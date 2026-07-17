@@ -333,6 +333,7 @@ button:disabled {
 }
 
 .utility-row {
+  flex-wrap: wrap;
   justify-content: space-between;
   margin-top: 12px;
 }
@@ -397,7 +398,6 @@ button:disabled {
   font-size: 0.72rem;
 }
 
-.hud-heading,
 .territory-title,
 .seed-row,
 .metrics,
@@ -406,9 +406,20 @@ button:disabled {
   align-items: center;
 }
 
-.hud-heading {
-  justify-content: space-between;
-  gap: 16px;
+.board-brand {
+  position: absolute;
+  z-index: 4;
+  top: 22px;
+  right: 22px;
+  width: min(380px, calc(100vw - 500px));
+  pointer-events: none;
+  filter: drop-shadow(0 7px 14px rgba(0, 0, 0, 0.5));
+}
+
+.board-brand img {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 h1,
@@ -478,7 +489,7 @@ h2 {
 }
 
 .seed-controls {
-  margin: 24px 0 17px;
+  margin: 0 0 17px;
 }
 
 .seed-controls label {
@@ -803,6 +814,13 @@ h2 {
     width: calc(100vw - 24px);
     max-height: 47vh;
     padding: 15px;
+  }
+
+  .board-brand {
+    top: auto;
+    right: 12px;
+    bottom: 46px;
+    width: 250px;
   }
 
   .seed-row {

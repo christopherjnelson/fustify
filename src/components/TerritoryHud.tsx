@@ -93,21 +93,6 @@ export function TerritoryHud() {
 
   return (
     <aside className="hud" aria-label="Local match controls">
-      <div className="hud-heading">
-        <div>
-          <span className="eyebrow">Generate a world. Conquer it.</span>
-          <h1>Worldseed</h1>
-        </div>
-        <button
-          type="button"
-          className={`icon-button ${debugView ? 'active' : ''}`}
-          onClick={toggleDebug}
-          aria-pressed={debugView}
-        >
-          Debug
-        </button>
-      </div>
-
       <SeedControls />
 
       <section
@@ -432,6 +417,14 @@ export function TerritoryHud() {
       )}
 
       <div className="utility-row">
+        <button
+          type="button"
+          className={`icon-button ${debugView ? 'active' : ''}`}
+          onClick={toggleDebug}
+          aria-pressed={debugView}
+        >
+          Debug
+        </button>
         <button
           type="button"
           className="icon-button"

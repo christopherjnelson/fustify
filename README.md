@@ -40,6 +40,22 @@ pnpm build
 pnpm format:check
 ```
 
+## Branding and logo variants
+
+The board-level Worldseed logo is intentionally separate from the match HUD so the HUD remains gameplay-focused. Two transparent PNG lockups are retained for visual A/B testing:
+
+- `public/assets/worldseed-logo-a.png` — the original globe-and-network lockup
+- `public/assets/worldseed-logo-b.png` — the glitch/data-fragment lockup and current default
+
+Select a variant without rebuilding by adding a query parameter:
+
+```text
+http://localhost:5173/?logo=a
+http://localhost:5173/?logo=b
+```
+
+Missing or unsupported values fall back to variant B. Both assets are trimmed RGBA images intended to sit directly over the dark gameboard without a surrounding panel.
+
 ## Local match rules
 
 The generated `PlanetDefinition` is immutable geography and topology. A separate `MatchState` owns all mutable gameplay data: territory owners and armies, active player, turn and phase, reinforcement pool, source/target selection, pending capture, combat sequence, player elimination, winner, and event history. Both structures are serializable data without React or Three.js objects. Regenerating creates a new definition and match; Reset Match reconstructs the original deterministic setup for the current seed.

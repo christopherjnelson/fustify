@@ -2,62 +2,88 @@
 
 ## Current state
 
-The strategic-readability milestone is complete. The prototype renders a deterministic globe with visible non-playable oceans, 42 contiguous territories, 6 spatially coherent gameplay continents, 4 balanced placeholder players, numbered army markers, smooth camera focus, selected/debug sea routes, and serialized graph/cohesion analysis. There is no backend or persisted match state.
+Worldseed is a deterministic globe-strategy prototype with a complete trusted local hot-seat loop. The generated planet remains immutable while a separate serializable match state owns live territory ownership, armies, turns, phases, selections, pending captures, combat sequence, elimination, victory, and events.
 
-The implementation has been verified with:
+The playable loop is:
+
+1. Reinforce with territory-count and fully owned continent bonuses.
+2. Attack zero or more strategically adjacent enemies across land borders or sea routes.
+3. Complete mandatory post-capture army movement.
+4. Fortify once through an owned path or skip.
+5. End the turn and advance to the next non-eliminated player.
+
+Combat uses deterministic match-seed/combat-sequence RNG streams, standard attacker/defender dice limits, defender-wins-ties comparisons, and replayable event records. Captures update ownership, elimination, and victory. The globe supports ownership, continent, and terrain views plus phase-aware source/target treatment and renderer-local horizon fading for army markers.
+
+There is no backend, persistence, authentication, networking, or server authority.
+
+## Verification baseline
+
+The current baseline is 57 passing Vitest tests: 33 generation/graph tests and 24 match-rule tests. Before handoff, run:
 
 ```bash
 pnpm test
 pnpm lint
 pnpm build
 pnpm format:check
+git diff --check
 ```
 
-All commands pass. Vitest covers terrain masks, territories, ownership, armies, physical landmasses, compact continents, route redundancy, graph algorithms, bonuses, validation, and serialization. Vite may emit a non-blocking chunk-size warning for the Three.js/R3F production bundle.
+Vite may emit the existing non-blocking Three.js/R3F chunk-size warning.
 
 ## Start here
 
-- `README.md` explains the generation technique, architecture decisions, limitations, and deferred scope.
-- `src/core/generation/generatePlanet.ts` is the top-level deterministic generation pipeline.
-- `src/core/generation/generateTerrain.ts` builds and smooths deterministic land-likelihood candidates.
-- `src/core/generation/generateTerritories.ts` selects spread land seeds and performs contiguous graph growth.
-- `src/core/generation/buildConnections.ts` derives land borders and a minimal sea-route tree.
-- `src/core/generation/generateContinents.ts` selects connected, boundary-weighted compact continent partitions.
-- `src/core/generation/generatePlayers.ts` creates players and balanced connected ownership.
-- `src/core/generation/analyzeGraph.ts` contains independent Tarjan graph analysis and cohesion metrics.
-- `src/core/generation/validatePlanet.ts` contains Zod shape validation and graph invariants.
-- `src/components/Planet.tsx` builds separate land/ocean meshes and maps land raycasts back to territories.
-- `src/components/ArmyMarkers.tsx` builds shared-material numbered sprite markers without per-territory React components.
-- `src/components/CameraController.tsx` handles renderer-local focus interpolation.
-- `src/state/useGameStore.ts` owns the generated planet and interactive UI state.
+- `README.md` documents generation, match rules, interaction, branding, limitations, and deferred scope.
+- `src/core/game/` contains the pure match engine, legal-action helpers, deterministic combat, turn progression, and tests.
+- `src/core/generation/generatePlanet.ts` is the immutable world-generation entrypoint.
+- `src/core/generation/analyzeGraph.ts` contains strategic graph and cohesion analysis.
+- `src/state/useGameStore.ts` coordinates the current planet, match reducer, and UI-only preferences.
+- `src/components/Planet.tsx` maps match state and legal-action sets onto the generated globe.
+- `src/components/ArmyMarkers.tsx` owns numbered marker rendering and camera-facing horizon visibility.
+- `src/components/TerritoryHud.tsx` contains phase-specific hot-seat controls and event/debug panels.
+- `src/app/App.tsx` owns the board-level logo variant selection.
+
+## Branding state
+
+Branding is outside the match HUD. The upper-right board logo defaults to variant B and is selected through the `logo` query parameter:
+
+```text
+/?logo=a
+/?logo=b
+```
+
+The retained transparent assets are:
+
+- `public/assets/worldseed-logo-a.png` — original logo backup
+- `public/assets/worldseed-logo-b.png` — glitch-style secondary logo, current default
+
+Keep both until a future task explicitly selects and removes a variant.
 
 ## Important invariants
 
-- Do not use `Math.random()` inside generation. Add a named deterministic seed stream when a generation phase needs randomness.
-- Increment `GENERATOR_VERSION` in `src/core/generation/constants.ts` when a generation change intentionally alters existing seeded worlds.
-- Keep `PlanetDefinition` serializable and free of React or Three.js objects.
-- Ocean cells must remain unassigned and territory cells must remain contiguous land.
-- Strategic connections must remain symmetrical, deduplicated, self-link-free, and globally connected.
-- Physical landmasses and gameplay continents are independent domain concepts.
-- Gameplay continents must remain connected and spatially coherent according to land-border weights.
-- Every territory must have one valid player owner and an army value inside placeholder bounds.
-- Serialized graph analysis must match a fresh analysis of generated connections.
-- Continents must remain non-empty and graph-connected.
-- Rendering and logical generation currently share the same icosphere subdivision constant so visual borders and adjacency agree.
+- Never mutate `PlanetDefinition` during gameplay.
+- Keep `PlanetDefinition` and `MatchState` serializable and free of React or Three.js objects.
+- Components dispatch typed game actions; gameplay rules and validation stay in `src/core/game/`.
+- Invalid actions return structured errors and must not mutate match state.
+- Do not use `Math.random()` for generation or combat. Add named deterministic streams.
+- Ocean cells remain unassigned; territory cells remain contiguous land.
+- Strategic adjacency remains symmetric, deduplicated, self-link-free, and globally connected.
+- Physical landmasses and gameplay continents remain separate concepts.
+- React Three Fiber owns scene objects and frame-level marker/camera calculations; avoid frame-by-frame Zustand updates.
+- Land borders and sea routes both count for attacks and owned-path fortification.
+- A captured territory requires its legal post-capture move before any other action.
+- Regenerating creates a new match for the new world; Reset Match restores the deterministic initial state for the current seed.
 
-## Suggested next Codex task
+## Recommended next milestone
 
-Add shareable, versioned planet setup URLs without expanding into gameplay. Introduce a small setup model containing seed, generator version, territory count, and continent count; encode it in URL query parameters; initialize the store from valid parameters; update the URL after regeneration; handle malformed or unsupported values safely; and add unit tests for parsing and serialization. Preserve deterministic generation and reset hover/selection when setup changes.
+Add a versioned, shareable setup/match URL model while preserving the existing `logo` query parameter. Include seed and supported generation settings, safe parsing/fallback behavior, URL updates after regeneration, and tests proving copied URLs reconstruct the same world. Accessible keyboard/list-based territory navigation is the next complementary usability improvement.
 
-Acceptance criteria:
+## Deliberately deferred
 
-1. Loading a copied URL reconstructs the same logical planet.
-2. Seed and configurable territory/continent counts are reflected in the HUD and URL.
-3. Invalid parameters fall back to documented defaults without crashing.
-4. Existing generator and graph tests continue to pass.
-5. New setup parsing/serialization tests are included.
-6. `pnpm test`, `pnpm lint`, `pnpm build`, and `pnpm format:check` pass.
-
-## Scope still deliberately deferred
-
-Do not introduce multiplayer, a backend, authentication, combat, reinforcement rules, detailed or true voxel terrain, individual troops, sound, animations, or AI unless a new task explicitly changes the scope.
+- Multiplayer, networking, and server authority
+- Authentication, persistence, matchmaking, reconnects, and spectators
+- Cards, trading, and alliances
+- AI opponents
+- Detailed terrain modifiers and true voxel terrain
+- Individual troop models
+- Sound and production animation polish
+- Production mobile polish
