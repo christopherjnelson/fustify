@@ -1,0 +1,269 @@
+import { writeLocalMatchSave } from '../browser/localSave';
+import type { ApplicationMode } from '../core/appFlow';
+import { createMatch } from '../core/game/createMatch';
+import { gameReducer } from '../core/game/gameReducer';
+import type { MatchState } from '../core/game/types';
+import { GENERATOR_VERSION } from '../core/generation/constants';
+import { generatePlanet } from '../core/generation/generatePlanet';
+import { SAVE_SCHEMA_VERSION } from '../core/persistence/saveGame';
+import { createDefaultPlayerConfigs } from '../core/setup/playerConfig';
+import { createMatchSetup } from '../core/setup/startingPositions';
+import type { WorldSetup } from '../core/setup/worldSetup';
+import { useGameStore } from '../state/useGameStore';
+
+export type VisualScenario =
+  | 'world-setup'
+  | 'pregame'
+  | 'handoff'
+  | 'reinforcement'
+  | 'attack-source'
+  | 'attack-target'
+  | 'pending-capture'
+  | 'fortification'
+  | 'game-over'
+  | 'navigator'
+  | 'event-log'
+  | 'saved-resume';
+
+const FIXED_SETUP: WorldSetup = {
+  version: 1,
+  seed: 'visual-review-atlas',
+  territoryCount: 42,
+  continentCount: 6,
+  playerCount: 4,
+};
+
+function fixedWorld() {
+  const planet = generatePlanet(FIXED_SETUP.seed, {
+    territoryCount: FIXED_SETUP.territoryCount,
+    continentCount: FIXED_SETUP.continentCount,
+    playerCount: FIXED_SETUP.playerCount,
+  });
+  const players = createDefaultPlayerConfigs(FIXED_SETUP.playerCount);
+  const matchSetup = createMatchSetup(planet, players, 0);
+  return {
+    planet,
+    players,
+    matchSetup,
+    match: createMatch(planet, matchSetup),
+  };
+}
+
+function borderPair(
+  match: MatchState,
+  planet: ReturnType<typeof generatePlanet>,
+) {
+  const source = planet.territories.find(
+    (territory) =>
+      match.territories[territory.id]!.ownerId === match.activePlayerId &&
+      territory.adjacentTerritoryIds.some(
+        (neighbor) =>
+          match.territories[neighbor]!.ownerId !== match.activePlayerId,
+      ),
+  )!;
+  const targetId = source.adjacentTerritoryIds.find(
+    (neighbor) => match.territories[neighbor]!.ownerId !== match.activePlayerId,
+  )!;
+  return { sourceId: source.id, targetId };
+}
+
+function advanceToAttack(
+  match: MatchState,
+  planet: ReturnType<typeof generatePlanet>,
+): MatchState {
+  const { sourceId } = borderPair(match, planet);
+  return gameReducer(planet, match, {
+    type: 'PLACE_REINFORCEMENT',
+    territoryId: sourceId,
+    amount: match.remainingReinforcements,
+  }).state;
+}
+
+function winningDice() {
+  let roll = 0;
+  return {
+    integer(min: number, max: number) {
+      roll += 1;
+      return roll <= 3 ? max : min;
+    },
+  };
+}
+
+function pendingCapture(
+  match: MatchState,
+  planet: ReturnType<typeof generatePlanet>,
+): MatchState {
+  const attack = advanceToAttack(match, planet);
+  const { sourceId, targetId } = borderPair(attack, planet);
+  const prepared: MatchState = {
+    ...attack,
+    territories: {
+      ...attack.territories,
+      [sourceId]: { ...attack.territories[sourceId]!, armyCount: 12 },
+      [targetId]: { ...attack.territories[targetId]!, armyCount: 1 },
+    },
+  };
+  return gameReducer(
+    planet,
+    prepared,
+    {
+      type: 'ATTACK',
+      fromTerritoryId: sourceId,
+      toTerritoryId: targetId,
+      attackDice: 3,
+    },
+    { createCombatRng: winningDice },
+  ).state;
+}
+
+function wonMatch(
+  match: MatchState,
+  planet: ReturnType<typeof generatePlanet>,
+): MatchState {
+  const connection = planet.connections[0]!;
+  const sourceId = connection.fromTerritoryId;
+  const targetId = connection.toTerritoryId;
+  const activePlayerId = match.activePlayerId;
+  const defeatedPlayerId = Object.keys(match.players).find(
+    (id) => id !== activePlayerId,
+  )!;
+  const prepared: MatchState = {
+    ...match,
+    phase: 'attack',
+    remainingReinforcements: 0,
+    territories: Object.fromEntries(
+      Object.keys(match.territories).map((id) => [
+        id,
+        {
+          ownerId: id === targetId ? defeatedPlayerId : activePlayerId,
+          armyCount: id === sourceId ? 12 : 1,
+        },
+      ]),
+    ),
+  };
+  const attacked = gameReducer(
+    planet,
+    prepared,
+    {
+      type: 'ATTACK',
+      fromTerritoryId: sourceId,
+      toTerritoryId: targetId,
+      attackDice: 3,
+    },
+    { createCombatRng: winningDice },
+  ).state;
+  return gameReducer(planet, attacked, {
+    type: 'MOVE_AFTER_CAPTURE',
+    fromTerritoryId: sourceId,
+    toTerritoryId: targetId,
+    amount: 3,
+  }).state;
+}
+
+function applyScenario(scenario: VisualScenario) {
+  window.localStorage.clear();
+  const { planet, matchSetup, match } = fixedWorld();
+  let applicationMode: ApplicationMode = 'world-setup';
+  let scenarioMatch = match;
+  let eventLogOpen = false;
+
+  if (scenario !== 'world-setup' && scenario !== 'saved-resume') {
+    applicationMode = scenario === 'pregame' ? 'pregame' : 'playing';
+  }
+  if (scenario === 'handoff') applicationMode = 'handoff';
+  if (scenario === 'reinforcement' || scenario === 'navigator') {
+    applicationMode = 'playing';
+  }
+  if (scenario === 'attack-source' || scenario === 'attack-target') {
+    scenarioMatch = advanceToAttack(match, planet);
+    const { sourceId, targetId } = borderPair(scenarioMatch, planet);
+    scenarioMatch = gameReducer(planet, scenarioMatch, {
+      type: 'SELECT_TERRITORY',
+      territoryId: sourceId,
+    }).state;
+    if (scenario === 'attack-target') {
+      scenarioMatch = gameReducer(planet, scenarioMatch, {
+        type: 'SELECT_TERRITORY',
+        territoryId: targetId,
+      }).state;
+    }
+  }
+  if (scenario === 'pending-capture') {
+    scenarioMatch = pendingCapture(match, planet);
+  }
+  if (scenario === 'fortification') {
+    scenarioMatch = gameReducer(planet, advanceToAttack(match, planet), {
+      type: 'END_ATTACK_PHASE',
+    }).state;
+  }
+  if (scenario === 'game-over') {
+    scenarioMatch = wonMatch(match, planet);
+    applicationMode = 'game-over';
+  }
+  if (scenario === 'event-log') {
+    applicationMode = 'playing';
+    eventLogOpen = true;
+  }
+  if (scenario === 'saved-resume') {
+    const savedAt = '2026-07-17T12:00:00.000Z';
+    writeLocalMatchSave({
+      schemaVersion: SAVE_SCHEMA_VERSION,
+      savedAt,
+      generatorVersion: GENERATOR_VERSION,
+      worldSetup: FIXED_SETUP,
+      matchSetup,
+      matchState: match,
+      applicationMode: 'playing',
+    });
+    useGameStore.setState({
+      savedMatchAvailable: true,
+      savedAt,
+      saveError: null,
+    });
+  }
+
+  useGameStore.setState({
+    applicationMode,
+    setup: FIXED_SETUP,
+    setupDraft: FIXED_SETUP,
+    seedInput: FIXED_SETUP.seed,
+    setupError: null,
+    setupWarning: null,
+    planet,
+    matchSetup,
+    match: scenarioMatch,
+    handoffSummary: { previousTurn: null, messages: [] },
+    eventLogOpen,
+    hoveredTerritoryId: null,
+    lastActionError: null,
+    focusTargetTerritoryId: null,
+    focusSequence: 0,
+  });
+}
+
+declare global {
+  interface Window {
+    __WORLDSEED_VISUAL__?: {
+      loadScenario: (scenario: VisualScenario) => void;
+      getState: () => {
+        mode: ApplicationMode;
+        phase: MatchState['phase'];
+        focusSequence: number;
+        focusTargetTerritoryId: string | null;
+      };
+    };
+  }
+}
+
+window.__WORLDSEED_VISUAL__ = {
+  loadScenario: applyScenario,
+  getState: () => {
+    const state = useGameStore.getState();
+    return {
+      mode: state.applicationMode,
+      phase: state.match.phase,
+      focusSequence: state.focusSequence,
+      focusTargetTerritoryId: state.focusTargetTerritoryId,
+    };
+  },
+};

@@ -25,6 +25,7 @@ describe('setup and match store integration', () => {
   });
 
   it('list selection dispatches selection and emits repeatable focus requests', () => {
+    useGameStore.setState({ applicationMode: 'playing' });
     const state = useGameStore.getState();
     const ownedTerritory = state.planet.territories.find(
       (territory) =>
@@ -43,6 +44,42 @@ describe('setup and match store integration', () => {
 
     useGameStore.getState().selectAndFocusTerritory(ownedTerritory.id);
     expect(useGameStore.getState().focusSequence).toBe(initialSequence + 2);
+  });
+
+  it('generating enters pregame and starting enters first-turn handoff', () => {
+    useGameStore.getState().setSeedInput('pregame-flow');
+    useGameStore.getState().regenerate();
+    expect(useGameStore.getState().applicationMode).toBe('pregame');
+    useGameStore.getState().startMatch();
+    expect(useGameStore.getState().applicationMode).toBe('handoff');
+    expect(useGameStore.getState().handoffSummary.previousTurn).toBeNull();
+  });
+
+  it('blocks actions during handoff and begins without recalculating reinforcements', () => {
+    useGameStore.setState({ applicationMode: 'handoff' });
+    const before = useGameStore.getState().match.remainingReinforcements;
+    const target = Object.keys(useGameStore.getState().match.territories)[0]!;
+    useGameStore.getState().dispatchGameAction({
+      type: 'PLACE_REINFORCEMENT',
+      territoryId: target,
+      amount: 1,
+    });
+    expect(useGameStore.getState().match.remainingReinforcements).toBe(before);
+    useGameStore.getState().beginTurn();
+    expect(useGameStore.getState().applicationMode).toBe('playing');
+    expect(useGameStore.getState().match.remainingReinforcements).toBe(before);
+  });
+
+  it('rerolls ownership while preserving player profiles and planet', () => {
+    const state = useGameStore.getState();
+    const planet = state.planet;
+    const players = state.matchSetup.players;
+    const previous = state.matchSetup.startingPosition.territories;
+    state.rerollOwnership();
+    const next = useGameStore.getState();
+    expect(next.planet).toBe(planet);
+    expect(next.matchSetup.players).toEqual(players);
+    expect(next.matchSetup.startingPosition.territories).not.toEqual(previous);
   });
 
   it('requests focus for a territory regardless of its hemisphere', () => {

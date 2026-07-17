@@ -13,9 +13,9 @@ import {
   getValidAttackDice,
 } from '../core/game';
 import { useGameStore, type PlanetViewMode } from '../state/useGameStore';
-import { SeedControls } from './SeedControls';
 import { TerritoryNavigator } from './TerritoryNavigator';
 import { territoryDrawerReducer } from '../core/navigation/territoryNavigator';
+import { playerColorValue } from '../core/setup/playerConfig';
 
 const PHASE_LABELS = {
   reinforce: 'Reinforce',
@@ -35,12 +35,22 @@ const VIEW_MODES: { id: PlanetViewMode; label: string }[] = [
 export function TerritoryHud() {
   const planet = useGameStore((state) => state.planet);
   const match = useGameStore((state) => state.match);
+  const configuredPlayers = useGameStore((state) => state.matchSetup.players);
   const debugView = useGameStore((state) => state.debugView);
   const viewMode = useGameStore((state) => state.viewMode);
   const eventLogOpen = useGameStore((state) => state.eventLogOpen);
   const error = useGameStore((state) => state.lastActionError);
   const dispatch = useGameStore((state) => state.dispatchGameAction);
   const resetMatch = useGameStore((state) => state.resetMatch);
+  const rematchNewOwnership = useGameStore(
+    (state) => state.rematchNewOwnership,
+  );
+  const backToWorldSetup = useGameStore((state) => state.backToWorldSetup);
+  const saveMatch = useGameStore((state) => state.saveMatch);
+  const deleteSavedMatch = useGameStore((state) => state.deleteSavedMatch);
+  const savedAt = useGameStore((state) => state.savedAt);
+  const saveMessage = useGameStore((state) => state.saveMessage);
+  const saveError = useGameStore((state) => state.saveError);
   const toggleDebug = useGameStore((state) => state.toggleDebugView);
   const toggleEventLog = useGameStore((state) => state.toggleEventLog);
   const setViewMode = useGameStore((state) => state.setViewMode);
@@ -48,6 +58,7 @@ export function TerritoryHud() {
   const [attackDice, setAttackDice] = useState(1);
   const [moveAmount, setMoveAmount] = useState(1);
   const [fortifyAmount, setFortifyAmount] = useState(1);
+  const [reviewingGameOver, setReviewingGameOver] = useState(false);
   const [navigatorOpen, dispatchNavigator] = useReducer(
     territoryDrawerReducer,
     false,
@@ -75,7 +86,7 @@ export function TerritoryHud() {
       new Map(planet.territories.map((territory) => [territory.id, territory])),
     [planet],
   );
-  const activePlayer = planet.players.find(
+  const activePlayer = configuredPlayers.find(
     (player) => player.id === match.activePlayerId,
   )!;
   const sourceId = match.selectedSourceTerritoryId;
@@ -85,7 +96,7 @@ export function TerritoryHud() {
   const sourceState = sourceId ? match.territories[sourceId] : undefined;
   const selected = target ?? source;
   const selectedState = selected ? match.territories[selected.id] : undefined;
-  const selectedOwner = planet.players.find(
+  const selectedOwner = configuredPlayers.find(
     (player) => player.id === selectedState?.ownerId,
   );
   const owned = getOwnedTerritories(match, match.activePlayerId);
@@ -124,12 +135,14 @@ export function TerritoryHud() {
   return (
     <>
       <aside className="hud" aria-label="Local match controls">
-        <SeedControls />
-
         <section
           className="turn-banner"
           aria-live="polite"
-          style={{ '--player-color': activePlayer.color } as CSSProperties}
+          style={
+            {
+              '--player-color': playerColorValue(activePlayer.colorId),
+            } as CSSProperties
+          }
         >
           <span className="player-token" aria-hidden="true">
             ◆
@@ -393,7 +406,11 @@ export function TerritoryHud() {
             <div className="territory-title">
               <span
                 className="color-swatch"
-                style={{ background: selectedOwner?.color }}
+                style={{
+                  background: selectedOwner
+                    ? playerColorValue(selectedOwner.colorId)
+                    : undefined,
+                }}
               />
               <div>
                 <span className="eyebrow">
@@ -475,14 +492,70 @@ export function TerritoryHud() {
           >
             Debug
           </button>
-          <button
-            type="button"
-            className="icon-button danger"
-            onClick={resetMatch}
-          >
-            Reset match
-          </button>
+          <details className="game-menu">
+            <summary>Game</summary>
+            <div>
+              <button type="button" onClick={saveMatch}>
+                Save match
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm('Restart with the same world and ownership?')
+                  )
+                    resetMatch();
+                }}
+              >
+                Same ownership rematch
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Return to pregame with a new ownership layout?',
+                    )
+                  )
+                    rematchNewOwnership();
+                }}
+              >
+                Reroll ownership
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Leave this match for world setup? The local save will remain.',
+                    )
+                  )
+                    backToWorldSetup();
+                }}
+              >
+                Different world
+              </button>
+              <button
+                type="button"
+                className="danger"
+                onClick={deleteSavedMatch}
+              >
+                Delete local save
+              </button>
+            </div>
+          </details>
         </div>
+
+        {(saveMessage || saveError || savedAt) && (
+          <p
+            className={saveError ? 'save-status error' : 'save-status'}
+            role="status"
+          >
+            {saveError ??
+              saveMessage ??
+              `Saved locally ${new Date(savedAt!).toLocaleTimeString()}`}
+          </p>
+        )}
 
         {eventLogOpen && (
           <section className="event-log">
@@ -515,7 +588,20 @@ export function TerritoryHud() {
           </section>
         )}
 
-        {match.phase === 'game-over' && (
+        {match.phase === 'game-over' && reviewingGameOver && (
+          <section className="phase-card">
+            <span className="eyebrow">Reviewing final world</span>
+            <button
+              type="button"
+              className="wide"
+              onClick={() => setReviewingGameOver(false)}
+            >
+              Show rematch options
+            </button>
+          </section>
+        )}
+
+        {match.phase === 'game-over' && !reviewingGameOver && (
           <section
             className="victory-panel"
             role="dialog"
@@ -525,14 +611,32 @@ export function TerritoryHud() {
             <span className="eyebrow">Match won</span>
             <h2>
               {
-                planet.players.find((player) => player.id === match.winnerId)
+                configuredPlayers.find((player) => player.id === match.winnerId)
                   ?.name
               }
             </h2>
             <p>Every playable territory is under one banner.</p>
-            <button type="button" onClick={resetMatch}>
-              Play again
-            </button>
+            <div className="victory-actions">
+              <button type="button" onClick={() => setReviewingGameOver(true)}>
+                Review world
+              </button>
+              <button type="button" onClick={resetMatch}>
+                Same ownership rematch
+              </button>
+              <button type="button" onClick={rematchNewOwnership}>
+                Reroll ownership
+              </button>
+              <button type="button" onClick={backToWorldSetup}>
+                Different world
+              </button>
+              <button
+                type="button"
+                className="danger"
+                onClick={deleteSavedMatch}
+              >
+                Delete saved match
+              </button>
+            </div>
           </section>
         )}
       </aside>

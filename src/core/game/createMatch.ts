@@ -2,9 +2,16 @@ import type { PlanetDefinition } from '../types/planet';
 import { makeEvent } from './events';
 import { calculateReinforcements } from './reinforcement';
 import type { MatchState } from './types';
+import type { MatchSetup } from '../setup/startingPositions';
 
-export function createMatch(planet: PlanetDefinition): MatchState {
-  const activePlayerId = planet.players[0]!.id;
+export function createMatch(
+  planet: PlanetDefinition,
+  setup?: MatchSetup,
+): MatchState {
+  const orderedPlayers = setup
+    ? setup.players.slice().sort((a, b) => a.seatIndex - b.seatIndex)
+    : planet.players;
+  const activePlayerId = orderedPlayers[0]!.id;
   const state: MatchState = {
     matchId: `${planet.seed}:local-hot-seat`,
     seed: planet.seed,
@@ -15,11 +22,14 @@ export function createMatch(planet: PlanetDefinition): MatchState {
     territories: Object.fromEntries(
       planet.territories.map((territory) => [
         territory.id,
-        { ownerId: territory.ownerId!, armyCount: territory.armyCount },
+        setup?.startingPosition.territories[territory.id] ?? {
+          ownerId: territory.ownerId!,
+          armyCount: territory.armyCount,
+        },
       ]),
     ),
     players: Object.fromEntries(
-      planet.players.map((player) => [
+      orderedPlayers.map((player) => [
         player.id,
         { playerId: player.id, eliminated: false },
       ]),

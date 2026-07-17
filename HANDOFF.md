@@ -2,30 +2,72 @@
 
 ## Current state
 
-Worldseed is a deterministic globe-strategy prototype with a complete trusted local hot-seat loop. The generated planet remains immutable while a separate serializable match state owns live territory ownership, armies, turns, phases, selections, pending captures, combat sequence, elimination, victory, and events.
+Worldseed is ready for small trusted local hot-seat playtests. It has explicit `world-setup`, `pregame`, `handoff`, `playing`, and `game-over` modes, editable player profiles, deterministic starting-position candidates, balance preview, mandatory turn handoffs, and one validated browser-local save slot.
 
-The current milestone adds a third boundary: versioned `WorldSetup` data. Version 1 serializes seed, territory count, continent count, and player count into shareable URLs. Applying or randomizing setup pushes browser history and rebuilds the planet plus initial match; Reset Match changes gameplay only. Back/forward navigation reconstructs the setup and initial match. Existing `logo=a` / `logo=b` and unknown query parameters survive setup writes.
+The important boundaries are:
 
-The searchable, keyboard-operable territory navigator now lives in a closed-by-default modal side drawer, adapting to a bottom sheet on narrow screens. My territories and All territories filters operate on the pure view model, which uses existing legal-action helpers and labels valid/selected source and target states, invalid territories, and sea-route targets with text and symbols. List and globe selections both reach the same typed reducer action; list selection also emits a repeatable request through the existing smooth camera-focus system.
+- `WorldSetup`: URL-shareable world parameters only.
+- `PlanetDefinition`: immutable generated geography and topology.
+- `MatchSetup`: local profiles, stable seats, ownership variant, starting assignment, and balance analysis.
+- `MatchState`: mutable rules state, combat sequence, events, and victory.
+- View state: camera focus, hover, drawers, display mode, and debug preferences.
 
-The playable loop is:
+Setup URLs never contain an active match. A local save and URL setup may coexist; the opening panel offers Resume saved match or generation from the URL without silently destroying either.
 
-1. Reinforce with territory-count and fully owned continent bonuses.
-2. Attack zero or more strategically adjacent enemies across land borders or sea routes.
-3. Complete mandatory post-capture army movement.
-4. Fortify once through an owned path or skip.
-5. End the turn and advance to the next non-eliminated player.
+## Main implementation locations
 
-Combat uses deterministic match-seed/combat-sequence RNG streams, standard attacker/defender dice limits, defender-wins-ties comparisons, and replayable event records. Captures update ownership, elimination, and victory. The globe supports ownership, continent, and terrain views plus phase-aware source/target treatment and renderer-local horizon fading for army markers.
+- `src/core/setup/playerConfig.ts`: profiles, palette IDs, normalization, validation.
+- `src/core/setup/startingPositions.ts`: 32-candidate deterministic generation, fixed starting-army totals, hard validation, metrics, and 0–100 scoring.
+- `src/core/appFlow.ts`: explicit application modes and handoff summary shape.
+- `src/core/persistence/saveGame.ts`: save schema v1, Zod validation, deterministic serialization, and explicit v0 migration.
+- `src/browser/localSave.ts`: the single `worldseed.local-match` localStorage slot.
+- `src/state/useGameStore.ts`: flow transitions, autosave, resume, rematch, URL-history confirmation, and action blocking during handoff.
+- `src/components/WorldSetupPanel.tsx`: URL setup versus local resume choice.
+- `src/components/PregamePanel.tsx`: profiles, preview metrics, reroll, and start validation.
+- `src/components/HandoffScreen.tsx`: focus-contained, non-dismissible next-player gate.
+- `src/components/TerritoryHud.tsx`: existing rules controls plus compact save/rematch actions.
+- `playwright.config.ts`: Chromium, deterministic Vite port 4173, failure artifacts, and the 1920×1080, 1366×768, and 390×844 projects.
+- `tests/e2e/`: interaction/accessibility coverage, visual scenarios, and committed UI-region baselines.
+- `src/testSupport/visualScenarios.ts`: development-only deterministic scenario construction using the real domain pipeline.
 
-There is no backend, persistence, authentication, networking, or server authority.
+## Starting-position rules
+
+The candidate seed includes world seed, generator version, stable player IDs, ownership variant, and candidate index. Each valid candidate owns every territory exactly once, gives every territory at least one army, keeps territory totals within one, and keeps equal army totals. A complete bonus-4-or-greater continent is hard-invalid.
+
+The score penalizes territory and army spread, excess components, borders, sea-route endpoints, articulation/gateway disparity, average degree, landmass spread, isolated territories, and complete continents. Ratings are Excellent 90+, Good 75+, Uneven 55+, and Poor below 55. The scoring is deliberately heuristic.
+
+Equal starting-army totals are 40/35/30/25/20 for 2/3/4/5/6 players. One army is assigned to every owned territory before deterministic distribution of the remainder.
+
+## Turn handoff and persistence
+
+`END_TURN` still prepares the next turn and reinforcement pool in the pure reducer. The store then switches to `handoff`; Begin turn only clears selections and reveals that already-prepared state, so reinforcements are not calculated twice. Game actions are rejected outside `playing`.
+
+Autosave occurs after match start, Begin turn, reinforcement, combat, capture movement, phase transitions, fortification, turn advancement, handoff, and victory. Selection, hover, focus, camera, and display changes do not save. Resume reconstructs the planet from validated `WorldSetup`, verifies territory IDs/count, restores the exact match, clears private selections, and enters handoff unless the match is over.
+
+## Visual inspection workflow
+
+Playwright 1.61.1 uses its bundled Chromium 149 fallback build for Ubuntu 24.04. The configuration starts Vite automatically on port 4173. Run `pnpm exec playwright install chromium` once on a new machine, then use:
+
+```bash
+pnpm test:e2e
+pnpm test:visual
+pnpm test:visual:update
+```
+
+The visual suite covers world setup, pregame, first handoff, reinforcement, attack source/target, pending capture, fortification, game over, navigator, event log, and saved-resume prompt at all three viewport sizes. UI-region baselines live in `tests/e2e/visual.spec.ts-snapshots/`; full-page human-review captures are generated under `test-results/ui-review/<project>/` and intentionally ignored by Git.
+
+The visual driver is available only in Vite development mode with `visual-review=1`. Production-build inspection confirmed that `__WORLDSEED_VISUAL__` and `visualScenarios` are absent from `dist`. The fixed seed, camera, reduced motion, UTC timezone, deterministic font, disabled orbit controls, and hidden star field keep captures stable. Do not replace human review with baseline assertions: inspect clipping, scroll regions, globe overlap, dialog obstruction, contrast, phase-control visibility, and horizon markers after UI changes. `AGENTS.md` contains the required agent checklist.
+
+The first full inspection found and fixed two issues: the mobile event-log capture did not reveal the log below the HUD's internal fold, and the translucent game-over surface allowed underlying controls to reduce contrast. No remaining desktop/laptop clipping, inaccessible mobile phase controls, modal obstruction, or detached horizon markers was observed.
 
 ## Verification baseline
 
-The current baseline is 75 passing Vitest tests across generation/graph, match rules, setup parsing/serialization, navigator legality/filtering/drawer state, and store focus integration. Before handoff, run:
+The committed baseline is 96 passing Vitest tests across 9 files, 27 Playwright interaction/accessibility tests, and 36 Playwright visual comparisons. Run:
 
 ```bash
 pnpm test
+pnpm test:e2e
+pnpm test:visual
 pnpm lint
 pnpm build
 pnpm format:check
@@ -34,77 +76,12 @@ git diff --check
 
 Vite may emit the existing non-blocking Three.js/R3F chunk-size warning.
 
-## Start here
+## Known limitations and next milestone
 
-- `README.md` documents generation, match rules, interaction, branding, limitations, and deferred scope.
-- `src/core/game/` contains the pure match engine, legal-action helpers, deterministic combat, turn progression, and tests.
-- `src/core/generation/generatePlanet.ts` is the immutable world-generation entrypoint.
-- `src/core/generation/analyzeGraph.ts` contains strategic graph and cohesion analysis.
-- `src/state/useGameStore.ts` coordinates the current planet, match reducer, and UI-only preferences.
-- `src/core/setup/worldSetup.ts` owns pure defaults, validation, parsing, comparison, and deterministic serialization.
-- `src/browser/setupUrl.ts` is the browser-only location/history adapter.
-- `src/core/navigation/territoryNavigator.ts` derives accessible list status from existing legal-action helpers.
-- `src/components/TerritoryNavigator.tsx` renders the searchable modal drawer, ownership filters, focus trap, and selection announcements.
-- `src/components/Planet.tsx` maps match state and legal-action sets onto the generated globe.
-- `src/components/ArmyMarkers.tsx` owns numbered marker rendering and camera-facing horizon visibility.
-- `src/components/TerritoryHud.tsx` contains phase-specific hot-seat controls and event/debug panels.
-- `src/app/App.tsx` owns the board-level logo variant selection.
+- Balance is heuristic rather than mathematically perfect.
+- Saves are browser-local, single-slot, and tied to a compatible generator version.
+- Confirmation prompts use native browser confirmation for destructive flow changes.
+- Broader production mobile polish and formal usability testing remain outstanding.
+- There is no AI, backend, authentication, cloud save, matchmaking, or online multiplayer.
 
-## Branding state
-
-Branding is outside the match HUD. The upper-right board logo defaults to variant B and is selected through the `logo` query parameter:
-
-```text
-/?logo=a
-/?logo=b
-```
-
-The retained transparent assets are:
-
-- `public/assets/worldseed-logo-a.png` — original logo backup
-- `public/assets/worldseed-logo-b.png` — glitch-style secondary logo, current default
-
-Keep both until a future task explicitly selects and removes a variant.
-
-## Setup URL contract
-
-Version 1 uses `v=1`, `seed` (default `atlas-prime`), `territories` (12–48, default 42), `continents` (2–8 and no more than territories, default 6), and `players` (2–6, default 4). Unsupported versions load all defaults with a warning. Malformed numeric values cannot reach the generator unchecked. Serialization emits setup keys in a stable order, followed by sorted preserved query parameters.
-
-Example: `/?v=1&seed=atlas-prime&territories=42&continents=6&players=4&logo=b`.
-
-## Important invariants
-
-- Never mutate `PlanetDefinition` during gameplay.
-- Keep `PlanetDefinition` and `MatchState` serializable and free of React or Three.js objects.
-- Components dispatch typed game actions; gameplay rules and validation stay in `src/core/game/`.
-- Invalid actions return structured errors and must not mutate match state.
-- Do not use `Math.random()` for generation or combat. Add named deterministic streams.
-- Ocean cells remain unassigned; territory cells remain contiguous land.
-- Strategic adjacency remains symmetric, deduplicated, self-link-free, and globally connected.
-- Physical landmasses and gameplay continents remain separate concepts.
-- React Three Fiber owns scene objects and frame-level marker/camera calculations; avoid frame-by-frame Zustand updates.
-- Land borders and sea routes both count for attacks and owned-path fortification.
-- A captured territory requires its legal post-capture move before any other action.
-- Regenerating creates a new match for the new world; Reset Match restores the deterministic initial state for the current seed.
-- Setup URLs restore initial matches only; in-progress match state and UI preferences are not encoded.
-
-## Known limitations
-
-- The subdivision-level-4 surface remains fixed throughout the supported 12–48 territory range.
-- History navigation intentionally rebuilds an initial match rather than preserving turns played under each history entry.
-- The navigator has a responsive bottom-sheet layout, but broader production mobile polish remains deferred.
-
-## Recommended next milestone
-
-Add an accessible, deterministic starting-ownership draft/reroll with balance summaries and an optional setup preview. Keep ownership setup separate from mutable match turns and extend the versioned format only with an explicit compatibility decision.
-
-## Deliberately deferred
-
-- Multiplayer, networking, and server authority
-- Authentication, persistence, matchmaking, reconnects, and spectators
-- Cards, trading, and alliances
-- AI opponents
-- Detailed terrain modifiers and true voxel terrain
-- Individual troop models
-- Sound and production animation polish
-- Production mobile polish
+The repository is ready for the next task. Start with structured friend playtesting, using the local save/resume flow and the Playwright screenshots to record reproducible UI states. Follow with evidence-based tuning of balance weights, starting-army totals, handoff copy, and narrow-screen pregame layout. Keep online authority and cards deferred until the local loop is validated.

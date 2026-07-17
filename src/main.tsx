@@ -8,3 +8,10 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 );
+
+if (
+  import.meta.env.DEV &&
+  new URLSearchParams(window.location.search).get('visual-review') === '1'
+) {
+  void import('./testSupport/visualScenarios');
+}

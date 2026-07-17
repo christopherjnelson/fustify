@@ -37,6 +37,7 @@ interface TerritoryNavigatorProps {
 export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
   const planet = useGameStore((state) => state.planet);
   const match = useGameStore((state) => state.match);
+  const configuredPlayers = useGameStore((state) => state.matchSetup.players);
   const selectAndFocus = useGameStore((state) => state.selectAndFocusTerritory);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -46,9 +47,21 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
   );
   const [selectionAnnouncement, setSelectionAnnouncement] = useState('');
   const effectiveFilter = match.phase === 'game-over' ? 'all' : filter;
+  const displayPlanet = useMemo(
+    () => ({
+      ...planet,
+      players: planet.players.map((player) => ({
+        ...player,
+        name:
+          configuredPlayers.find((configured) => configured.id === player.id)
+            ?.name ?? player.name,
+      })),
+    }),
+    [configuredPlayers, planet],
+  );
   const items = useMemo(
-    () => getTerritoryNavigationItems(planet, match),
-    [planet, match],
+    () => getTerritoryNavigationItems(displayPlanet, match),
+    [displayPlanet, match],
   );
   const filtered = useMemo(
     () =>

@@ -3,10 +3,12 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef, type ComponentRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '../state/useGameStore';
+import { isVisualReview } from '../browser/visualReview';
 
 const PLANET_ROTATION = new THREE.Euler(0.08, 0, -0.08);
 
 export function CameraController() {
+  const visualReview = isVisualReview();
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
   const destination = useRef(new THREE.Vector3(0, 0, 1));
   const focusing = useRef(false);
@@ -69,7 +71,8 @@ export function CameraController() {
       ref={controls}
       makeDefault
       enableDamping
-      dampingFactor={0.07}
+      dampingFactor={visualReview ? 0 : 0.07}
+      enabled={!visualReview}
       enablePan={false}
       minDistance={3.1}
       maxDistance={8}

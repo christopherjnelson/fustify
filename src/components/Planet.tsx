@@ -14,6 +14,7 @@ import {
 } from '../core/generation/constants';
 import type { PlanetDefinition } from '../core/types/planet';
 import type { TerritoryDefinition } from '../core/types/territory';
+import { playerColorValue } from '../core/setup/playerConfig';
 import { useGameStore, type PlanetViewMode } from '../state/useGameStore';
 import { ArmyMarkers } from './ArmyMarkers';
 import { GraphDebugOverlay } from './GraphDebugOverlay';
@@ -76,6 +77,7 @@ export function Planet({ planet }: PlanetProps) {
   const hoveredId = useGameStore((state) => state.hoveredTerritoryId);
   const debugView = useGameStore((state) => state.debugView);
   const viewMode = useGameStore((state) => state.viewMode);
+  const configuredPlayers = useGameStore((state) => state.matchSetup.players);
   const setHovered = useGameStore((state) => state.setHoveredTerritory);
   const select = useGameStore((state) => state.selectTerritory);
   const sphere = useMemo(() => createIcosphere(PLANET_SUBDIVISIONS), []);
@@ -84,8 +86,14 @@ export function Planet({ planet }: PlanetProps) {
     [planet],
   );
   const playerById = useMemo(
-    () => new Map(planet.players.map((player) => [player.id, player])),
-    [planet],
+    () =>
+      new Map(
+        configuredPlayers.map((player) => [
+          player.id,
+          { ...player, color: playerColorValue(player.colorId) },
+        ]),
+      ),
+    [configuredPlayers],
   );
   const legal = useMemo(() => {
     let sources: string[] = [];

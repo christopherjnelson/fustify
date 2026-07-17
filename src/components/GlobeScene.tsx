@@ -3,10 +3,12 @@ import { Canvas } from '@react-three/fiber';
 import { useGameStore } from '../state/useGameStore';
 import { CameraController } from './CameraController';
 import { Planet } from './Planet';
+import { isVisualReview } from '../browser/visualReview';
 
 export function GlobeScene() {
   const planet = useGameStore((state) => state.planet);
   const clearSelection = useGameStore((state) => state.selectTerritory);
+  const visualReview = isVisualReview();
 
   return (
     <Canvas
@@ -25,7 +27,16 @@ export function GlobeScene() {
         intensity={0.65}
         color="#4569b2"
       />
-      <Stars radius={34} depth={14} count={900} factor={2} fade speed={0.25} />
+      {!visualReview && (
+        <Stars
+          radius={34}
+          depth={14}
+          count={900}
+          factor={2}
+          fade
+          speed={0.25}
+        />
+      )}
       <Planet planet={planet} />
       <CameraController />
     </Canvas>

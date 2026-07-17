@@ -3,7 +3,9 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { MatchState } from '../core/game';
 import { PLANET_RADIUS } from '../core/generation/constants';
+import { playerColorValue } from '../core/setup/playerConfig';
 import type { PlanetDefinition } from '../core/types/planet';
+import { useGameStore } from '../state/useGameStore';
 
 interface ArmyMarkersProps {
   planet: PlanetDefinition;
@@ -99,6 +101,7 @@ export function ArmyMarkers({
   validTargetIds,
   seaTargetIds,
 }: ArmyMarkersProps) {
+  const configuredPlayers = useGameStore((state) => state.matchSetup.players);
   const renderedGroup = useRef<THREE.Group>(null);
   const camera = useThree((state) => state.camera);
   const scratch = useMemo(
@@ -115,7 +118,10 @@ export function ArmyMarkers({
     const materialList: THREE.SpriteMaterial[] = [];
     const textureList: THREE.CanvasTexture[] = [];
     const players = new Map(
-      planet.players.map((player) => [player.id, player]),
+      configuredPlayers.map((player) => [
+        player.id,
+        { ...player, color: playerColorValue(player.colorId) },
+      ]),
     );
     for (const territory of planet.territories) {
       const territoryState = match.territories[territory.id]!;
@@ -157,7 +163,14 @@ export function ArmyMarkers({
       materials: materialList,
       textures: textureList,
     };
-  }, [match, planet, seaTargetIds, validSourceIds, validTargetIds]);
+  }, [
+    configuredPlayers,
+    match,
+    planet,
+    seaTargetIds,
+    validSourceIds,
+    validTargetIds,
+  ]);
 
   useFrame(() => {
     const current = renderedGroup.current;
