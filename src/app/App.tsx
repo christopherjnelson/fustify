@@ -7,7 +7,7 @@ export function App() {
       <GlobeScene />
       <TerritoryHud />
       <div className="interaction-hint" aria-hidden="true">
-        Drag to orbit · Scroll to zoom · Click to select
+        Drag to orbit · Scroll to zoom · Follow the phase prompts
       </div>
     </main>
   );

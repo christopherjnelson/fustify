@@ -1,6 +1,8 @@
-# Globe Risk — Technical Prototype
+# Worldseed
 
-A browser-based foundation for a voxel-styled planetary strategy game. This iteration proves that a deterministic, interactive strategic globe can be generated, inspected, and regenerated from a seed without a backend.
+**Generate a world. Conquer it.**
+
+A browser-based local hot-seat rules prototype for a voxel-styled planetary strategy game. This iteration places one complete Risk-style turn loop on the deterministic interactive globe. It is not a secure multiplayer implementation and has no backend or persistence.
 
 The prototype currently provides:
 
@@ -8,7 +10,11 @@ The prototype currently provides:
 - A deterministic, smoothed land/ocean mask with multiple landmasses and islands
 - Exactly 42 playable land territories grouped into 6 connected gameplay continents
 - Four deterministic placeholder players with balanced, connected ownership regions
-- Deterministic bounded placeholder armies shown through lightweight numbered markers
+- A separate serializable match state containing live ownership, armies, phase, selections, events, elimination, and victory
+- Reinforcement, repeated attacks, deterministic dice combat, mandatory post-capture movement, one connected-path fortification, and turn advancement
+- Phase-aware globe selection and numbered army markers with non-color source/target cues
+- Ownership, continent, and terrain display modes that do not affect rules state
+- Camera-facing marker hiding and silhouette fading so back-side markers do not detach from the globe
 - Non-playable visible oceans, emphasized coastlines, land borders, hover feedback, and persistent land selection
 - Geographic land-border connections plus a minimal sea-route tree and 0–3 deterministic redundancy routes
 - Smooth camera focus for selected territories and selected-route highlighting outside debug mode
@@ -33,6 +39,33 @@ pnpm lint
 pnpm build
 pnpm format:check
 ```
+
+## Local match rules
+
+The generated `PlanetDefinition` is immutable geography and topology. A separate `MatchState` owns all mutable gameplay data: territory owners and armies, active player, turn and phase, reinforcement pool, source/target selection, pending capture, combat sequence, player elimination, winner, and event history. Both structures are serializable data without React or Three.js objects. Regenerating creates a new definition and match; Reset Match reconstructs the original deterministic setup for the current seed.
+
+Each player turn follows these phases:
+
+1. **Reinforce:** place all awarded armies on owned territories. The phase advances automatically when the pool is empty.
+2. **Attack:** make zero or more attacks from an owned territory with at least two armies to a strategically adjacent enemy. Land borders and sea routes both count.
+3. **Capture move:** after a capture, move at least the number of attacking dice into the territory and leave at least one army behind. No other action is accepted until this completes.
+4. **Fortify:** move armies once between owned territories connected by any owned path, or skip.
+5. **End turn:** explicitly hand off to the next non-eliminated local player, who begins in Reinforce.
+
+Reinforcements use `max(3, floor(owned territories / 3))` plus the generated placeholder bonus for every fully owned gameplay continent. The HUD shows the base and continent portions separately.
+
+The attacker may roll one die with two armies, two with three armies, and three with four or more armies. The defender rolls up to two dice based on its army count. Rolls are sorted high-to-low, compared in pairs, and the defender wins ties. Combat never calls `Math.random()`: each battle gets a deterministic RNG stream derived from the match seed and combat sequence, and the event log records both dice arrays and casualties.
+
+Capturing transfers ownership immediately and checks elimination. A player with no territories is eliminated and skipped in turn order. When one player owns every playable territory, the required capture move completes first and then the match enters Game Over with a winner.
+
+### Globe interaction
+
+- Reinforce: dashed owned markers are valid targets; select one and place one or all remaining armies.
+- Attack: dashed owned markers are valid sources, outlined enemy markers are valid targets, and `≈` identifies sea-route targets. Select source, target, dice, and Attack.
+- Fortify: select a source with at least two armies, then any highlighted destination reachable through owned land-border or sea-route connections.
+- Selected sources use a diamond cue; selected targets use an × cue. Invalid territories are dimmed, captures receive brief emphasis, and active-player land is subtly brightened.
+- Ownership mode emphasizes player fill, Continents emphasizes gameplay regions while markers retain ownership, and Terrain emphasizes land/ocean geography. These modes are renderer preferences only.
+- The event log is toggleable and locally scrollable. Debug graph overlays remain available.
 
 For continuation context and a ready-to-use next-task brief, see [`HANDOFF.md`](./HANDOFF.md).
 
@@ -100,14 +133,15 @@ Non-fatal warnings flag land coverage outside 45–60%, landmass counts outside 
 
 ### State boundaries
 
-Zustand owns UI state and the current serializable planet: seed input, hover, selection, and debug mode. React Three Fiber owns scene objects and transient rendering concerns. Generation, geometry, validation, and types have no dependency on React or Three.js.
+Zustand owns the current serializable planet and match plus UI-only seed input, hover, display mode, event-log visibility, focus request, and debug mode. Components dispatch typed commands through the pure rules reducer; they do not implement gameplay mutations. React Three Fiber owns scene objects and transient camera/horizon calculations, so orbiting does not produce frame-by-frame Zustand updates. Generation, geometry, validation, and game rules have no dependency on React or Three.js.
 
 ## Current limitations
 
 - Boundaries and coastlines follow triangular surface-cell edges and are intentionally faceted.
 - The scalar field currently produces a binary strategic land/ocean mask, not detailed elevation or terrain modifiers.
 - Sea routes are strategic graph edges and debug lines, not navigable ocean territories.
-- Ownership, army values, and continent bonuses are deterministic visualization placeholders; there are no turns, reinforcement rules, or combat resolution.
+- This is trusted local hot-seat play. There is no server authority, secrecy between players, validation against a remote client, reconnect, or persistence.
+- Starting ownership, starting armies, and continent bonus values still come from deterministic procedural placeholders rather than a setup draft or balance pass.
 - Numbered markers are screen-facing sprites rather than troop models and do not aggregate at extreme zoom levels yet.
 - Camera focus centers a territory but does not yet frame a multi-territory selection.
 - Picking targets playable land territories and does not yet support structures.
@@ -115,24 +149,23 @@ Zustand owns UI state and the current serializable planet: seed input, hover, se
 - The prototype is tuned for roughly 42 territories; extreme counts may need adaptive tessellation.
 - Seed controls are local to a browser session and do not create shareable match URLs yet.
 
-## Most important next steps
+## Next recommended milestone
 
-1. Add accessible keyboard/list-based territory navigation and non-color ownership cues.
-2. Add a versioned match/setup model and encode seed/player settings in shareable URLs.
-3. Add generator diagnostics for comparing rejected compactness, gateway, and route candidates.
-4. Add zoom-dependent marker aggregation and strategic labels without introducing troop models.
-5. Prototype a setup-only ownership reroll/editor before adding any turn or combat system.
+Add a versioned, shareable local match/setup format with accessible keyboard/list-based territory navigation and a setup ownership draft/reroll. Keep the simulation client-local until a later server-authority milestone explicitly defines networking and trust boundaries.
 
 ## Deliberately Deferred
 
 - Multiplayer
+- Networking and server authority
 - Backend persistence
 - Authentication
-- Combat rules
-- Reinforcement rules
+- Matchmaking, reconnects, and spectators
+- Cards and trading
+- Alliances
 - Detailed terrain
 - True voxel terrain
 - Individual troop rendering
-- Animations
+- Animations beyond simple feedback
 - Sound
 - AI opponents
+- Production mobile polish
