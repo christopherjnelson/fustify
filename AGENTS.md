@@ -20,3 +20,15 @@ The visual scenario driver lives in `src/testSupport/visualScenarios.ts`. It mus
 Scenarios should use real domain construction and transitions wherever practical: `generatePlanet`, player and match setup helpers, `createMatch`, and `gameReducer`. Keep the fixed seed, camera, reduced-motion behavior, font, timezone, and hidden star field stable. Avoid full-scene pixel assertions against WebGL; prefer DOM assertions, focused UI-region screenshots, reasonable tolerances, and full-page images for human review.
 
 When adding a user-visible application state, add or update a deterministic visual scenario and its interaction/accessibility coverage.
+
+## Gameplay verification workflow
+
+Rules changes must be checked against all three gameplay layers:
+
+1. `pnpm test` for hand-authored fixtures, persistence, setup, and generation tests.
+2. `pnpm test:simulation` for the fast deterministic conservative/aggressive matrix.
+3. `pnpm test:simulation:stress` before handing off changes to rules, generation, setup, persistence, or turn flow.
+
+Use `pnpm test:coverage` to inspect pure rules and persistence branches. Do not change gameplay semantics solely to increase a coverage percentage.
+
+Simulation failures must retain the reproduction block printed by the harness. Replay it with `SIMULATION_SEED`, `SIMULATION_TERRITORIES`, `SIMULATION_CONTINENTS`, `SIMULATION_PLAYERS`, `SIMULATION_VARIANT`, and `SIMULATION_POLICY` followed by `pnpm test:simulation:replay`. The simulator must continue to choose actions through the real legal-action helpers and apply them through `gameReducer`; do not introduce a parallel rules implementation.

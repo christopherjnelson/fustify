@@ -124,6 +124,15 @@ const matchStateSchema = z.object({
   winnerId: z.string().nullable(),
   events: z.array(eventSchema),
 });
+
+export function validateMatchState(
+  value: unknown,
+): { ok: true; state: MatchState } | { ok: false; error: string } {
+  const parsed = matchStateSchema.safeParse(value);
+  return parsed.success
+    ? { ok: true, state: parsed.data }
+    : { ok: false, error: 'The match state failed runtime validation.' };
+}
 const currentSaveSchema = z.object({
   schemaVersion: z.literal(SAVE_SCHEMA_VERSION),
   savedAt: z.string().datetime(),

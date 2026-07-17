@@ -20,7 +20,9 @@ const scenarios: Array<{
   { name: 'reinforcement', region: '.hud', heading: /Crimson League/i },
   { name: 'attack-source', region: '.hud', heading: /Crimson League/i },
   { name: 'attack-target', region: '.hud', heading: /Crimson League/i },
+  { name: 'combat-result', region: '.hud', heading: /Crimson League/i },
   { name: 'pending-capture', region: '.hud', heading: /Move armies in/i },
+  { name: 'player-elimination', region: '.hud', heading: /Latest events/i },
   { name: 'fortification', region: '.hud', heading: /Crimson League/i },
   { name: 'game-over', region: '.hud', heading: /Match won/i },
   { name: 'navigator', region: '.hud', heading: /Crimson League/i },
@@ -40,6 +42,11 @@ for (const scenario of scenarios) {
       await expect(page.getByRole('dialog')).toBeVisible();
     }
     if (scenario.name === 'event-log') {
+      await page.locator('.hud').evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+    }
+    if (scenario.name === 'player-elimination') {
       await page.locator('.hud').evaluate((element) => {
         element.scrollTop = element.scrollHeight;
       });

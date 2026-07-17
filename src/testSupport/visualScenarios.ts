@@ -18,7 +18,9 @@ export type VisualScenario =
   | 'reinforcement'
   | 'attack-source'
   | 'attack-target'
+  | 'combat-result'
   | 'pending-capture'
+  | 'player-elimination'
   | 'fortification'
   | 'game-over'
   | 'navigator'
@@ -92,15 +94,27 @@ function winningDice() {
 function pendingCapture(
   match: MatchState,
   planet: ReturnType<typeof generatePlanet>,
+  eliminateTargetOwner = false,
 ): MatchState {
   const attack = advanceToAttack(match, planet);
   const { sourceId, targetId } = borderPair(attack, planet);
+  const targetOwnerId = attack.territories[targetId]!.ownerId;
+  const preparedTerritories = eliminateTargetOwner
+    ? Object.fromEntries(
+        Object.entries(attack.territories).map(([id, territory]) => [
+          id,
+          territory.ownerId === targetOwnerId && id !== targetId
+            ? { ...territory, ownerId: attack.activePlayerId }
+            : territory,
+        ]),
+      )
+    : attack.territories;
   const prepared: MatchState = {
     ...attack,
     territories: {
-      ...attack.territories,
-      [sourceId]: { ...attack.territories[sourceId]!, armyCount: 12 },
-      [targetId]: { ...attack.territories[targetId]!, armyCount: 1 },
+      ...preparedTerritories,
+      [sourceId]: { ...preparedTerritories[sourceId]!, armyCount: 12 },
+      [targetId]: { ...preparedTerritories[targetId]!, armyCount: 1 },
     },
   };
   return gameReducer(
@@ -113,6 +127,33 @@ function pendingCapture(
       attackDice: 3,
     },
     { createCombatRng: winningDice },
+  ).state;
+}
+
+function combatResult(
+  match: MatchState,
+  planet: ReturnType<typeof generatePlanet>,
+): MatchState {
+  const attack = advanceToAttack(match, planet);
+  const { sourceId, targetId } = borderPair(attack, planet);
+  const prepared: MatchState = {
+    ...attack,
+    territories: {
+      ...attack.territories,
+      [sourceId]: { ...attack.territories[sourceId]!, armyCount: 8 },
+      [targetId]: { ...attack.territories[targetId]!, armyCount: 5 },
+    },
+  };
+  return gameReducer(
+    planet,
+    prepared,
+    {
+      type: 'ATTACK',
+      fromTerritoryId: sourceId,
+      toTerritoryId: targetId,
+      attackDice: 3,
+    },
+    { createCombatRng: () => ({ integer: () => 4 }) },
   ).state;
 }
 
@@ -188,8 +229,15 @@ function applyScenario(scenario: VisualScenario) {
       }).state;
     }
   }
+  if (scenario === 'combat-result') {
+    scenarioMatch = combatResult(match, planet);
+  }
   if (scenario === 'pending-capture') {
     scenarioMatch = pendingCapture(match, planet);
+  }
+  if (scenario === 'player-elimination') {
+    scenarioMatch = pendingCapture(match, planet, true);
+    eventLogOpen = true;
   }
   if (scenario === 'fortification') {
     scenarioMatch = gameReducer(planet, advanceToAttack(match, planet), {
@@ -250,7 +298,13 @@ declare global {
         phase: MatchState['phase'];
         focusSequence: number;
         focusTargetTerritoryId: string | null;
+        match: MatchState;
+        planet: ReturnType<typeof generatePlanet>;
+        ownershipVariant: number;
       };
+      dispatch: (action: Parameters<typeof gameReducer>[2]) => void;
+      save: () => void;
+      prepareAttack: (type: 'land-border' | 'sea-route') => void;
     };
   }
 }
@@ -264,6 +318,41 @@ window.__WORLDSEED_VISUAL__ = {
       phase: state.match.phase,
       focusSequence: state.focusSequence,
       focusTargetTerritoryId: state.focusTargetTerritoryId,
+      match: structuredClone(state.match),
+      planet: structuredClone(state.planet),
+      ownershipVariant: state.matchSetup.ownershipVariant,
     };
+  },
+  dispatch: (action) => useGameStore.getState().dispatchGameAction(action),
+  save: () => useGameStore.getState().saveMatch(),
+  prepareAttack: (type) => {
+    const store = useGameStore.getState();
+    const match = advanceToAttack(store.match, store.planet);
+    const connection = store.planet.connections.find(
+      (item) => item.type === type,
+    )!;
+    const otherPlayerId = Object.keys(match.players).find(
+      (id) => id !== match.activePlayerId,
+    )!;
+    const prepared: MatchState = {
+      ...match,
+      territories: {
+        ...match.territories,
+        [connection.fromTerritoryId]: {
+          ownerId: match.activePlayerId,
+          armyCount: 8,
+        },
+        [connection.toTerritoryId]: { ownerId: otherPlayerId, armyCount: 5 },
+      },
+    };
+    const sourceSelected = gameReducer(store.planet, prepared, {
+      type: 'SELECT_TERRITORY',
+      territoryId: connection.fromTerritoryId,
+    }).state;
+    const targetSelected = gameReducer(store.planet, sourceSelected, {
+      type: 'SELECT_TERRITORY',
+      territoryId: connection.toTerritoryId,
+    }).state;
+    useGameStore.setState({ match: targetSelected, lastActionError: null });
   },
 };

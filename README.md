@@ -40,6 +40,9 @@ Quality checks:
 
 ```bash
 pnpm test
+pnpm test:coverage
+pnpm test:simulation
+pnpm test:simulation:stress
 pnpm lint
 pnpm build
 pnpm format:check
@@ -63,11 +66,41 @@ pnpm test:visual
 pnpm test:visual:update
 ```
 
-`test:e2e` covers accessible labels and headings, handoff focus containment, navigator open/close and keyboard behavior, territory selection and camera-focus requests, reinforcement, attack, capture, fortification, event-log controls, save resume, and game-over actions. `test:visual` compares stable UI-region screenshots with the committed baselines in `tests/e2e/visual.spec.ts-snapshots/`. Use `test:visual:update` only after reviewing intentional UI changes.
+`test:e2e` covers real world setup and pregame validation, ownership rerolls, first and later handoffs, reinforcement, land-border and sea-route combat, invalid actions, capture movement, elimination, connected-path fortification, turn completion, four in-progress save/resume phases, rematches, navigator keyboard behavior, event-log controls, and victory. `test:visual` compares stable UI-region screenshots with the committed baselines in `tests/e2e/visual.spec.ts-snapshots/`. Use `test:visual:update` only after reviewing intentional UI changes.
 
 Every visual run also writes full-page human-review captures to `test-results/ui-review/<project>/`. Playwright failure screenshots, traces, and its HTML report remain under `test-results/`. Those generated results are ignored by Git.
 
 The visual route uses the fixed `visual-review-atlas` world, default camera orientation, reduced motion, a deterministic font and timezone, and no animated star field. Scenario state is built with the real generator, match setup, match constructor, and rules reducer. The scenario driver is loaded only when Vite is in development mode and `visual-review=1` is present; production builds do not include or expose it. Full-page images are for human inspection, while assertions target UI regions with a small pixel tolerance so animated WebGL details do not make the suite brittle.
+
+## Automated gameplay verification
+
+Gameplay verification has three complementary layers:
+
+- Hand-authored rules fixtures cover adjacent territories, land borders, sea routes, owned and enemy-blocked chains, branched graphs, disconnected ownership, one and multiple continents, zero-territory players, pending capture, and near-victory states. These tests exercise reinforcement and continent bonuses, action legality, dice and ties, casualties, capture bounds, elimination and turn skipping, connected fortification, victory, deterministic events, invalid-action immutability, and serialization.
+- Playwright drives the real store and UI at all three supported viewports. Its scenario and inspection API is development-only and remains gated by both `import.meta.env.DEV` and `visual-review=1`.
+- The headless simulator constructs real generated worlds and starting positions, asks the rules helpers for legal actions, and dispatches every transition through `gameReducer`. The conservative policy makes at most two favorable attacks per turn and performs basic fortification; the aggressive policy attacks whenever a legal target remains and moves the maximum legal capture force.
+
+The simulator validates the runtime match schema and invariants after every transition: immutable planet data, complete valid ownership, integer armies, elimination consistency, a live active player, non-negative reinforcement pools, phase/action compatibility, capture blocking, one fortification per turn, strategic adjacency, turn ownership, monotonic combat sequence, ordered event IDs, winner consistency, and JSON semantic round trips. The pending-capture destination is the one intentional temporary exception to the normal `armyCount >= 1` invariant: it has zero armies between ownership transfer and the mandatory capture move.
+
+The fast matrix runs ten deterministic setup combinations across player counts 2–6 with both policies. The local stress matrix runs 135 world/setup combinations—territory counts 12, 18, and 24; continent counts 2, 3, and 4; player counts 2–6; and three ownership variants—with both policies and a 750-action bound per match. Some small generated worlds cannot satisfy the bounded balanced-connected ownership or starting-position candidate search for their first seed; simulation setup retries a documented deterministic seed suffix sequence and reports the actual successful world seed.
+
+Every failure includes the actual world seed, generator version, territory and continent counts, player count, ownership variant, policy, turn, phase, last action, recent actions, and recent events. Replay a reported failure with:
+
+```bash
+SIMULATION_SEED='<seed>' \
+SIMULATION_TERRITORIES=18 \
+SIMULATION_CONTINENTS=3 \
+SIMULATION_PLAYERS=4 \
+SIMULATION_VARIANT=0 \
+SIMULATION_POLICY=aggressive \
+pnpm test:simulation:replay
+```
+
+`pnpm test:coverage` writes text, HTML, and JSON-summary reports for the pure game and save-validation modules. The HTML report is generated under `coverage/`. Coverage is used to identify rule branches—not as a 100% target. Remaining low-value branches are mainly malformed/unknown command variants and defensive lookup failures; browser-local storage exceptions, free-form globe dragging, and subjective play balance still require integration or manual playtesting.
+
+The current focused report is 92.54% statements, 87.5% branches, 100% functions, and 92.68% lines. Combat, match creation, events, reinforcement, and legal-action lines have complete coverage; the principal meaningful gaps are defensive reducer command variants and malformed save-version/shape branches.
+
+In the current deterministic matrices, the smoke suite reached 7 victories in 20 bounded runs and exercised 7,767 state transitions. The stress suite reached 124 victories in 270 bounded runs and exercised 146,287 transitions; the remaining runs stopped cleanly at their configured action limit rather than failing an invariant.
 
 ## Branding and logo variants
 
