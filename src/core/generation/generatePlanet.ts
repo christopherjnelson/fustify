@@ -1,18 +1,41 @@
+import { createIcosphere } from '../geometry/icosphere';
 import type {
   PlanetDefinition,
   PlanetGenerationOptions,
 } from '../types/planet';
 import type { TerritoryDefinition } from '../types/territory';
-import { generateSpherePoints } from '../geometry/spherePoints';
-import { buildAdjacency, classifyTerritorySurface } from './buildAdjacency';
+import { analyzeStrategicGraph } from './analyzeGraph';
+import {
+  adjacencyFromConnections,
+  buildLandBorderConnections,
+  buildSeaRoutes,
+  buildTerritoryBorderWeights,
+  findCoastalTerritoryIndices,
+  territoryId,
+} from './buildConnections';
 import {
   CONTINENT_PALETTE,
   DEFAULT_CONTINENT_COUNT,
+  DEFAULT_LAND_COVERAGE,
+  DEFAULT_PLAYER_COUNT,
   DEFAULT_TERRITORY_COUNT,
   GENERATOR_VERSION,
+  MAX_PLACEHOLDER_ARMIES,
+  MIN_PLACEHOLDER_ARMIES,
+  PLANET_SUBDIVISIONS,
 } from './constants';
-import { generateContinentAssignments } from './generateContinents';
+import {
+  calculateContinentBonus,
+  chooseSpatialContinentAssignments,
+} from './generateContinents';
+import {
+  generateOwnershipAssignments,
+  generatePlayers,
+} from './generatePlayers';
+import { generateTerrain } from './generateTerrain';
+import { generateTerritoryLayout } from './generateTerritories';
 import { createSeededRandom } from './seededRandom';
+import { buildCellAdjacency } from './surfaceTopology';
 import { validatePlanet } from './validatePlanet';
 
 const CONTINENT_NAMES = [
@@ -41,12 +64,12 @@ const TERRITORY_PREFIXES = [
   'Lumen',
 ] as const;
 
-function territoryId(index: number): string {
-  return `territory-${String(index + 1).padStart(2, '0')}`;
-}
-
 function continentId(index: number): string {
   return `continent-${String(index + 1).padStart(2, '0')}`;
+}
+
+function landmassId(index: number): string {
+  return `landmass-${String(index + 1).padStart(2, '0')}`;
 }
 
 function shadeColor(hex: string, variation: number): string {
@@ -66,6 +89,8 @@ export function generatePlanet(
   const normalizedSeed = seed.trim() || 'new-world';
   const territoryCount = options.territoryCount ?? DEFAULT_TERRITORY_COUNT;
   const continentCount = options.continentCount ?? DEFAULT_CONTINENT_COUNT;
+  const playerCount = options.playerCount ?? DEFAULT_PLAYER_COUNT;
+  const targetLandCoverage = options.landCoverage ?? DEFAULT_LAND_COVERAGE;
   if (!Number.isInteger(territoryCount) || territoryCount < 2) {
     throw new Error('Territory count must be an integer of at least 2.');
   }
@@ -76,66 +101,183 @@ export function generatePlanet(
   ) {
     throw new Error('Continent count must be between 1 and territory count.');
   }
+  if (targetLandCoverage < 0.35 || targetLandCoverage > 0.7) {
+    throw new Error('Land coverage must be between 35% and 70%.');
+  }
+  if (!Number.isInteger(playerCount) || playerCount < 2 || playerCount > 6) {
+    throw new Error('Player count must be an integer between 2 and 6.');
+  }
 
-  const pointRandom = createSeededRandom(
-    `${normalizedSeed}|points|${GENERATOR_VERSION}`,
+  const sphere = createIcosphere(PLANET_SUBDIVISIONS);
+  const cellAdjacency = buildCellAdjacency(sphere);
+  const terrain = generateTerrain(
+    `${normalizedSeed}|v${GENERATOR_VERSION}`,
+    sphere,
+    cellAdjacency,
+    targetLandCoverage,
   );
-  const centers = generateSpherePoints(territoryCount, pointRandom);
-  const surface = classifyTerritorySurface(centers);
-  const adjacency = buildAdjacency(centers, surface);
-  const continentRandom = createSeededRandom(
-    `${normalizedSeed}|continents|${GENERATOR_VERSION}`,
+  const layout = generateTerritoryLayout(
+    sphere,
+    cellAdjacency,
+    terrain.landComponents,
+    terrain.likelihood,
+    territoryCount,
   );
-  const assignments = generateContinentAssignments(
-    adjacency,
+  const landBorders = buildLandBorderConnections(
+    layout.cellTerritoryIndices,
+    cellAdjacency,
+  );
+  const borderWeights = buildTerritoryBorderWeights(
+    layout.cellTerritoryIndices,
+    cellAdjacency,
+  );
+  const routeRandom = createSeededRandom(
+    `${normalizedSeed}|routes|${GENERATOR_VERSION}`,
+  );
+  const additionalRouteCount = routeRandom.integer(0, 3);
+  const seaRoutes = buildSeaRoutes(
+    layout.territoryCenters,
+    layout.territoryLandmassIndices,
+    terrain.landComponents.length,
+    additionalRouteCount,
+    findCoastalTerritoryIndices(layout.cellTerritoryIndices, cellAdjacency),
+  );
+  const connections = [...landBorders, ...seaRoutes];
+  const strategicAdjacency = adjacencyFromConnections(
+    territoryCount,
+    connections,
+  );
+  const assignments = chooseSpatialContinentAssignments(
+    strategicAdjacency,
+    borderWeights,
     continentCount,
-    continentRandom,
+    `${normalizedSeed}|v${GENERATOR_VERSION}`,
+  );
+  const players = generatePlayers(playerCount);
+  const ownershipAssignments = generateOwnershipAssignments(
+    strategicAdjacency,
+    playerCount,
+    `${normalizedSeed}|v${GENERATOR_VERSION}`,
   );
   const detailRandom = createSeededRandom(
     `${normalizedSeed}|details|${GENERATOR_VERSION}`,
   );
+  const armyRandom = createSeededRandom(
+    `${normalizedSeed}|armies|${GENERATOR_VERSION}`,
+  );
 
-  const territories: TerritoryDefinition[] = centers.map((center, index) => {
-    const assignedContinent = assignments[index]!;
-    const prefix = TERRITORY_PREFIXES[index % TERRITORY_PREFIXES.length];
-    return {
-      id: territoryId(index),
-      name: `${prefix} ${String(index + 1).padStart(2, '0')}`,
-      center,
-      continentId: continentId(assignedContinent),
-      displayColor: shadeColor(
-        CONTINENT_PALETTE[assignedContinent % CONTINENT_PALETTE.length]!,
-        detailRandom.integer(-15, 15),
-      ),
-      adjacentTerritoryIds: adjacency[index]!.map(territoryId),
-      ownerId: null,
-      armyCount: detailRandom.integer(1, 8),
-    };
-  });
+  const territories: TerritoryDefinition[] = layout.territoryCenters.map(
+    (center, index) => {
+      const assignedContinent = assignments[index]!;
+      const prefix = TERRITORY_PREFIXES[index % TERRITORY_PREFIXES.length];
+      return {
+        id: territoryId(index),
+        name: `${prefix} ${String(index + 1).padStart(2, '0')}`,
+        center,
+        continentId: continentId(assignedContinent),
+        displayColor: shadeColor(
+          CONTINENT_PALETTE[assignedContinent % CONTINENT_PALETTE.length]!,
+          detailRandom.integer(-15, 15),
+        ),
+        adjacentTerritoryIds: strategicAdjacency[index]!.map(territoryId),
+        ownerId: players[ownershipAssignments[index]!]!.id,
+        armyCount: armyRandom.integer(
+          MIN_PLACEHOLDER_ARMIES,
+          MAX_PLACEHOLDER_ARMIES,
+        ),
+        cellCount: layout.territoryCellCounts[index]!,
+        landmassId: landmassId(layout.territoryLandmassIndices[index]!),
+      };
+    },
+  );
 
   const continents = Array.from({ length: continentCount }, (_, index) => {
     const ids = territories
       .filter((territory) => territory.continentId === continentId(index))
       .map((territory) => territory.id);
+    const idSet = new Set(ids);
+    const externalGatewayTerritoryIds = ids.filter((id) => {
+      const territory = territories.find((item) => item.id === id)!;
+      return territory.adjacentTerritoryIds.some(
+        (neighbor) => !idSet.has(neighbor),
+      );
+    });
+    const neighboringContinentIds = [
+      ...new Set(
+        ids.flatMap((id) => {
+          const territory = territories.find((item) => item.id === id)!;
+          return territory.adjacentTerritoryIds
+            .map(
+              (neighbor) =>
+                territories.find((item) => item.id === neighbor)!.continentId,
+            )
+            .filter(
+              (neighborContinentId) =>
+                neighborContinentId !== continentId(index),
+            );
+        }),
+      ),
+    ].sort();
     return {
       id: continentId(index),
       name:
         CONTINENT_NAMES[index % CONTINENT_NAMES.length] ??
         `Region ${index + 1}`,
       territoryIds: ids,
-      bonus: Math.max(2, Math.round(ids.length / 3)),
+      bonus: calculateContinentBonus(
+        ids.length,
+        externalGatewayTerritoryIds.length,
+        neighboringContinentIds.length,
+      ),
+      externalGatewayTerritoryIds,
+      neighboringContinentIds,
     };
   });
+
+  const surfaceCells = layout.cellTerritoryIndices.map(
+    (territoryIndex, id) => ({
+      id,
+      terrainType:
+        territoryIndex === null ? ('ocean' as const) : ('land' as const),
+      territoryId: territoryIndex === null ? null : territoryId(territoryIndex),
+    }),
+  );
+  const landmasses = terrain.landComponents.map((_, index) => ({
+    id: landmassId(index),
+    territoryIds: territories
+      .filter((territory) => territory.landmassId === landmassId(index))
+      .map((territory) => territory.id),
+  }));
+  const analysis = analyzeStrategicGraph(
+    territories,
+    connections,
+    continents,
+    landmasses,
+    borderWeights,
+  );
 
   const planet: PlanetDefinition = {
     seed: normalizedSeed,
     generatorVersion: GENERATOR_VERSION,
     territoryCount,
     continentCount,
+    playerCount,
+    players,
     territories,
     continents,
+    surfaceCells,
+    landmasses,
+    connections,
+    landCoverage:
+      surfaceCells.filter((cell) => cell.terrainType === 'land').length /
+      surfaceCells.length,
+    analysis,
   };
-  const validation = validatePlanet(planet);
+  const validation = validatePlanet(planet, {
+    territoryCount,
+    continentCount,
+    playerCount,
+  });
   if (!validation.valid) {
     throw new Error(
       `Generated an invalid planet: ${validation.errors.join(' ')}`,

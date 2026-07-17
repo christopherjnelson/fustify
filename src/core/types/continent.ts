@@ -3,4 +3,6 @@ export interface ContinentDefinition {
   name: string;
   territoryIds: string[];
   bonus: number;
+  externalGatewayTerritoryIds: string[];
+  neighboringContinentIds: string[];
 }

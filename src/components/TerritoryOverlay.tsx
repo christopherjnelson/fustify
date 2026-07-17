@@ -1,67 +1,129 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import type { TerritorySurface } from '../core/generation/buildAdjacency';
+import type { IcosphereData } from '../core/geometry/icosphere';
 import { PLANET_RADIUS } from '../core/generation/constants';
+import type { SurfaceCellDefinition } from '../core/types/surface';
+import type { TerritoryDefinition } from '../core/types/territory';
 
 interface TerritoryOverlayProps {
-  surface: TerritorySurface;
+  sphere: IcosphereData;
+  surfaceCells: readonly SurfaceCellDefinition[];
+  territories: readonly TerritoryDefinition[];
   emphasized: boolean;
 }
 
+function boundaryGeometry(
+  sphere: IcosphereData,
+  surfaceCells: readonly SurfaceCellDefinition[],
+  territoryContinents: ReadonlyMap<string, string>,
+  kind: 'coastline' | 'territory' | 'continent',
+) {
+  const edgeFaces = new Map<string, number>();
+  const positions: number[] = [];
+  sphere.faces.forEach(([a, b, c], faceIndex) => {
+    for (const [first, second] of [
+      [a, b],
+      [b, c],
+      [c, a],
+    ] as const) {
+      const key = first < second ? `${first}:${second}` : `${second}:${first}`;
+      const priorFace = edgeFaces.get(key);
+      if (priorFace === undefined) {
+        edgeFaces.set(key, faceIndex);
+        continue;
+      }
+      const firstCell = surfaceCells[priorFace]!;
+      const secondCell = surfaceCells[faceIndex]!;
+      const isCoastline = firstCell.terrainType !== secondCell.terrainType;
+      const isTerritoryBorder =
+        firstCell.terrainType === 'land' &&
+        secondCell.terrainType === 'land' &&
+        firstCell.territoryId !== secondCell.territoryId;
+      const isContinentBorder =
+        isTerritoryBorder &&
+        territoryContinents.get(firstCell.territoryId!) !==
+          territoryContinents.get(secondCell.territoryId!);
+      if (
+        (kind === 'coastline' && !isCoastline) ||
+        (kind === 'territory' && !isTerritoryBorder) ||
+        (kind === 'continent' && !isContinentBorder)
+      ) {
+        continue;
+      }
+      for (const vertexIndex of [first, second]) {
+        const vertex = sphere.vertices[vertexIndex]!;
+        const radius = PLANET_RADIUS * 1.006;
+        positions.push(
+          vertex[0] * radius,
+          vertex[1] * radius,
+          vertex[2] * radius,
+        );
+      }
+    }
+  });
+  const result = new THREE.BufferGeometry();
+  result.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(positions, 3),
+  );
+  return result;
+}
+
 export function TerritoryOverlay({
-  surface,
+  sphere,
+  surfaceCells,
+  territories,
   emphasized,
 }: TerritoryOverlayProps) {
-  const geometry = useMemo(() => {
-    const edgeFaces = new Map<string, number>();
-    const positions: number[] = [];
-    surface.sphere.faces.forEach(([a, b, c], faceIndex) => {
-      const edges: [number, number][] = [
-        [a, b],
-        [b, c],
-        [c, a],
-      ];
-      for (const [first, second] of edges) {
-        const key =
-          first < second ? `${first}:${second}` : `${second}:${first}`;
-        const priorFace = edgeFaces.get(key);
-        if (priorFace === undefined) {
-          edgeFaces.set(key, faceIndex);
-          continue;
-        }
-        if (
-          surface.faceTerritoryIndices[priorFace] ===
-          surface.faceTerritoryIndices[faceIndex]
-        ) {
-          continue;
-        }
-        for (const vertexIndex of [first, second]) {
-          const vertex = surface.sphere.vertices[vertexIndex]!;
-          const radius = PLANET_RADIUS * 1.006;
-          positions.push(
-            vertex[0] * radius,
-            vertex[1] * radius,
-            vertex[2] * radius,
-          );
-        }
-      }
-    });
-    const result = new THREE.BufferGeometry();
-    result.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(positions, 3),
-    );
-    return result;
-  }, [surface]);
+  const territoryContinents = useMemo(
+    () =>
+      new Map(
+        territories.map((territory) => [territory.id, territory.continentId]),
+      ),
+    [territories],
+  );
+  const coastlines = useMemo(
+    () =>
+      boundaryGeometry(sphere, surfaceCells, territoryContinents, 'coastline'),
+    [sphere, surfaceCells, territoryContinents],
+  );
+  const territoryBorders = useMemo(
+    () =>
+      boundaryGeometry(sphere, surfaceCells, territoryContinents, 'territory'),
+    [sphere, surfaceCells, territoryContinents],
+  );
+  const continentBorders = useMemo(
+    () =>
+      boundaryGeometry(sphere, surfaceCells, territoryContinents, 'continent'),
+    [sphere, surfaceCells, territoryContinents],
+  );
 
   return (
-    <lineSegments geometry={geometry} renderOrder={2}>
-      <lineBasicMaterial
-        color={emphasized ? '#d7efff' : '#09121d'}
-        transparent
-        opacity={emphasized ? 0.9 : 0.55}
-        depthWrite={false}
-      />
-    </lineSegments>
+    <>
+      <lineSegments geometry={territoryBorders} renderOrder={2}>
+        <lineBasicMaterial
+          color={emphasized ? '#d7efff' : '#09121d'}
+          transparent
+          opacity={emphasized ? 0.92 : 0.78}
+          depthWrite={false}
+        />
+      </lineSegments>
+      <lineSegments geometry={continentBorders} renderOrder={3}>
+        <lineBasicMaterial
+          color={emphasized ? '#ffe29a' : '#d8ad62'}
+          transparent
+          opacity={emphasized ? 1 : 0.48}
+          depthWrite={false}
+        />
+      </lineSegments>
+      <lineSegments geometry={coastlines} renderOrder={4}>
+        <lineBasicMaterial
+          color={emphasized ? '#bcecff' : '#67b5d4'}
+          transparent
+          opacity={emphasized ? 1 : 0.78}
+          depthWrite={false}
+        />
+      </lineSegments>
+    </>
   );
 }

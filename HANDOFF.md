@@ -2,7 +2,7 @@
 
 ## Current state
 
-The first technical prototype is complete. It renders a deterministic, interactive 3D strategic globe with 42 territories and 6 connected continents. The repository is a new Vite/React/TypeScript application; there is no backend or persisted match state.
+The strategic-readability milestone is complete. The prototype renders a deterministic globe with visible non-playable oceans, 42 contiguous territories, 6 spatially coherent gameplay continents, 4 balanced placeholder players, numbered army markers, smooth camera focus, selected/debug sea routes, and serialized graph/cohesion analysis. There is no backend or persisted match state.
 
 The implementation has been verified with:
 
@@ -13,16 +13,22 @@ pnpm build
 pnpm format:check
 ```
 
-All commands pass. Vitest currently runs 9 generator tests. Vite emits a non-blocking warning because the Three.js/R3F production chunk is about 328 KB gzip.
+All commands pass. Vitest covers terrain masks, territories, ownership, armies, physical landmasses, compact continents, route redundancy, graph algorithms, bonuses, validation, and serialization. Vite may emit a non-blocking chunk-size warning for the Three.js/R3F production bundle.
 
 ## Start here
 
 - `README.md` explains the generation technique, architecture decisions, limitations, and deferred scope.
 - `src/core/generation/generatePlanet.ts` is the top-level deterministic generation pipeline.
-- `src/core/generation/buildAdjacency.ts` classifies icosphere faces and derives graph edges from rendered borders.
-- `src/core/generation/generateContinents.ts` creates connected graph partitions.
+- `src/core/generation/generateTerrain.ts` builds and smooths deterministic land-likelihood candidates.
+- `src/core/generation/generateTerritories.ts` selects spread land seeds and performs contiguous graph growth.
+- `src/core/generation/buildConnections.ts` derives land borders and a minimal sea-route tree.
+- `src/core/generation/generateContinents.ts` selects connected, boundary-weighted compact continent partitions.
+- `src/core/generation/generatePlayers.ts` creates players and balanced connected ownership.
+- `src/core/generation/analyzeGraph.ts` contains independent Tarjan graph analysis and cohesion metrics.
 - `src/core/generation/validatePlanet.ts` contains Zod shape validation and graph invariants.
-- `src/components/Planet.tsx` builds the single colored globe mesh and maps raycast face indices back to territories.
+- `src/components/Planet.tsx` builds separate land/ocean meshes and maps land raycasts back to territories.
+- `src/components/ArmyMarkers.tsx` builds shared-material numbered sprite markers without per-territory React components.
+- `src/components/CameraController.tsx` handles renderer-local focus interpolation.
 - `src/state/useGameStore.ts` owns the generated planet and interactive UI state.
 
 ## Important invariants
@@ -30,7 +36,12 @@ All commands pass. Vitest currently runs 9 generator tests. Vite emits a non-blo
 - Do not use `Math.random()` inside generation. Add a named deterministic seed stream when a generation phase needs randomness.
 - Increment `GENERATOR_VERSION` in `src/core/generation/constants.ts` when a generation change intentionally alters existing seeded worlds.
 - Keep `PlanetDefinition` serializable and free of React or Three.js objects.
-- Territory adjacency must remain non-empty, symmetrical, deduplicated, self-link-free, and globally connected.
+- Ocean cells must remain unassigned and territory cells must remain contiguous land.
+- Strategic connections must remain symmetrical, deduplicated, self-link-free, and globally connected.
+- Physical landmasses and gameplay continents are independent domain concepts.
+- Gameplay continents must remain connected and spatially coherent according to land-border weights.
+- Every territory must have one valid player owner and an army value inside placeholder bounds.
+- Serialized graph analysis must match a fresh analysis of generated connections.
 - Continents must remain non-empty and graph-connected.
 - Rendering and logical generation currently share the same icosphere subdivision constant so visual borders and adjacency agree.
 

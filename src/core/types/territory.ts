@@ -9,4 +9,6 @@ export interface TerritoryDefinition {
   adjacentTerritoryIds: string[];
   ownerId: string | null;
   armyCount: number;
+  cellCount: number;
+  landmassId: string;
 }
