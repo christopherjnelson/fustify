@@ -4,6 +4,10 @@
 
 Worldseed is a deterministic globe-strategy prototype with a complete trusted local hot-seat loop. The generated planet remains immutable while a separate serializable match state owns live territory ownership, armies, turns, phases, selections, pending captures, combat sequence, elimination, victory, and events.
 
+The current milestone adds a third boundary: versioned `WorldSetup` data. Version 1 serializes seed, territory count, continent count, and player count into shareable URLs. Applying or randomizing setup pushes browser history and rebuilds the planet plus initial match; Reset Match changes gameplay only. Back/forward navigation reconstructs the setup and initial match. Existing `logo=a` / `logo=b` and unknown query parameters survive setup writes.
+
+The searchable, keyboard-operable territory navigator now lives in a closed-by-default modal side drawer, adapting to a bottom sheet on narrow screens. My territories and All territories filters operate on the pure view model, which uses existing legal-action helpers and labels valid/selected source and target states, invalid territories, and sea-route targets with text and symbols. List and globe selections both reach the same typed reducer action; list selection also emits a repeatable request through the existing smooth camera-focus system.
+
 The playable loop is:
 
 1. Reinforce with territory-count and fully owned continent bonuses.
@@ -18,7 +22,7 @@ There is no backend, persistence, authentication, networking, or server authorit
 
 ## Verification baseline
 
-The current baseline is 57 passing Vitest tests: 33 generation/graph tests and 24 match-rule tests. Before handoff, run:
+The current baseline is 75 passing Vitest tests across generation/graph, match rules, setup parsing/serialization, navigator legality/filtering/drawer state, and store focus integration. Before handoff, run:
 
 ```bash
 pnpm test
@@ -37,6 +41,10 @@ Vite may emit the existing non-blocking Three.js/R3F chunk-size warning.
 - `src/core/generation/generatePlanet.ts` is the immutable world-generation entrypoint.
 - `src/core/generation/analyzeGraph.ts` contains strategic graph and cohesion analysis.
 - `src/state/useGameStore.ts` coordinates the current planet, match reducer, and UI-only preferences.
+- `src/core/setup/worldSetup.ts` owns pure defaults, validation, parsing, comparison, and deterministic serialization.
+- `src/browser/setupUrl.ts` is the browser-only location/history adapter.
+- `src/core/navigation/territoryNavigator.ts` derives accessible list status from existing legal-action helpers.
+- `src/components/TerritoryNavigator.tsx` renders the searchable modal drawer, ownership filters, focus trap, and selection announcements.
 - `src/components/Planet.tsx` maps match state and legal-action sets onto the generated globe.
 - `src/components/ArmyMarkers.tsx` owns numbered marker rendering and camera-facing horizon visibility.
 - `src/components/TerritoryHud.tsx` contains phase-specific hot-seat controls and event/debug panels.
@@ -58,6 +66,12 @@ The retained transparent assets are:
 
 Keep both until a future task explicitly selects and removes a variant.
 
+## Setup URL contract
+
+Version 1 uses `v=1`, `seed` (default `atlas-prime`), `territories` (12–48, default 42), `continents` (2–8 and no more than territories, default 6), and `players` (2–6, default 4). Unsupported versions load all defaults with a warning. Malformed numeric values cannot reach the generator unchecked. Serialization emits setup keys in a stable order, followed by sorted preserved query parameters.
+
+Example: `/?v=1&seed=atlas-prime&territories=42&continents=6&players=4&logo=b`.
+
 ## Important invariants
 
 - Never mutate `PlanetDefinition` during gameplay.
@@ -72,10 +86,17 @@ Keep both until a future task explicitly selects and removes a variant.
 - Land borders and sea routes both count for attacks and owned-path fortification.
 - A captured territory requires its legal post-capture move before any other action.
 - Regenerating creates a new match for the new world; Reset Match restores the deterministic initial state for the current seed.
+- Setup URLs restore initial matches only; in-progress match state and UI preferences are not encoded.
+
+## Known limitations
+
+- The subdivision-level-4 surface remains fixed throughout the supported 12–48 territory range.
+- History navigation intentionally rebuilds an initial match rather than preserving turns played under each history entry.
+- The navigator has a responsive bottom-sheet layout, but broader production mobile polish remains deferred.
 
 ## Recommended next milestone
 
-Add a versioned, shareable setup/match URL model while preserving the existing `logo` query parameter. Include seed and supported generation settings, safe parsing/fallback behavior, URL updates after regeneration, and tests proving copied URLs reconstruct the same world. Accessible keyboard/list-based territory navigation is the next complementary usability improvement.
+Add an accessible, deterministic starting-ownership draft/reroll with balance summaries and an optional setup preview. Keep ownership setup separate from mutable match turns and extend the versioned format only with an explicit compatibility decision.
 
 ## Deliberately deferred
 

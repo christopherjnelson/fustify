@@ -31,9 +31,21 @@ export function CameraController() {
       .set(...territory.center)
       .applyEuler(PLANET_ROTATION)
       .normalize();
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const distance = THREE.MathUtils.clamp(camera.position.length(), 3.1, 8);
+      camera.position.copy(
+        destination.current.clone().multiplyScalar(distance),
+      );
+      camera.lookAt(0, 0, 0);
+      controls.current?.target.set(0, 0, 0);
+      controls.current?.update();
+      focusing.current = false;
+      if (controls.current) controls.current.enabled = true;
+      return;
+    }
     focusing.current = true;
     if (controls.current) controls.current.enabled = false;
-  }, [focusSequence, focusTargetTerritoryId, planet]);
+  }, [camera, focusSequence, focusTargetTerritoryId, planet]);
 
   useFrame(() => {
     if (!focusing.current) return;

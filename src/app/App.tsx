@@ -1,7 +1,15 @@
+import { useEffect } from 'react';
 import { GlobeScene } from '../components/GlobeScene';
 import { TerritoryHud } from '../components/TerritoryHud';
+import { useGameStore } from '../state/useGameStore';
 
 export function App() {
+  useGameStore((state) => state.setup);
+  const loadSetupFromUrl = useGameStore((state) => state.loadSetupFromUrl);
+  useEffect(() => {
+    window.addEventListener('popstate', loadSetupFromUrl);
+    return () => window.removeEventListener('popstate', loadSetupFromUrl);
+  }, [loadSetupFromUrl]);
   const logoVariant =
     new URLSearchParams(window.location.search).get('logo') === 'a' ? 'a' : 'b';
 

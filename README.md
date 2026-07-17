@@ -13,6 +13,8 @@ The prototype currently provides:
 - A separate serializable match state containing live ownership, armies, phase, selections, events, elimination, and victory
 - Reinforcement, repeated attacks, deterministic dice combat, mandatory post-capture movement, one connected-path fortification, and turn advancement
 - Phase-aware globe selection and numbered army markers with non-color source/target cues
+- Versioned setup URLs that reproduce the seed, territory count, continent count, player count, and initial match
+- A searchable, keyboard-operable territory navigator with owner, armies, continent, legal status, and sea-route cues
 - Ownership, continent, and terrain display modes that do not affect rules state
 - Camera-facing marker hiding and silhouette fading so back-side markers do not detach from the globe
 - Non-playable visible oceans, emphasized coastlines, land borders, hover feedback, and persistent land selection
@@ -56,6 +58,29 @@ http://localhost:5173/?logo=b
 
 Missing or unsupported values fall back to variant B. Both assets are trimmed RGBA images intended to sit directly over the dark gameboard without a surrounding panel.
 
+## Shareable world setup URLs
+
+World setup is plain serializable data kept separate from both immutable `PlanetDefinition` geography and mutable `MatchState` gameplay. Version 1 supports:
+
+| Parameter     | Default       | Valid values                                        |
+| ------------- | ------------- | --------------------------------------------------- |
+| `v`           | `1`           | `1`                                                 |
+| `seed`        | `atlas-prime` | Any non-empty string                                |
+| `territories` | `42`          | Whole numbers from 12–48                            |
+| `continents`  | `6`           | Whole numbers from 2–8, never more than territories |
+| `players`     | `4`           | Whole numbers from 2–6                              |
+| `logo`        | `b`           | `a` or `b`                                          |
+
+Example:
+
+```text
+http://localhost:5173/?v=1&seed=atlas-prime&territories=42&continents=6&players=4&logo=b
+```
+
+Missing parameters use defaults. Malformed counts fall back or clamp to supported ranges and show a concise setup warning; an unsupported `v` falls back to the complete default setup. Serialization has a stable parameter order. The current `logo` value and unknown query parameters are preserved when applying or randomizing a setup.
+
+Generate / apply and Random seed create a new deterministic `PlanetDefinition`, create its initial local `MatchState`, update the URL with `history.pushState`, and do not reload the page. Browser back and forward navigation rebuilds the setup, world, and initial match from the selected history entry. Reset Match only reconstructs gameplay for the current planet; it never changes the setup or URL.
+
 ## Local match rules
 
 The generated `PlanetDefinition` is immutable geography and topology. A separate `MatchState` owns all mutable gameplay data: territory owners and armies, active player, turn and phase, reinforcement pool, source/target selection, pending capture, combat sequence, player elimination, winner, and event history. Both structures are serializable data without React or Three.js objects. Regenerating creates a new definition and match; Reset Match reconstructs the original deterministic setup for the current seed.
@@ -82,6 +107,14 @@ Capturing transfers ownership immediately and checks elimination. A player with 
 - Selected sources use a diamond cue; selected targets use an × cue. Invalid territories are dimmed, captures receive brief emphasis, and active-player land is subtly brightened.
 - Ownership mode emphasizes player fill, Continents emphasizes gameplay regions while markers retain ownership, and Terrain emphasizes land/ocean geography. These modes are renderer preferences only.
 - The event log is toggleable and locally scrollable. Debug graph overlays remain available.
+
+### Accessible territory navigation
+
+The compact Territory list utility opens a modal side drawer on wider screens and a bottom sheet on narrow screens. It is closed by default and can also be opened with Ctrl/Cmd+K. Search works within My territories or All territories filters, and result counts update in a polite live region. Every row is a keyboard-focusable button and exposes the territory name, owner, army count, continent, legal status, and sea-route status in its accessible name. Symbols and text identify valid sources (`◇`), valid targets (`◎`), selected sources (`◆`), selected targets (`×`), invalid territories (`—`), and sea-route targets (`≈`) without relying on color.
+
+The navigator model reuses the same legal-action helpers as the renderer. Selection dispatches the same typed `SELECT_TERRITORY` action as globe picking and emits a request through the existing camera-focus system, including for repeated selections and back-side territories. The drawer stays open after desktop selection and includes Close and view globe.
+
+Visible focus rings apply to buttons, inputs, and selects. The modal traps focus, Escape closes it, and focus returns to its trigger. Phase changes, result counts, and selections use polite live regions; invalid actions use an alert; victory is assertive. Capture movement and all phase action controls remain keyboard operable. Reduced-motion preferences replace camera interpolation with an immediate safe focus.
 
 For continuation context and a ready-to-use next-task brief, see [`HANDOFF.md`](./HANDOFF.md).
 
@@ -149,7 +182,7 @@ Non-fatal warnings flag land coverage outside 45–60%, landmass counts outside 
 
 ### State boundaries
 
-Zustand owns the current serializable planet and match plus UI-only seed input, hover, display mode, event-log visibility, focus request, and debug mode. Components dispatch typed commands through the pure rules reducer; they do not implement gameplay mutations. React Three Fiber owns scene objects and transient camera/horizon calculations, so orbiting does not produce frame-by-frame Zustand updates. Generation, geometry, validation, and game rules have no dependency on React or Three.js.
+Zustand owns the current serializable setup, setup draft, planet, and match plus UI-only seed input, warnings, hover, display mode, event-log visibility, focus request, and debug mode. Pure setup helpers parse, normalize, compare, and deterministically serialize query parameters without browser or React globals. A small browser adapter owns `window.location` and History API access. Components dispatch typed commands through the pure rules reducer; they do not implement gameplay mutations. React Three Fiber owns scene objects and transient camera/horizon calculations, so orbiting does not produce frame-by-frame Zustand updates. Generation, geometry, validation, and game rules have no dependency on React or Three.js.
 
 ## Current limitations
 
@@ -161,13 +194,13 @@ Zustand owns the current serializable planet and match plus UI-only seed input, 
 - Numbered markers are screen-facing sprites rather than troop models and do not aggregate at extreme zoom levels yet.
 - Camera focus centers a territory but does not yet frame a multi-territory selection.
 - Picking targets playable land territories and does not yet support structures.
-- Territory and continent counts are configurable in code, not in the HUD.
-- The prototype is tuned for roughly 42 territories; extreme counts may need adaptive tessellation.
-- Seed controls are local to a browser session and do not create shareable match URLs yet.
+- The fixed subdivision-level-4 surface is tuned most heavily around 42 territories; the supported 12–48 range does not yet adapt mesh resolution to count.
+- URLs reconstruct the generated world and initial match, not in-progress turns or UI-only preferences.
+- Browser history records applied setups, but there is no named setup library or durable server storage.
 
 ## Next recommended milestone
 
-Add a versioned, shareable local match/setup format with accessible keyboard/list-based territory navigation and a setup ownership draft/reroll. Keep the simulation client-local until a later server-authority milestone explicitly defines networking and trust boundaries.
+Add an accessible starting-ownership draft/reroll with setup preview and balance summaries. Keep it deterministic, serializable, and client-local until a later server-authority milestone explicitly defines networking and trust boundaries.
 
 ## Deliberately Deferred
 
