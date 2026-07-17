@@ -63,6 +63,29 @@ describe('deterministic starting positions', () => {
     expect(analysis.overallScore).toBeLessThanOrEqual(100);
     expect(JSON.parse(JSON.stringify(analysis))).toEqual(analysis);
     expect(JSON.stringify(analysis)).not.toContain('Object3D');
+    expect(Object.keys(analysis.breakdown)).toEqual([
+      'territoryParity',
+      'armyParity',
+      'continentFairness',
+      'connectivityDistribution',
+      'geographicSpread',
+      'borderExposure',
+      'seaRouteAccess',
+      'gatewayAccess',
+    ]);
+    expect(Object.values(analysis.breakdown).every((score) => score >= 0 && score <= 100)).toBe(true);
+  });
+
+  it('prefers distributed ownership without prebuilt continents', () => {
+    const analysis = generateStartingPosition(planet, players, 0).analysis;
+    expect(analysis.hardFailure).toBe(false);
+    for (const metric of analysis.players) {
+      expect(metric.connectedComponentCount).toBeGreaterThanOrEqual(2);
+      expect(metric.connectedComponentCount).toBeLessThanOrEqual(5);
+      expect(metric.largestComponentRatio).toBeLessThanOrEqual(0.6);
+      expect(metric.isolatedTerritoryCount).toBeLessThanOrEqual(2);
+      expect(metric.fullyOwnedContinentCount).toBe(0);
+    }
   });
 
   it('selects candidates deterministically and rejects impossible counts', () => {

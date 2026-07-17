@@ -255,6 +255,36 @@ select:focus-visible {
   font-size: 0.67rem;
 }
 
+.balance-details {
+  margin-top: 11px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(118, 194, 228, 0.16);
+  color: #a9bed0;
+  font-size: 0.66rem;
+}
+
+.balance-details summary {
+  color: #bfe7f7;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.balance-details > p {
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
+
+.player-balance-details p {
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
+
+.balance-blockers {
+  margin-top: 10px;
+  color: #ffb4a8;
+  font-size: 0.67rem;
+}
+
 .pregame-actions {
   display: grid;
   grid-template-columns: 1fr 1fr 1.15fr;

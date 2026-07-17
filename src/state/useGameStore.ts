@@ -391,9 +391,12 @@ export const useGameStore = create<GameState>((set, get) => {
           }),
           saveMessage: `Ownership variant ${ownershipVariant} is ready.`,
         });
-      } catch {
+      } catch (error) {
         set({
-          setupError: 'A new balanced ownership layout could not be generated.',
+          setupError:
+            error instanceof Error
+              ? error.message
+              : 'A new balanced ownership layout could not be generated.',
         });
       }
     },
@@ -405,10 +408,19 @@ export const useGameStore = create<GameState>((set, get) => {
       }));
       const errors = validatePlayerConfigs(players);
       if (state.matchSetup.startingPosition.analysis.hardFailure) {
-        errors.push('The starting ownership candidate is invalid.');
+        errors.push(...state.matchSetup.startingPosition.analysis.hardFailureReasons);
       }
       if (errors.length > 0) {
         set({ playerSetupErrors: errors });
+        return;
+      }
+      if (
+        state.matchSetup.startingPosition.analysis.rating === 'poor' &&
+        typeof window !== 'undefined' &&
+        !window.confirm(
+          `This starting position is rated Poor. ${state.matchSetup.startingPosition.analysis.warnings.slice(0, 2).join(' ')} Start anyway?`,
+        )
+      ) {
         return;
       }
       const matchSetup = { ...state.matchSetup, players };

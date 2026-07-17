@@ -97,8 +97,9 @@ export function PregamePanel() {
                 </span>
                 <small>
                   {metric.territoryCount} territories · {metric.armyCount}{' '}
-                  armies · {metric.connectedComponentCount} connected region
-                  {metric.connectedComponentCount === 1 ? '' : 's'}
+                  armies · {metric.connectedComponentCount} ownership region
+                  {metric.connectedComponentCount === 1 ? '' : 's'} · largest{' '}
+                  {metric.largestComponentSize}
                 </small>
               </section>
             );
@@ -112,7 +113,7 @@ export function PregamePanel() {
             {analysis.rating} — {analysis.overallScore}/100
           </strong>
         </div>
-        <dl>
+        <dl className="balance-summary">
           <div>
             <dt>Territory spread</dt>
             <dd>≤ 1</dd>
@@ -150,6 +151,47 @@ export function PregamePanel() {
             ))}
           </ul>
         )}
+        {analysis.hardFailureReasons.length > 0 && (
+          <div className="balance-blockers" role="alert">
+            <strong>Start blocked</strong>
+            <ul>
+              {analysis.hardFailureReasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <details className="balance-details">
+          <summary>How is this scored?</summary>
+          <p>
+            Eight 0–100 categories reward equal totals, distributed ownership,
+            broad access, and comparable exposure. Hard-invalid layouts are
+            rejected before score comparison.
+          </p>
+          <dl>
+            <div><dt>Territory parity</dt><dd>{analysis.breakdown.territoryParity}</dd></div>
+            <div><dt>Army parity</dt><dd>{analysis.breakdown.armyParity}</dd></div>
+            <div><dt>Continent fairness</dt><dd>{analysis.breakdown.continentFairness}</dd></div>
+            <div><dt>Ownership regions</dt><dd>{analysis.breakdown.connectivityDistribution}</dd></div>
+            <div><dt>World spread</dt><dd>{analysis.breakdown.geographicSpread}</dd></div>
+            <div><dt>Border exposure</dt><dd>{analysis.breakdown.borderExposure}</dd></div>
+            <div><dt>Sea-route access</dt><dd>{analysis.breakdown.seaRouteAccess}</dd></div>
+            <div><dt>Gateway access</dt><dd>{analysis.breakdown.gatewayAccess}</dd></div>
+          </dl>
+          <div className="player-balance-details">
+            {matchSetup.players.slice().sort((a, b) => a.seatIndex - b.seatIndex).map((player) => {
+              const metric = metricByPlayer.get(player.id)!;
+              return (
+                <p key={player.id}>
+                  <strong>{player.name}</strong>: {metric.connectedComponentCount} regions,
+                  largest {metric.largestComponentSize}; {Math.round(metric.maximumContinentShare * 100)}%
+                  max continent share; {metric.seaRouteEndpointCount} sea endpoints;{' '}
+                  {metric.borderTerritoryCount} border territories.
+                </p>
+              );
+            })}
+          </div>
+        </details>
       </section>
 
       {errors.length > 0 && (
