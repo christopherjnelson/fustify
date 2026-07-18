@@ -44,6 +44,7 @@ import {
   worldSetupsEqual,
 } from '../core/setup/worldSetup';
 import type { PlanetDefinition } from '../core/types/planet';
+import type { GeographicPoint } from '../core/minimap/projection';
 
 const initialParsedSetup =
   typeof window === 'undefined'
@@ -131,6 +132,7 @@ export interface GameState {
   lastActionError: GameError | null;
   focusTargetTerritoryId: string | null;
   focusSequence: number;
+  globeFocus: GeographicPoint;
   setSeedInput: (seed: string) => void;
   setSetupDraft: (update: Partial<WorldSetup>) => void;
   regenerate: () => void;
@@ -162,6 +164,7 @@ export interface GameState {
   setViewMode: (mode: PlanetViewMode) => void;
   toggleEventLog: () => void;
   focusSelectedTerritory: () => void;
+  setGlobeFocus: (focus: GeographicPoint) => void;
 }
 
 function makeRandomSeed(): string {
@@ -291,6 +294,7 @@ export const useGameStore = create<GameState>((set, get) => {
     lastActionError: null,
     focusTargetTerritoryId: null,
     focusSequence: 0,
+    globeFocus: { longitude: 90, latitude: 0 },
     setSeedInput: (seedInput) =>
       set((state) => ({
         seedInput,
@@ -764,5 +768,12 @@ export const useGameStore = create<GameState>((set, get) => {
               focusSequence: state.focusSequence + 1,
             };
       }),
+    setGlobeFocus: (globeFocus) =>
+      set((state) =>
+        Math.abs(state.globeFocus.longitude - globeFocus.longitude) < 0.01 &&
+        Math.abs(state.globeFocus.latitude - globeFocus.latitude) < 0.01
+          ? state
+          : { globeFocus },
+      ),
   };
 });

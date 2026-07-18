@@ -22,6 +22,11 @@ const scenarios: Array<{
     heading: /Preview and assign territories/i,
   },
   {
+    name: 'draft-started',
+    region: '.pregame-panel',
+    heading: /chooses now/i,
+  },
+  {
     name: 'draft-in-progress',
     region: '.pregame-panel',
     heading: /chooses now/i,
@@ -72,6 +77,26 @@ const scenarios: Array<{
     region: '.setup-panel',
     heading: /Local session available/i,
   },
+  {
+    name: 'minimap-seam',
+    region: '.minimap-panel',
+    heading: /World minimap/i,
+  },
+  {
+    name: 'minimap-focus-east',
+    region: '.minimap-panel',
+    heading: /World minimap/i,
+  },
+  {
+    name: 'minimap-focus-north',
+    region: '.minimap-panel',
+    heading: /World minimap/i,
+  },
+  {
+    name: 'minimap-focus-west',
+    region: '.minimap-panel',
+    heading: /World minimap/i,
+  },
 ];
 
 for (const scenario of scenarios) {
@@ -105,13 +130,28 @@ for (const scenario of scenarios) {
         element.scrollTop = element.scrollHeight;
       });
     }
+    if (scenario.name.startsWith('minimap-focus-')) {
+      await page.waitForFunction(() => {
+        const longitude = Number(
+          document
+            .querySelector('.minimap-focus')
+            ?.getAttribute('data-longitude'),
+        );
+        return Number.isFinite(longitude) && Math.abs(longitude - 90) > 15;
+      });
+    }
 
     await expect(page.getByText(scenario.heading).first()).toBeVisible();
     const region =
       scenario.name === 'navigator'
         ? page.getByRole('dialog')
         : page.locator(scenario.region);
-    await expect(region).toHaveScreenshot(`${scenario.name}-ui.png`);
+    await expect(region).toHaveScreenshot(
+      `${scenario.name}-ui.png`,
+      scenario.name.startsWith('minimap-focus-')
+        ? { maxDiffPixelRatio: 0 }
+        : undefined,
+    );
     await page.screenshot({
       path: reviewPath(testInfo, scenario.name),
       fullPage: true,

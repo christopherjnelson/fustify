@@ -1,11 +1,15 @@
 import { OrbitControls } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useRef, type ComponentRef } from 'react';
+import { useCallback, useEffect, useRef, type ComponentRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '../state/useGameStore';
 import { isVisualReview } from '../browser/visualReview';
+import {
+  cameraDirectionToGlobeFocus,
+  PLANET_ROTATION,
+} from '../presentation/globeOrientation';
 
-const PLANET_ROTATION = new THREE.Euler(0.08, 0, -0.08);
+const PLANET_ROTATION_EULER = new THREE.Euler(...PLANET_ROTATION);
 
 export function CameraController() {
   const visualReview = isVisualReview();
@@ -18,11 +22,23 @@ export function CameraController() {
     (state) => state.focusTargetTerritoryId,
   );
   const focusSequence = useGameStore((state) => state.focusSequence);
+  const setGlobeFocus = useGameStore((state) => state.setGlobeFocus);
+  const publishFocus = useCallback(() => {
+    setGlobeFocus(
+      cameraDirectionToGlobeFocus(
+        camera.position.clone().normalize().toArray(),
+      ),
+    );
+  }, [camera, setGlobeFocus]);
+
+  useEffect(() => {
+    publishFocus();
+  }, [publishFocus]);
 
   useEffect(() => {
     if (focusTargetTerritoryId === null) {
       focusing.current = false;
-      if (controls.current) controls.current.enabled = true;
+      if (controls.current) controls.current.enabled = !visualReview;
       return;
     }
     const territory = planet.territories.find(
@@ -31,7 +47,7 @@ export function CameraController() {
     if (!territory) return;
     destination.current
       .set(...territory.center)
-      .applyEuler(PLANET_ROTATION)
+      .applyEuler(PLANET_ROTATION_EULER)
       .normalize();
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       const distance = THREE.MathUtils.clamp(camera.position.length(), 3.1, 8);
@@ -41,13 +57,21 @@ export function CameraController() {
       camera.lookAt(0, 0, 0);
       controls.current?.target.set(0, 0, 0);
       controls.current?.update();
+      publishFocus();
       focusing.current = false;
-      if (controls.current) controls.current.enabled = true;
+      if (controls.current) controls.current.enabled = !visualReview;
       return;
     }
     focusing.current = true;
     if (controls.current) controls.current.enabled = false;
-  }, [camera, focusSequence, focusTargetTerritoryId, planet]);
+  }, [
+    camera,
+    focusSequence,
+    focusTargetTerritoryId,
+    planet,
+    publishFocus,
+    visualReview,
+  ]);
 
   useFrame(() => {
     if (!focusing.current) return;
@@ -58,11 +82,12 @@ export function CameraController() {
     camera.lookAt(0, 0, 0);
     controls.current?.target.set(0, 0, 0);
     controls.current?.update();
+    publishFocus();
     if (
       camera.position.clone().normalize().dot(destination.current) > 0.99996
     ) {
       focusing.current = false;
-      if (controls.current) controls.current.enabled = true;
+      if (controls.current) controls.current.enabled = !visualReview;
     }
   });
 
@@ -78,6 +103,7 @@ export function CameraController() {
       maxDistance={8}
       rotateSpeed={0.55}
       zoomSpeed={0.75}
+      onChange={publishFocus}
     />
   );
 }

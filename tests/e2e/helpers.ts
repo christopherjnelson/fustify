@@ -4,6 +4,7 @@ export type Scenario =
   | 'world-setup'
   | 'pregame'
   | 'pregame-random-ready'
+  | 'draft-started'
   | 'draft-in-progress'
   | 'draft-complete'
   | 'draft-invalid'
@@ -22,7 +23,11 @@ export type Scenario =
   | 'game-over'
   | 'navigator'
   | 'event-log'
-  | 'saved-resume';
+  | 'saved-resume'
+  | 'minimap-seam'
+  | 'minimap-focus-east'
+  | 'minimap-focus-north'
+  | 'minimap-focus-west';
 
 export async function openScenario(page: Page, scenario: Scenario) {
   await page.route('https://fonts.googleapis.com/**', (route) => route.abort());

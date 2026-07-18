@@ -4,6 +4,7 @@ import { TerritoryHud } from '../components/TerritoryHud';
 import { HandoffScreen } from '../components/HandoffScreen';
 import { PregamePanel } from '../components/PregamePanel';
 import { WorldSetupPanel } from '../components/WorldSetupPanel';
+import { Minimap } from '../components/Minimap';
 import { useGameStore } from '../state/useGameStore';
 
 export function App() {
@@ -19,6 +20,7 @@ export function App() {
   return (
     <main className={`app-shell mode-${mode}`}>
       <GlobeScene />
+      <Minimap />
       {mode === 'world-setup' && <WorldSetupPanel />}
       {mode === 'pregame' && <PregamePanel />}
       {(mode === 'playing' || mode === 'game-over') && <TerritoryHud />}

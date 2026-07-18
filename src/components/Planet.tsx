@@ -13,9 +13,14 @@ import {
   PLANET_SUBDIVISIONS,
 } from '../core/generation/constants';
 import type { PlanetDefinition } from '../core/types/planet';
-import type { TerritoryDefinition } from '../core/types/territory';
 import { playerColorValue } from '../core/setup/playerConfig';
-import { useGameStore, type PlanetViewMode } from '../state/useGameStore';
+import {
+  displayedTerritoryStates,
+  territoryFillColor,
+  type TerritoryVisualKind,
+} from '../presentation/territoryVisuals';
+import { PLANET_ROTATION } from '../presentation/globeOrientation';
+import { useGameStore } from '../state/useGameStore';
 import { ArmyMarkers } from './ArmyMarkers';
 import { GraphDebugOverlay } from './GraphDebugOverlay';
 import { SeaRouteOverlay } from './SeaRouteOverlay';
@@ -23,53 +28,6 @@ import { TerritoryOverlay } from './TerritoryOverlay';
 
 interface PlanetProps {
   planet: PlanetDefinition;
-}
-
-type VisualKind =
-  | 'hovered'
-  | 'source'
-  | 'target'
-  | 'valid-source'
-  | 'valid-target'
-  | 'captured'
-  | 'invalid'
-  | null;
-
-function territoryFillColor(
-  territory: TerritoryDefinition,
-  playerColor: string | null,
-  viewMode: PlanetViewMode,
-  active: boolean,
-  kind: VisualKind,
-) {
-  let color: THREE.Color;
-  if (viewMode === 'continents') {
-    color = new THREE.Color(territory.displayColor);
-    if (playerColor) color.lerp(new THREE.Color(playerColor), 0.16);
-  } else if (viewMode === 'terrain') {
-    const landmassIndex = Number(territory.landmassId.split('-').at(-1) ?? 0);
-    color = new THREE.Color(landmassIndex % 2 === 0 ? '#58714d' : '#6b7650')
-      .lerp(new THREE.Color(territory.displayColor), 0.16)
-      .offsetHSL(0, -0.12, 0);
-  } else if (playerColor) {
-    color = new THREE.Color(playerColor).lerp(
-      new THREE.Color(territory.displayColor),
-      0.18,
-    );
-  } else {
-    color = new THREE.Color(territory.displayColor).offsetHSL(0, -0.08, -0.03);
-  }
-  const numericId = Number(territory.id.slice('territory-'.length));
-  color.offsetHSL(0, 0, ((numericId % 5) - 2) * 0.022);
-  if (active) color.lerp(new THREE.Color('#ffffff'), 0.06);
-  if (kind === 'invalid') color.multiplyScalar(0.52);
-  if (kind === 'valid-source') color.lerp(new THREE.Color('#c8f2ff'), 0.18);
-  if (kind === 'valid-target') color.lerp(new THREE.Color('#ffcc78'), 0.3);
-  if (kind === 'captured') color.lerp(new THREE.Color('#ffffff'), 0.42);
-  if (kind === 'source') color.lerp(new THREE.Color('#fff3a1'), 0.62);
-  if (kind === 'target') color.lerp(new THREE.Color('#ff8c66'), 0.62);
-  if (kind === 'hovered') color.lerp(new THREE.Color('#ffffff'), 0.32);
-  return color;
 }
 
 export function Planet({ planet }: PlanetProps) {
@@ -82,20 +40,10 @@ export function Planet({ planet }: PlanetProps) {
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
   const setHovered = useGameStore((state) => state.setHoveredTerritory);
   const select = useGameStore((state) => state.selectTerritory);
-  const displayedTerritories = useMemo(() => {
-    if (match) return match.territories;
-    if (matchSetup.setupPhase === 'ready') {
-      return matchSetup.startingPosition.territories;
-    }
-    if (matchSetup.setupPhase === 'assignment-in-progress') {
-      return Object.fromEntries(
-        Object.entries(matchSetup.draft.territoryOwners).map(
-          ([territoryId, ownerId]) => [territoryId, { ownerId, armyCount: 1 }],
-        ),
-      );
-    }
-    return {};
-  }, [match, matchSetup]);
+  const displayedTerritories = useMemo(
+    () => displayedTerritoryStates(matchSetup, match),
+    [match, matchSetup],
+  );
   const gameplayActive =
     match !== null &&
     ['handoff', 'playing', 'game-over'].includes(applicationMode);
@@ -167,7 +115,7 @@ export function Planet({ planet }: PlanetProps) {
   }, [applicationMode, match, planet]);
 
   const visualKind = useCallback(
-    (territoryId: string): VisualKind => {
+    (territoryId: string): TerritoryVisualKind => {
       if (!match || applicationMode !== 'playing') {
         return territoryId === hoveredId ? 'hovered' : null;
       }
@@ -292,7 +240,7 @@ export function Planet({ planet }: PlanetProps) {
   };
 
   return (
-    <group rotation={[0.08, 0, -0.08]}>
+    <group rotation={PLANET_ROTATION}>
       <mesh geometry={oceanGeometry}>
         <meshStandardMaterial
           color={viewMode === 'terrain' ? '#173b52' : OCEAN_COLOR}

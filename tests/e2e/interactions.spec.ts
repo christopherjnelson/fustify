@@ -23,6 +23,116 @@ test('world and pregame controls have accessible labels and headings', async ({
   await expect(page.getByLabel('Player draft')).toBeEnabled();
 });
 
+test('minimap follows neutral, draft, ready, and active ownership lifecycle', async ({
+  page,
+}) => {
+  await openScenario(page, 'pregame');
+  const minimap = page.getByTestId('minimap');
+  await expect(minimap).toBeVisible();
+  await expect(minimap).toHaveAccessibleName('World minimap');
+  const territories = minimap.locator('.minimap-territories path');
+  await expect(territories).toHaveCount(42);
+  await expect(
+    minimap.locator('.minimap-territories path[data-owner-id=""]'),
+  ).toHaveCount(42);
+
+  await page.getByLabel('Player draft').check();
+  await page.getByRole('button', { name: 'Begin player draft' }).click();
+  await page.getByLabel('Territory to claim').selectOption('territory-01');
+  await page.getByRole('button', { name: /Claim for Crimson League/i }).click();
+  await expect(
+    minimap.locator('[data-territory-id="territory-01"]'),
+  ).toHaveAttribute('data-owner-id', 'player-01');
+  await page.getByRole('button', { name: 'Restart draft' }).click();
+  await expect(
+    minimap.locator('.minimap-territories path[data-owner-id=""]'),
+  ).toHaveCount(42);
+  await page.getByLabel('Territory to claim').selectOption('territory-02');
+  await page.getByRole('button', { name: /Claim for Crimson League/i }).click();
+  await page.getByRole('button', { name: 'Cancel draft' }).click();
+  await expect(
+    minimap.locator('.minimap-territories path[data-owner-id=""]'),
+  ).toHaveCount(42);
+
+  await openScenario(page, 'pregame-random-ready');
+  await expect(
+    page
+      .getByTestId('minimap')
+      .locator('.minimap-territories path[data-owner-id=""]'),
+  ).toHaveCount(0);
+  await openScenario(page, 'draft-complete');
+  await expect(
+    page
+      .getByTestId('minimap')
+      .locator('.minimap-territories path[data-owner-id=""]'),
+  ).toHaveCount(0);
+  await openScenario(page, 'reinforcement');
+  await expect(page.getByTestId('minimap')).toBeVisible();
+  await expect(
+    page
+      .getByTestId('minimap')
+      .locator('.minimap-territories path[data-owner-id=""]'),
+  ).toHaveCount(0);
+  await expect(page.locator('.minimap-active-player')).toContainText(
+    'Crimson League',
+  );
+});
+
+test('minimap reflects reducer ownership and remains a non-interactive overview', async ({
+  page,
+}) => {
+  await openScenario(page, 'pending-capture');
+  const minimap = page.getByTestId('minimap');
+  const before = await stateSnapshot(page);
+  for (const [territoryId, territory] of Object.entries(
+    before.match.territories,
+  )) {
+    await expect(
+      minimap.locator(`[data-territory-id="${territoryId}"]`),
+    ).toHaveAttribute('data-owner-id', territory.ownerId);
+  }
+  await expect(
+    minimap.locator('button, input, select, a, [tabindex]'),
+  ).toHaveCount(0);
+  const bounds = await minimap.boundingBox();
+  expect(bounds).not.toBeNull();
+  await page.mouse.click(bounds!.x + bounds!.width / 2, bounds!.y + 12);
+  const after = await stateSnapshot(page);
+  expect(after.match).toEqual(before.match);
+  expect(after.setupPhase).toBe(before.setupPhase);
+
+  await page.getByRole('button', { name: /Territory list/i }).focus();
+  await page.keyboard.press('Tab');
+  expect(
+    await page.evaluate(() =>
+      document
+        .querySelector('.minimap-panel')
+        ?.contains(document.activeElement),
+    ),
+  ).toBe(false);
+});
+
+test('minimap stays in bounds and separate from primary controls', async ({
+  page,
+}) => {
+  await openScenario(page, 'pregame');
+  const viewport = page.viewportSize()!;
+  const minimap = await page.getByTestId('minimap').boundingBox();
+  const panel = await page.locator('.pregame-panel').boundingBox();
+  expect(minimap).not.toBeNull();
+  expect(panel).not.toBeNull();
+  expect(minimap!.x).toBeGreaterThanOrEqual(0);
+  expect(minimap!.y).toBeGreaterThanOrEqual(0);
+  expect(minimap!.x + minimap!.width).toBeLessThanOrEqual(viewport.width);
+  expect(minimap!.y + minimap!.height).toBeLessThanOrEqual(viewport.height);
+  const overlaps =
+    minimap!.x < panel!.x + panel!.width &&
+    minimap!.x + minimap!.width > panel!.x &&
+    minimap!.y < panel!.y + panel!.height &&
+    minimap!.y + minimap!.height > panel!.y;
+  expect(overlaps).toBe(false);
+});
+
 test('world setup, player validation, ownership reroll, and match start flow', async ({
   page,
 }) => {
@@ -60,6 +170,11 @@ test('world setup, player validation, ownership reroll, and match start flow', a
 
   await page.getByRole('button', { name: 'Begin random assignment' }).click();
   await expect(page.getByText(/Ready · Variant 0/)).toBeVisible();
+  await expect(
+    page
+      .getByTestId('minimap')
+      .locator('.minimap-territories path[data-owner-id=""]'),
+  ).toHaveCount(0);
   await page.getByRole('button', { name: 'Reroll assignment' }).click();
   await expect(page.getByText(/Ready · Variant 1/)).toBeVisible();
   await page.getByRole('button', { name: 'Start match' }).click();
@@ -174,10 +289,16 @@ test('territory navigator opens, focuses search, selects, focuses camera, and cl
   await expect(dialog).toBeVisible();
   await expect(page.getByLabel('Search territories')).toBeFocused();
   const before = await stateSnapshot(page);
+  const focusMarker = page.locator('.minimap-focus');
+  const initialTransform = await focusMarker.getAttribute('transform');
   await dialog.locator('ul button:not(:disabled)').first().click();
   const after = await stateSnapshot(page);
   expect(after.focusSequence).toBe(before.focusSequence + 1);
   expect(after.focusTargetTerritoryId).not.toBeNull();
+  await expect
+    .poll(() => focusMarker.getAttribute('transform'))
+    .not.toBe(initialTransform);
+  expect((await stateSnapshot(page)).globeFocus).not.toEqual(before.globeFocus);
   await page.getByRole('button', { name: /Close and view globe/i }).click();
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();

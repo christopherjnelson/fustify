@@ -6,6 +6,7 @@ import type { MatchState } from '../core/game/types';
 import { GENERATOR_VERSION } from '../core/generation/constants';
 import { generatePlanet } from '../core/generation/generatePlanet';
 import { SAVE_SCHEMA_VERSION } from '../core/persistence/saveGame';
+import { vectorToGeographicPoint } from '../core/minimap/projection';
 import { createDefaultPlayerConfigs } from '../core/setup/playerConfig';
 import {
   createMatchSetup,
@@ -23,6 +24,7 @@ export type VisualScenario =
   | 'world-setup'
   | 'pregame'
   | 'pregame-random-ready'
+  | 'draft-started'
   | 'draft-in-progress'
   | 'draft-complete'
   | 'draft-invalid'
@@ -41,7 +43,11 @@ export type VisualScenario =
   | 'game-over'
   | 'navigator'
   | 'event-log'
-  | 'saved-resume';
+  | 'saved-resume'
+  | 'minimap-seam'
+  | 'minimap-focus-east'
+  | 'minimap-focus-north'
+  | 'minimap-focus-west';
 
 const FIXED_SETUP: WorldSetup = {
   version: 1,
@@ -52,13 +58,13 @@ const FIXED_SETUP: WorldSetup = {
   assignmentMode: 'random',
 };
 
-function fixedWorld() {
-  const planet = generatePlanet(FIXED_SETUP.seed, {
-    territoryCount: FIXED_SETUP.territoryCount,
-    continentCount: FIXED_SETUP.continentCount,
-    playerCount: FIXED_SETUP.playerCount,
+function fixedWorld(setup: WorldSetup = FIXED_SETUP) {
+  const planet = generatePlanet(setup.seed, {
+    territoryCount: setup.territoryCount,
+    continentCount: setup.continentCount,
+    playerCount: setup.playerCount,
   });
-  const players = createDefaultPlayerConfigs(FIXED_SETUP.playerCount);
+  const players = createDefaultPlayerConfigs(setup.playerCount);
   const matchSetup = createMatchSetup(planet, players, 0);
   return {
     planet,
@@ -220,7 +226,11 @@ function wonMatch(
 
 function applyScenario(scenario: VisualScenario) {
   window.localStorage.clear();
-  const fixed = fixedWorld();
+  const scenarioSetup =
+    scenario === 'minimap-seam'
+      ? { ...FIXED_SETUP, seed: 'minimap-fixture-0' }
+      : FIXED_SETUP;
+  const fixed = fixedWorld(scenarioSetup);
   const { planet } = fixed;
   let matchSetup: MatchSetup = fixed.matchSetup;
   let match = fixed.match;
@@ -228,6 +238,32 @@ function applyScenario(scenario: VisualScenario) {
   let scenarioMatch: MatchState | null = match;
   let eventLogOpen = false;
   let assignmentFeedback: string | null = null;
+  const scenarioFocus =
+    scenario === 'minimap-focus-east'
+      ? { longitude: 35, latitude: 8 }
+      : scenario === 'minimap-focus-north'
+        ? { longitude: 120, latitude: 68 }
+        : scenario === 'minimap-focus-west'
+          ? { longitude: -142, latitude: -24 }
+          : { longitude: 90, latitude: 0 };
+  const focusScenario = scenario.startsWith('minimap-focus-');
+  const focusTargetTerritoryId = focusScenario
+    ? planet.territories
+        .map((territory) => {
+          const point = vectorToGeographicPoint(territory.center);
+          const longitudeDistance = Math.min(
+            Math.abs(point.longitude - scenarioFocus.longitude),
+            360 - Math.abs(point.longitude - scenarioFocus.longitude),
+          );
+          return {
+            id: territory.id,
+            distance:
+              longitudeDistance ** 2 +
+              (point.latitude - scenarioFocus.latitude) ** 2,
+          };
+        })
+        .sort((left, right) => left.distance - right.distance)[0]!.id
+    : null;
 
   if (scenario !== 'world-setup' && scenario !== 'saved-resume') {
     applicationMode =
@@ -235,14 +271,20 @@ function applyScenario(scenario: VisualScenario) {
         ? 'pregame'
         : 'playing';
   }
-  if (scenario === 'world-setup' || scenario === 'pregame') {
+  if (
+    scenario === 'world-setup' ||
+    scenario === 'pregame' ||
+    scenario === 'minimap-seam'
+  ) {
     matchSetup = createNeutralMatchSetup(fixed.players, 'random');
     scenarioMatch = null;
   }
+  if (scenario === 'minimap-seam') applicationMode = 'pregame';
   if (scenario === 'pregame-random-ready') {
     scenarioMatch = null;
   }
   if (
+    scenario === 'draft-started' ||
     scenario === 'draft-in-progress' ||
     scenario === 'draft-complete' ||
     scenario === 'draft-invalid'
@@ -253,7 +295,11 @@ function applyScenario(scenario: VisualScenario) {
       throw new Error('Visual draft scenario did not begin.');
     }
     const pickCount =
-      scenario === 'draft-complete' ? planet.territories.length : 8;
+      scenario === 'draft-complete'
+        ? planet.territories.length
+        : scenario === 'draft-started'
+          ? 0
+          : 8;
     for (const territory of planet.territories.slice(0, pickCount)) {
       if (draftSetup.setupPhase !== 'assignment-in-progress') break;
       const result = pickDraftTerritory(planet, draftSetup, territory.id);
@@ -371,9 +417,9 @@ function applyScenario(scenario: VisualScenario) {
 
   useGameStore.setState({
     applicationMode,
-    setup: FIXED_SETUP,
-    setupDraft: FIXED_SETUP,
-    seedInput: FIXED_SETUP.seed,
+    setup: scenarioSetup,
+    setupDraft: scenarioSetup,
+    seedInput: scenarioSetup.seed,
     setupError: null,
     setupWarning: null,
     assignmentFeedback,
@@ -384,8 +430,9 @@ function applyScenario(scenario: VisualScenario) {
     eventLogOpen,
     hoveredTerritoryId: null,
     lastActionError: null,
-    focusTargetTerritoryId: null,
-    focusSequence: 0,
+    focusTargetTerritoryId,
+    focusSequence: focusScenario ? 1 : 0,
+    globeFocus: scenarioFocus,
   });
 }
 
@@ -403,6 +450,7 @@ declare global {
         draftOwners: Record<string, string>;
         focusSequence: number;
         focusTargetTerritoryId: string | null;
+        globeFocus: { longitude: number; latitude: number };
         match: MatchState;
         planet: ReturnType<typeof generatePlanet>;
         ownershipVariant: number;
@@ -435,6 +483,7 @@ window.__WORLDSEED_VISUAL__ = {
           : structuredClone(state.matchSetup.draft?.territoryOwners ?? {}),
       focusSequence: state.focusSequence,
       focusTargetTerritoryId: state.focusTargetTerritoryId,
+      globeFocus: state.globeFocus,
       match: structuredClone(state.match ?? fallbackMatch),
       planet: structuredClone(state.planet),
       ownershipVariant: state.matchSetup.ownershipVariant,

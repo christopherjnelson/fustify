@@ -7,6 +7,7 @@ A browser-based local hot-seat playtest for a voxel-styled planetary strategy ga
 The prototype currently provides:
 
 - A rotatable and zoomable 3D globe with desktop and touch-compatible orbit controls
+- A responsive, read-only equirectangular minimap derived from the same canonical globe geometry and ownership state
 - A deterministic, smoothed land/ocean mask with multiple landmasses and islands
 - Exactly 42 playable land territories grouped into 6 connected gameplay continents
 - Two to six editable local players using a curated accessible color palette
@@ -68,11 +69,11 @@ pnpm test:visual
 pnpm test:visual:update
 ```
 
-`test:e2e` covers neutral setup, keyboard assignment selection, random rerolls, draft turn order and duplicate feedback, neutral/draft save-resume, first and later handoffs, reinforcement, land-border and sea-route combat, invalid actions, capture movement, elimination, connected-path fortification, turn completion, in-progress match save-resume, rematches, navigator keyboard behavior, event-log controls, and victory. `test:visual` compares stable UI-region screenshots with the committed baselines in `tests/e2e/visual.spec.ts-snapshots/`. Use `test:visual:update` only after reviewing intentional UI changes.
+`test:e2e` covers neutral setup, keyboard assignment selection, random rerolls, draft turn order and duplicate feedback, neutral/draft save-resume, minimap lifecycle styling and camera synchronization, first and later handoffs, reinforcement, land-border and sea-route combat, invalid actions, capture movement, elimination, connected-path fortification, turn completion, in-progress match save-resume, rematches, navigator keyboard behavior, event-log controls, and victory. `test:visual` compares stable UI-region screenshots with the committed baselines in `tests/e2e/visual.spec.ts-snapshots/`. Use `test:visual:update` only after reviewing intentional UI changes.
 
 Every visual run also writes full-page human-review captures to `test-results/ui-review/<project>/`. Playwright failure screenshots, traces, and its HTML report remain under `test-results/`. Those generated results are ignored by Git.
 
-The visual route uses the fixed `visual-review-atlas` world, default camera orientation, reduced motion, a deterministic font and timezone, and no animated star field. Scenario state is built with the real generator, match setup, match constructor, and rules reducer. The scenario driver is loaded only when Vite is in development mode and `visual-review=1` is present; production builds do not include or expose it. Full-page images are for human inspection, while assertions target UI regions with a small pixel tolerance so animated WebGL details do not make the suite brittle.
+The visual route uses the fixed `visual-review-atlas` world, reduced motion, a deterministic font and timezone, and no animated star field. Minimap scenarios additionally cover a deliberate land-and-route antimeridian fixture and representative camera orientations. Scenario state is built with the real generator, match setup, match constructor, and rules reducer. The scenario driver is loaded only when Vite is in development mode and `visual-review=1` is present; production builds do not include or expose it. Full-page images are for human inspection, while assertions target UI regions with a small pixel tolerance so animated WebGL details do not make the suite brittle.
 
 ## Automated gameplay verification
 
@@ -164,7 +165,7 @@ Starting a match opens a mandatory full-screen handoff before Turn 1. End Turn p
 
 ## Local save and resume
 
-Worldseed uses one browser-local `localStorage` slot (`worldseed.local-match`). Match start and every semantic rules transition are autosaved; a manual Save match action is also available. Camera, hover, animation, live Three.js objects, and open utility dialogs are never saved.
+Worldseed uses one browser-local `localStorage` slot (`worldseed.local-match`). Match start and every semantic rules transition are autosaved; a manual Save match action is also available. Camera, minimap projection geometry, hover, animation, live Three.js objects, and open utility dialogs are never saved.
 
 Save schema version 3 stores the world setup and generator version, assignment mode, explicit setup phase, player profiles, ownership variant, optional in-progress draft owner map and pick index, optional completed starting position, nullable match state, application mode, and timestamp. The Save setup control supports neutral, drafting, and ready states; match transitions continue to autosave. Parsed storage is runtime-validated with Zod. Versions 0, 1, and 2 migrate to random/ready active-match saves. Every load or migration reconstructs the planet and rebuilds balance analysis from ownership rather than trusting serialized derived metrics.
 
@@ -207,6 +208,14 @@ The navigator model reuses the same legal-action helpers as the renderer. Select
 
 Visible focus rings apply to buttons, inputs, and selects. The modal traps focus, Escape closes it, and focus returns to its trigger. Phase changes, result counts, and selections use polite live regions; invalid actions use an alert; victory is assertive. Capture movement and all phase action controls remain keyboard operable. Reduced-motion preferences replace camera interpolation with an immediate safe focus.
 
+### Read-only strategic minimap
+
+The compact flat map is a secondary overview; the 3D globe remains the authoritative board and the only spatial gameplay surface. It renders the current `PlanetDefinition.surfaceCells`, territory metadata, canonical connections, setup ownership, and live `MatchState` ownership. It never regenerates from the seed, owns no territory identifiers, dispatches no game commands, and provides no selection, draft, combat, zoom, pan, or camera-navigation controls.
+
+Projection is equirectangular: longitude maps left-to-right and latitude maps north-to-south. Canonical icosphere cells become grouped SVG territory paths, shared cell edges become coast/territory/continent lines, and canonical sea routes become sampled great-circle polylines. Polygons are unwrapped and clipped into longitude bands at `-180°/+180°`; lines and routes are split at the crossing. Every fragment retains its canonical territory or route association, so a seam never creates another logical territory or a full-width false edge. Polar distortion is accepted, while near-polar cells remain visible.
+
+Projected geometry and SVG path data are cached by the canonical `PlanetDefinition`. A regenerated or loaded world rebuilds them; assignment and gameplay only update fills, and globe motion only updates the crosshair. The crosshair is derived one-way from the globe camera direction, uses both a ring and crosshair shape, and honors reduced-motion styling. The visualization is a single labeled, non-focusable overview rather than thousands of screen-reader polygons. On narrow screens the setup panel becomes shorter and independently scrollable so the minimap remains visible without covering its controls.
+
 For continuation context and a ready-to-use next-task brief, see [`HANDOFF.md`](./HANDOFF.md).
 
 ## Architecture Decisions
@@ -216,6 +225,8 @@ For continuation context and a ready-to-use next-task brief, see [`HANDOFF.md`](
 The globe is a subdivision-level-4 icosphere (5,120 triangular surface cells). Every generated cell explicitly records `land` or `ocean` and either one territory ID or `null`. The renderer consumes that generated ownership directly, so the displayed terrain, pointer picking, geographic contiguity checks, and border graph all agree.
 
 Rendering uses separate non-indexed land and ocean meshes. Only the land mesh has pointer handlers; raycast face indices map through a land-cell lookup to logical territories. Territory borders and coastlines are lightweight line-segment meshes, while debug mode adds subtle raised sea-route lines.
+
+The minimap is a second renderer for this same data, not a second generator. Its data flow is `seed → canonical spherical generation → globe and flat projection`. Projection code is pure and renderer-independent; SVG owns only compact paths and presentation. Ownership colors come from the same player palette and shared territory-fill resolver used by the globe.
 
 ### Visual hierarchy and army markers
 
@@ -263,7 +274,7 @@ Selecting a territory shows its sea routes even outside debug mode and identifie
 
 ### Camera focus
 
-The selected-territory Focus action interpolates the camera direction toward the territory while preserving a clamped valid zoom distance. Orbit controls are briefly disabled during interpolation and resume automatically. Only a one-shot focus request lives in Zustand; per-frame camera state remains in React Three Fiber.
+The selected-territory Focus action interpolates the camera direction toward the territory while preserving a clamped valid zoom distance. Orbit controls are briefly disabled during interpolation and resume automatically. A one-shot focus request lives in Zustand; React Three Fiber retains the camera itself. Orbit changes publish only a small wrapped longitude/latitude value for the minimap reticle, not camera objects or projected world geometry.
 
 ### Validation and warnings
 
@@ -273,7 +284,7 @@ Non-fatal warnings flag land coverage outside 45–60%, landmass counts outside 
 
 ### State boundaries
 
-Zustand owns the explicit application mode, current serializable world and match setups, planet, match, save status, and UI-only seed input, warnings, hover, display mode, event-log visibility, focus request, and debug mode. Pure setup and persistence helpers generate candidates, score balance, validate profiles and saves, and deterministically serialize without React or Three.js globals. Small browser adapters own `window.location`, History API, and localStorage access. Components dispatch typed commands through the pure rules reducer; they do not implement gameplay mutations. React Three Fiber owns scene objects and transient camera/horizon calculations, so orbiting does not produce frame-by-frame Zustand updates.
+Zustand owns the explicit application mode, current serializable world and match setups, planet, match, save status, and UI-only seed input, warnings, hover, display mode, event-log visibility, focus request, derived minimap focus coordinate, and debug mode. Pure setup and persistence helpers generate candidates, score balance, validate profiles and saves, and deterministically serialize without React or Three.js globals. Small browser adapters own `window.location`, History API, and localStorage access. Components dispatch typed commands through the pure rules reducer; they do not implement gameplay mutations. React Three Fiber owns scene objects and transient camera/horizon calculations; only the small minimap focus coordinate crosses that boundary during orbit changes.
 
 ## Current limitations
 
@@ -288,6 +299,7 @@ Zustand owns the explicit application mode, current serializable world and match
 - Picking targets playable land territories and does not yet support structures.
 - The fixed subdivision-level-4 surface is tuned most heavily around 42 territories; the supported 12–48 range does not yet adapt mesh resolution to count.
 - URLs reconstruct world setup only, not player profiles, ownership variants, in-progress turns, or UI preferences.
+- The minimap is intentionally read-only. Optional click-to-focus globe navigation is a possible future enhancement, but territory actions and independent minimap navigation remain out of scope.
 - Browser history records applied setups, but there is no named setup library or durable server storage.
 
 ## Next recommended milestone
@@ -309,4 +321,5 @@ Run structured friend playtests, collect balance and usability observations, and
 - Animations beyond simple feedback
 - Sound
 - AI opponents
+- AI/controller integrations, AI-versus-AI matches, and spectator tooling; future controllers should continue dispatching validated game actions so every renderer reflects them without special cases
 - Production mobile polish
