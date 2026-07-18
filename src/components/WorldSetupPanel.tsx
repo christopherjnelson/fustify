@@ -7,9 +7,14 @@ export function WorldSetupPanel() {
   const saveError = useGameStore((state) => state.saveError);
   const resume = useGameStore((state) => state.resumeSavedMatch);
   const deleteSave = useGameStore((state) => state.deleteSavedMatch);
+  const operation = useGameStore((state) => state.setupOperation);
 
   return (
-    <aside className="setup-panel" aria-labelledby="world-setup-title">
+    <aside
+      className={`setup-panel ${operation ? 'is-busy' : ''}`}
+      aria-labelledby="world-setup-title"
+      aria-busy={operation !== null}
+    >
       <span className="eyebrow">Local hot-seat</span>
       <h1 id="world-setup-title">Configure your world</h1>
       <p>
@@ -26,8 +31,15 @@ export function WorldSetupPanel() {
           </span>
           {saveError && <p role="alert">{saveError}</p>}
           <div className="setup-actions">
-            <button type="button" onClick={resume} disabled={!savedAt}>
-              Resume saved session
+            <button
+              type="button"
+              onClick={() => void resume()}
+              disabled={!savedAt || operation !== null}
+              aria-busy={operation === 'restore-game'}
+            >
+              {operation === 'restore-game'
+                ? 'Restoring…'
+                : 'Resume saved session'}
             </button>
             <button type="button" className="secondary" onClick={deleteSave}>
               Delete save

@@ -16,6 +16,7 @@ import { useGameStore, type PlanetViewMode } from '../state/useGameStore';
 import { TerritoryNavigator } from './TerritoryNavigator';
 import { territoryDrawerReducer } from '../core/navigation/territoryNavigator';
 import { playerColorValue } from '../core/setup/playerConfig';
+import { TERRITORY_NAVIGATOR_SHORTCUT } from '../core/input/controlBindings';
 
 const PHASE_LABELS = {
   reinforce: 'Reinforce',
@@ -75,7 +76,10 @@ export function TerritoryHud() {
 
   useEffect(() => {
     const openFromShortcut = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === TERRITORY_NAVIGATOR_SHORTCUT.key
+      ) {
         event.preventDefault();
         dispatchNavigator('open');
       }

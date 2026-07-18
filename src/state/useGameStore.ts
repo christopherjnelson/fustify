@@ -107,6 +107,13 @@ function initialSaveStatus(): Pick<
 }
 
 export type PlanetViewMode = 'ownership' | 'continents' | 'terrain';
+export type SetupOperation =
+  | 'preview-world'
+  | 'random-seed'
+  | 'assign-territories'
+  | 'reroll-territories'
+  | 'start-game'
+  | 'restore-game';
 
 export interface GameState {
   applicationMode: ApplicationMode;
@@ -133,29 +140,30 @@ export interface GameState {
   focusTargetTerritoryId: string | null;
   focusSequence: number;
   globeFocus: GeographicPoint;
+  setupOperation: SetupOperation | null;
   setSeedInput: (seed: string) => void;
   setSetupDraft: (update: Partial<WorldSetup>) => void;
-  regenerate: () => void;
-  randomizeSeed: () => void;
+  regenerate: () => Promise<void>;
+  randomizeSeed: () => Promise<void>;
   loadSetupFromUrl: () => void;
   updatePlayer: (
     id: string,
     update: Partial<Pick<LocalPlayerConfig, 'name' | 'colorId'>>,
   ) => void;
   setAssignmentMode: (mode: TerritoryAssignmentMode) => void;
-  beginAssignment: () => void;
+  beginAssignment: () => Promise<void>;
   cancelAssignment: () => void;
   restartDraft: () => void;
   pickDraftTerritory: (territoryId: string) => void;
-  rerollOwnership: () => void;
-  startMatch: () => void;
+  rerollOwnership: () => Promise<void>;
+  startMatch: () => Promise<void>;
   backToWorldSetup: () => void;
   beginTurn: () => void;
   resetMatch: () => void;
   rematchNewOwnership: () => void;
   dispatchGameAction: (action: GameAction) => void;
   saveMatch: () => void;
-  resumeSavedMatch: () => void;
+  resumeSavedMatch: () => Promise<void>;
   deleteSavedMatch: () => void;
   setHoveredTerritory: (id: string | null) => void;
   selectTerritory: (id: string | null) => void;
@@ -171,6 +179,15 @@ function makeRandomSeed(): string {
   const values = new Uint32Array(2);
   crypto.getRandomValues(values);
   return `world-${values[0]!.toString(36)}-${values[1]!.toString(36)}`;
+}
+
+function allowBusyStateToPaint(): Promise<void> {
+  if (typeof window === 'undefined' || !window.requestAnimationFrame) {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  return new Promise((resolve) =>
+    window.requestAnimationFrame(() => setTimeout(resolve, 250)),
+  );
 }
 
 function selectedTerritory(state: GameState): string | null {
@@ -295,6 +312,7 @@ export const useGameStore = create<GameState>((set, get) => {
     focusTargetTerritoryId: null,
     focusSequence: 0,
     globeFocus: { longitude: 90, latitude: 0 },
+    setupOperation: null,
     setSeedInput: (seedInput) =>
       set((state) => ({
         seedInput,
@@ -306,7 +324,8 @@ export const useGameStore = create<GameState>((set, get) => {
         setupDraft: { ...state.setupDraft, ...update },
         setupError: null,
       })),
-    regenerate: () => {
+    regenerate: async () => {
+      if (get().setupOperation) return;
       if (
         get().savedMatchAvailable &&
         typeof window !== 'undefined' &&
@@ -315,6 +334,8 @@ export const useGameStore = create<GameState>((set, get) => {
         )
       )
         return;
+      set({ setupOperation: 'preview-world', setupError: null });
+      await allowBusyStateToPaint();
       const requestedSetup = { ...get().setupDraft, seed: get().seedInput };
       const setup = normalizeWorldSetup(requestedSetup);
       const warning = worldSetupsEqual(setup, requestedSetup)
@@ -330,9 +351,12 @@ export const useGameStore = create<GameState>((set, get) => {
               ? error.message
               : 'Could not generate world.',
         });
+      } finally {
+        set({ setupOperation: null });
       }
     },
-    randomizeSeed: () => {
+    randomizeSeed: async () => {
+      if (get().setupOperation) return;
       if (
         get().savedMatchAvailable &&
         typeof window !== 'undefined' &&
@@ -341,18 +365,22 @@ export const useGameStore = create<GameState>((set, get) => {
         )
       )
         return;
-      const seedInput = makeRandomSeed();
-      const setup = normalizeWorldSetup({
-        ...get().setupDraft,
-        seed: seedInput,
-      });
+      set({ setupOperation: 'random-seed', setupError: null });
+      await allowBusyStateToPaint();
       try {
+        const seedInput = makeRandomSeed();
+        const setup = normalizeWorldSetup({
+          ...get().setupDraft,
+          seed: seedInput,
+        });
         if (typeof window !== 'undefined') writeSetupToLocation(setup);
         applyGeneratedSetup(setup, null);
       } catch {
         set({
           setupError: 'That random setup could not be generated. Try again.',
         });
+      } finally {
+        set({ setupOperation: null });
       }
     },
     loadSetupFromUrl: () => {
@@ -403,8 +431,9 @@ export const useGameStore = create<GameState>((set, get) => {
       });
       if (typeof window !== 'undefined') writeSetupToLocation(setup, 'replace');
     },
-    beginAssignment: () => {
+    beginAssignment: async () => {
       const state = get();
+      if (state.setupOperation) return;
       if (state.matchSetup.setupPhase !== 'neutral-preview') return;
       const players = state.matchSetup.players.map((player) => ({
         ...player,
@@ -415,9 +444,13 @@ export const useGameStore = create<GameState>((set, get) => {
         set({ playerSetupErrors: errors });
         return;
       }
+      set({ setupOperation: 'assign-territories', setupError: null });
+      await allowBusyStateToPaint();
       try {
-        const matchSetup = beginTerritoryAssignment(state.planet, {
-          ...state.matchSetup,
+        const current = get();
+        if (current.matchSetup.setupPhase !== 'neutral-preview') return;
+        const matchSetup = beginTerritoryAssignment(current.planet, {
+          ...current.matchSetup,
           players,
         });
         set({
@@ -437,6 +470,8 @@ export const useGameStore = create<GameState>((set, get) => {
               ? error.message
               : 'Territory assignment could not begin.',
         });
+      } finally {
+        set({ setupOperation: null });
       }
     },
     cancelAssignment: () => {
@@ -489,23 +524,34 @@ export const useGameStore = create<GameState>((set, get) => {
         hoveredTerritoryId: null,
       });
     },
-    rerollOwnership: () => {
+    rerollOwnership: async () => {
       const state = get();
+      if (state.setupOperation) return;
       if (
         state.matchSetup.setupPhase !== 'ready' ||
         state.matchSetup.assignmentMode !== 'random'
       )
         return;
-      const ownershipVariant = state.matchSetup.ownershipVariant + 1;
+      set({ setupOperation: 'reroll-territories', setupError: null });
+      await allowBusyStateToPaint();
+      const current = get();
+      if (
+        current.matchSetup.setupPhase !== 'ready' ||
+        current.matchSetup.assignmentMode !== 'random'
+      ) {
+        set({ setupOperation: null });
+        return;
+      }
+      const ownershipVariant = current.matchSetup.ownershipVariant + 1;
       try {
         const startingPosition = generateStartingPosition(
-          state.planet,
-          state.matchSetup.players,
+          current.planet,
+          current.matchSetup.players,
           ownershipVariant,
         );
         set({
           matchSetup: {
-            ...state.matchSetup,
+            ...current.matchSetup,
             ownershipVariant,
             startingPosition,
           },
@@ -519,10 +565,13 @@ export const useGameStore = create<GameState>((set, get) => {
               ? error.message
               : 'A new balanced ownership layout could not be generated.',
         });
+      } finally {
+        set({ setupOperation: null });
       }
     },
-    startMatch: () => {
+    startMatch: async () => {
       const state = get();
+      if (state.setupOperation) return;
       if (state.matchSetup.setupPhase !== 'ready') {
         set({
           playerSetupErrors: [
@@ -550,16 +599,31 @@ export const useGameStore = create<GameState>((set, get) => {
         )
       )
         return;
-      const match = createMatch(state.planet, state.matchSetup);
-      set({
-        applicationMode: 'handoff',
-        match,
-        handoffSummary: { previousTurn: null, messages: [] },
-        playerSetupErrors: [],
-        assignmentFeedback: null,
-        lastActionError: null,
-      });
-      persist({ ...get(), match, applicationMode: 'handoff' }, 'handoff');
+      set({ setupOperation: 'start-game', setupError: null });
+      await allowBusyStateToPaint();
+      try {
+        const current = get();
+        if (current.matchSetup.setupPhase !== 'ready') return;
+        const match = createMatch(current.planet, current.matchSetup);
+        set({
+          applicationMode: 'handoff',
+          match,
+          handoffSummary: { previousTurn: null, messages: [] },
+          playerSetupErrors: [],
+          assignmentFeedback: null,
+          lastActionError: null,
+        });
+        persist({ ...get(), match, applicationMode: 'handoff' }, 'handoff');
+      } catch (error) {
+        set({
+          setupError:
+            error instanceof Error
+              ? error.message
+              : 'The game could not start.',
+        });
+      } finally {
+        set({ setupOperation: null });
+      }
     },
     backToWorldSetup: () =>
       set({ applicationMode: 'world-setup', saveMessage: null }),
@@ -637,8 +701,11 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     },
     saveMatch: () => persist(get()),
-    resumeSavedMatch: () => {
+    resumeSavedMatch: async () => {
+      if (get().setupOperation) return;
       if (typeof window === 'undefined') return;
+      set({ setupOperation: 'restore-game', saveError: null });
+      await allowBusyStateToPaint();
       try {
         const parsed = readLocalMatchSave();
         if (!parsed || !parsed.ok) {
@@ -709,6 +776,8 @@ export const useGameStore = create<GameState>((set, get) => {
         if (parsed.migrated) persist(get(), applicationMode);
       } catch {
         set({ saveError: 'The local session could not be read safely.' });
+      } finally {
+        set({ setupOperation: null });
       }
     },
     deleteSavedMatch: () => {

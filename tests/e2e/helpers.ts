@@ -2,6 +2,7 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 
 export type Scenario =
   | 'world-setup'
+  | 'random-seed-busy'
   | 'pregame'
   | 'pregame-random-ready'
   | 'draft-started'
@@ -12,6 +13,7 @@ export type Scenario =
   | 'pregame-invalid'
   | 'pregame-expanded'
   | 'pregame-rerolled'
+  | 'reroll-busy'
   | 'handoff'
   | 'reinforcement'
   | 'attack-source'

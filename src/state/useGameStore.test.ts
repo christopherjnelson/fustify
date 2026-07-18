@@ -3,16 +3,16 @@ import { useGameStore } from './useGameStore';
 
 const initialState = useGameStore.getState();
 
-function beginRandomAssignment() {
-  useGameStore.getState().beginAssignment();
+async function beginRandomAssignment() {
+  await useGameStore.getState().beginAssignment();
   const state = useGameStore.getState();
   expect(state.matchSetup.setupPhase).toBe('ready');
   return state;
 }
 
-function startRandomMatch() {
-  beginRandomAssignment();
-  useGameStore.getState().startMatch();
+async function startRandomMatch() {
+  await beginRandomAssignment();
+  await useGameStore.getState().startMatch();
   return useGameStore.getState();
 }
 
@@ -22,9 +22,78 @@ afterEach(() => {
 });
 
 describe('setup and match store integration', () => {
-  it('generation creates neutral geography without creating match ownership', () => {
+  it('random seed replaces geography but preserves neutral setup choices and profiles', async () => {
+    useGameStore.getState().setAssignmentMode('player-draft');
+    useGameStore.getState().updatePlayer('player-01', { name: 'North Star' });
+    const previousPlanet = useGameStore.getState().planet;
+    await useGameStore.getState().randomizeSeed();
+    const state = useGameStore.getState();
+    expect(state.planet).not.toBe(previousPlanet);
+    expect(state.setup.assignmentMode).toBe('player-draft');
+    expect(state.matchSetup.assignmentMode).toBe('player-draft');
+    expect(state.matchSetup.players[0]!.name).toBe('North Star');
+    expect(state.matchSetup.setupPhase).toBe('neutral-preview');
+    expect(state.match).toBeNull();
+    expect(
+      state.planet.territories.every(
+        (territory) => territory.ownerId === null && territory.armyCount === 0,
+      ),
+    ).toBe(true);
+  });
+
+  it('generation clears ready ownership analysis and remains deterministic for an explicit seed', async () => {
+    await beginRandomAssignment();
+    useGameStore.getState().setSeedInput('explicit-preview-seed');
+    await useGameStore.getState().regenerate();
+    const first = useGameStore.getState();
+    expect(first.matchSetup.setupPhase).toBe('neutral-preview');
+    expect(first.matchSetup.startingPosition).toBeNull();
+    expect(first.matchSetup.draft).toBeNull();
+    const topology = first.planet.territories.map((territory) => ({
+      id: territory.id,
+      center: territory.center,
+      adjacentTerritoryIds: territory.adjacentTerritoryIds,
+    }));
+    await useGameStore.getState().regenerate();
+    expect(
+      useGameStore.getState().planet.territories.map((territory) => ({
+        id: territory.id,
+        center: territory.center,
+        adjacentTerritoryIds: territory.adjacentTerritoryIds,
+      })),
+    ).toEqual(topology);
+  });
+
+  it('paints a busy lock before generation and ignores duplicate activation', async () => {
+    const first = useGameStore.getState().randomizeSeed();
+    expect(useGameStore.getState().setupOperation).toBe('random-seed');
+    const seedBeforeWork = useGameStore.getState().setup.seed;
+    const duplicate = useGameStore.getState().randomizeSeed();
+    await duplicate;
+    expect(useGameStore.getState().setup.seed).toBe(seedBeforeWork);
+    await first;
+    expect(useGameStore.getState().setupOperation).toBeNull();
+    expect(useGameStore.getState().setup.seed).not.toBe(seedBeforeWork);
+  });
+
+  it('clears the busy lock and exposes an error when random generation fails', async () => {
+    const originalCrypto = globalThis.crypto;
+    vi.stubGlobal('crypto', {
+      getRandomValues: () => {
+        throw new Error('Random source unavailable');
+      },
+    });
+    await useGameStore.getState().randomizeSeed();
+    expect(useGameStore.getState().setupOperation).toBeNull();
+    expect(useGameStore.getState().setupError).toMatch(
+      /could not be generated/i,
+    );
+    vi.stubGlobal('crypto', originalCrypto);
+  });
+
+  it('generation creates neutral geography without creating match ownership', async () => {
     useGameStore.getState().setSeedInput('store-integration-world');
-    useGameStore.getState().regenerate();
+    await useGameStore.getState().regenerate();
     const generated = useGameStore.getState();
     expect(generated.setup.seed).toBe('store-integration-world');
     expect(generated.applicationMode).toBe('pregame');
@@ -37,21 +106,21 @@ describe('setup and match store integration', () => {
     ).toBe(true);
   });
 
-  it('random assignment is explicit and enters first-turn handoff only after start', () => {
+  it('random assignment is explicit and enters first-turn handoff only after start', async () => {
     useGameStore.getState().setSeedInput('pregame-flow');
-    useGameStore.getState().regenerate();
+    await useGameStore.getState().regenerate();
     expect(useGameStore.getState().matchSetup.setupPhase).toBe(
       'neutral-preview',
     );
-    beginRandomAssignment();
+    await beginRandomAssignment();
     expect(useGameStore.getState().match).toBeNull();
-    useGameStore.getState().startMatch();
+    await useGameStore.getState().startMatch();
     expect(useGameStore.getState().applicationMode).toBe('handoff');
     expect(useGameStore.getState().match).not.toBeNull();
   });
 
-  it('list selection dispatches selection and repeatable focus requests in play', () => {
-    const started = startRandomMatch();
+  it('list selection dispatches selection and repeatable focus requests in play', async () => {
+    const started = await startRandomMatch();
     started.beginTurn();
     const state = useGameStore.getState();
     const match = state.match!;
@@ -68,8 +137,8 @@ describe('setup and match store integration', () => {
     expect(useGameStore.getState().focusSequence).toBe(initialSequence + 2);
   });
 
-  it('blocks actions during handoff and begins without recalculating reinforcements', () => {
-    const state = startRandomMatch();
+  it('blocks actions during handoff and begins without recalculating reinforcements', async () => {
+    const state = await startRandomMatch();
     const before = state.match!.remainingReinforcements;
     const target = Object.keys(state.match!.territories)[0]!;
     state.dispatchGameAction({
@@ -83,12 +152,12 @@ describe('setup and match store integration', () => {
     expect(useGameStore.getState().match?.remainingReinforcements).toBe(before);
   });
 
-  it('rerolls random ownership without regenerating geography', () => {
-    const state = beginRandomAssignment();
+  it('rerolls random ownership without regenerating geography', async () => {
+    const state = await beginRandomAssignment();
     const planet = state.planet;
     if (state.matchSetup.setupPhase !== 'ready') return;
     const previous = state.matchSetup.startingPosition.territories;
-    state.rerollOwnership();
+    await state.rerollOwnership();
     const next = useGameStore.getState();
     expect(next.planet).toBe(planet);
     expect(next.matchSetup.setupPhase).toBe('ready');
@@ -99,10 +168,10 @@ describe('setup and match store integration', () => {
     }
   });
 
-  it('progresses a round-robin player draft and rejects duplicate picks', () => {
+  it('progresses a round-robin player draft and rejects duplicate picks', async () => {
     const state = useGameStore.getState();
     state.setAssignmentMode('player-draft');
-    state.beginAssignment();
+    await state.beginAssignment();
     const first = state.planet.territories[0]!.id;
     const second = state.planet.territories[1]!.id;
     useGameStore.getState().pickDraftTerritory(first);
@@ -119,7 +188,7 @@ describe('setup and match store integration', () => {
     }
   });
 
-  it('handles uneven draft totals, restart, cancel, and completion', () => {
+  it('handles uneven draft totals, restart, cancel, and completion', async () => {
     useGameStore.getState().setSetupDraft({
       territoryCount: 13,
       continentCount: 3,
@@ -127,8 +196,8 @@ describe('setup and match store integration', () => {
       assignmentMode: 'player-draft',
     });
     useGameStore.getState().setSeedInput('uneven-draft');
-    useGameStore.getState().regenerate();
-    useGameStore.getState().beginAssignment();
+    await useGameStore.getState().regenerate();
+    await useGameStore.getState().beginAssignment();
     useGameStore
       .getState()
       .pickDraftTerritory(useGameStore.getState().planet.territories[0]!.id);
@@ -149,7 +218,7 @@ describe('setup and match store integration', () => {
       ).toEqual([5, 4, 4]);
       expect(setup.startingPosition.analysis.hardFailure).toBe(false);
     }
-    useGameStore.getState().startMatch();
+    await useGameStore.getState().startMatch();
     expect(useGameStore.getState().applicationMode).toBe('handoff');
     useGameStore.getState().rematchNewOwnership();
     expect(useGameStore.getState().matchSetup.setupPhase).toBe(
@@ -161,8 +230,8 @@ describe('setup and match store integration', () => {
     );
   });
 
-  it('blocks hard-invalid ready layouts with their specific reasons', () => {
-    const state = beginRandomAssignment();
+  it('blocks hard-invalid ready layouts with their specific reasons', async () => {
+    const state = await beginRandomAssignment();
     if (state.matchSetup.setupPhase !== 'ready') return;
     useGameStore.setState({
       applicationMode: 'pregame',
@@ -180,20 +249,20 @@ describe('setup and match store integration', () => {
         },
       },
     });
-    useGameStore.getState().startMatch();
+    await useGameStore.getState().startMatch();
     expect(useGameStore.getState().applicationMode).toBe('pregame');
     expect(useGameStore.getState().playerSetupErrors).toContain(
       'Crimson League begins with all of Golden March.',
     );
   });
 
-  it('requires confirmation only for Poor random layouts', () => {
+  it('requires confirmation only for Poor random layouts', async () => {
     const confirm = vi
       .fn()
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(true);
     vi.stubGlobal('window', { confirm });
-    const state = beginRandomAssignment();
+    const state = await beginRandomAssignment();
     if (state.matchSetup.setupPhase !== 'ready') return;
     useGameStore.setState({
       applicationMode: 'pregame',
@@ -212,9 +281,9 @@ describe('setup and match store integration', () => {
         },
       },
     });
-    useGameStore.getState().startMatch();
+    await useGameStore.getState().startMatch();
     expect(useGameStore.getState().applicationMode).toBe('pregame');
-    useGameStore.getState().startMatch();
+    await useGameStore.getState().startMatch();
     expect(useGameStore.getState().applicationMode).toBe('handoff');
     expect(confirm).toHaveBeenCalledTimes(2);
   });

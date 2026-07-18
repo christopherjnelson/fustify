@@ -12,6 +12,11 @@ const scenarios: Array<{
     heading: /Configure your world/i,
   },
   {
+    name: 'random-seed-busy',
+    region: '.setup-panel',
+    heading: /Configure your world/i,
+  },
+  {
     name: 'pregame',
     region: '.pregame-panel',
     heading: /Preview and assign territories/i,
@@ -58,6 +63,11 @@ const scenarios: Array<{
   },
   {
     name: 'pregame-rerolled',
+    region: '.pregame-panel',
+    heading: /Preview and assign territories/i,
+  },
+  {
+    name: 'reroll-busy',
     region: '.pregame-panel',
     heading: /Preview and assign territories/i,
   },

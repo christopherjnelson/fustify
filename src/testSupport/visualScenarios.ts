@@ -22,6 +22,7 @@ import { useGameStore } from '../state/useGameStore';
 
 export type VisualScenario =
   | 'world-setup'
+  | 'random-seed-busy'
   | 'pregame'
   | 'pregame-random-ready'
   | 'draft-started'
@@ -32,6 +33,7 @@ export type VisualScenario =
   | 'pregame-invalid'
   | 'pregame-expanded'
   | 'pregame-rerolled'
+  | 'reroll-busy'
   | 'handoff'
   | 'reinforcement'
   | 'attack-source'
@@ -265,7 +267,11 @@ function applyScenario(scenario: VisualScenario) {
         .sort((left, right) => left.distance - right.distance)[0]!.id
     : null;
 
-  if (scenario !== 'world-setup' && scenario !== 'saved-resume') {
+  if (
+    scenario !== 'world-setup' &&
+    scenario !== 'random-seed-busy' &&
+    scenario !== 'saved-resume'
+  ) {
     applicationMode =
       scenario.startsWith('pregame') || scenario.startsWith('draft')
         ? 'pregame'
@@ -273,6 +279,7 @@ function applyScenario(scenario: VisualScenario) {
   }
   if (
     scenario === 'world-setup' ||
+    scenario === 'random-seed-busy' ||
     scenario === 'pregame' ||
     scenario === 'minimap-seam'
   ) {
@@ -315,6 +322,10 @@ function applyScenario(scenario: VisualScenario) {
   if (scenario === 'pregame-rerolled') {
     matchSetup = createMatchSetup(planet, fixed.players, 1);
     match = createMatch(planet, matchSetup);
+    scenarioMatch = null;
+  }
+  if (scenario === 'reroll-busy') {
+    applicationMode = 'pregame';
     scenarioMatch = null;
   }
   if (scenario === 'pregame-poor') {
@@ -433,6 +444,12 @@ function applyScenario(scenario: VisualScenario) {
     focusTargetTerritoryId,
     focusSequence: focusScenario ? 1 : 0,
     globeFocus: scenarioFocus,
+    setupOperation:
+      scenario === 'random-seed-busy'
+        ? 'random-seed'
+        : scenario === 'reroll-busy'
+          ? 'reroll-territories'
+          : null,
   });
 }
 

@@ -919,7 +919,7 @@ button:disabled {
 .minimap-panel {
   position: absolute;
   z-index: 5;
-  top: 122px;
+  bottom: 18px;
   right: 22px;
   width: min(330px, calc(100vw - 500px));
   min-width: 250px;
@@ -930,6 +930,90 @@ button:disabled {
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.34);
   backdrop-filter: blur(13px);
   user-select: none;
+}
+
+.control-legend {
+  position: absolute;
+  z-index: 5;
+  bottom: 18px;
+  left: 24px;
+  width: min(310px, calc(100vw - 48px));
+  padding: 9px 11px;
+  color: #9db0c3;
+  border: 1px solid rgba(149, 183, 214, 0.12);
+  border-radius: 10px;
+  background: rgba(5, 11, 20, 0.68);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(9px);
+  pointer-events: none;
+}
+
+.mode-world-setup .control-legend,
+.mode-pregame .control-legend,
+.mode-playing .control-legend,
+.mode-game-over .control-legend {
+  left: min(568px, calc(100vw - 334px));
+}
+
+.control-legend > strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #d5e3ef;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.control-legend dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.control-legend dl > div {
+  display: flex;
+  gap: 4px;
+  font-size: 0.58rem;
+}
+
+.control-legend dt {
+  color: #d0deea;
+  font-weight: 700;
+}
+
+.control-legend dd {
+  margin: 0;
+}
+
+.control-legend kbd {
+  font: inherit;
+}
+
+button[aria-busy='true']::before {
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-right: 0.45em;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  content: '';
+  vertical-align: -0.08em;
+  animation: busy-spin 700ms linear infinite;
+}
+
+.is-busy,
+.is-busy button,
+.seed-controls[aria-busy='true'],
+.seed-controls[aria-busy='true'] button {
+  cursor: wait;
+}
+
+@keyframes busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .mode-handoff .minimap-panel {
@@ -1693,20 +1777,6 @@ h2 {
   font-size: 2.4rem;
 }
 
-.interaction-hint {
-  position: absolute;
-  z-index: 4;
-  right: 20px;
-  bottom: 18px;
-  padding: 7px 10px;
-  color: rgba(178, 199, 220, 0.66);
-  border: 1px solid rgba(149, 183, 214, 0.1);
-  border-radius: 8px;
-  background: rgba(5, 11, 20, 0.48);
-  font-size: 0.66rem;
-  backdrop-filter: blur(7px);
-}
-
 @media (max-width: 680px) {
   .hud {
     top: 12px;
@@ -1740,9 +1810,29 @@ h2 {
   .minimap-panel {
     top: auto;
     right: 12px;
-    bottom: 44px;
-    width: calc(100vw - 24px);
+    bottom: 82px;
+    width: min(300px, calc(100vw - 24px));
     min-width: 0;
+  }
+
+  .control-legend,
+  .mode-world-setup .control-legend,
+  .mode-pregame .control-legend,
+  .mode-playing .control-legend,
+  .mode-game-over .control-legend {
+    right: 12px;
+    bottom: 10px;
+    left: 12px;
+    width: auto;
+    padding: 7px 9px;
+  }
+
+  .control-legend > strong {
+    margin-bottom: 3px;
+  }
+
+  .control-legend dl {
+    gap: 2px 9px;
   }
 
   .mode-world-setup .setup-panel,
@@ -1769,14 +1859,6 @@ h2 {
 
   .empty-selection {
     padding-top: 10px;
-  }
-
-  .interaction-hint {
-    right: 50%;
-    bottom: 9px;
-    width: max-content;
-    max-width: calc(100vw - 24px);
-    transform: translateX(50%);
   }
 }
 

@@ -19,14 +19,17 @@ export function SeedControls() {
   const error = useGameStore((state) => state.setupError);
   const regenerate = useGameStore((state) => state.regenerate);
   const randomize = useGameStore((state) => state.randomizeSeed);
+  const operation = useGameStore((state) => state.setupOperation);
+  const generating =
+    operation === 'preview-world' || operation === 'random-seed';
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    regenerate();
+    void regenerate();
   };
 
   return (
-    <form className="seed-controls" onSubmit={submit}>
+    <form className="seed-controls" onSubmit={submit} aria-busy={generating}>
       <div className="setup-heading">
         <label htmlFor="planet-seed">World setup</label>
         <span>Current seed: {setup.seed}</span>
@@ -38,6 +41,7 @@ export function SeedControls() {
           onChange={(event) => setSeedInput(event.target.value)}
           spellCheck={false}
           aria-label="Planet seed"
+          disabled={operation !== null}
         />
       </div>
       <div className="setup-counts">
@@ -52,6 +56,7 @@ export function SeedControls() {
               setDraft({ territoryCount: Number(event.target.value) })
             }
             aria-label="Territory count"
+            disabled={operation !== null}
           />
         </label>
         <label>
@@ -65,6 +70,7 @@ export function SeedControls() {
               setDraft({ continentCount: Number(event.target.value) })
             }
             aria-label="Continent count"
+            disabled={operation !== null}
           />
         </label>
         <label>
@@ -78,6 +84,7 @@ export function SeedControls() {
               setDraft({ playerCount: Number(event.target.value) })
             }
             aria-label="Player count"
+            disabled={operation !== null}
           />
         </label>
       </div>
@@ -90,9 +97,21 @@ export function SeedControls() {
         </p>
       )}
       <div className="setup-actions">
-        <button type="submit">Generate / apply</button>
-        <button type="button" className="secondary" onClick={randomize}>
-          Random seed
+        <button
+          type="submit"
+          disabled={operation !== null}
+          aria-busy={operation === 'preview-world'}
+        >
+          {operation === 'preview-world' ? 'Generating…' : 'Preview world'}
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => void randomize()}
+          disabled={operation !== null}
+          aria-busy={operation === 'random-seed'}
+        >
+          {operation === 'random-seed' ? 'Generating…' : 'Random seed'}
         </button>
       </div>
     </form>

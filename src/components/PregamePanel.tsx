@@ -21,6 +21,7 @@ export function PregamePanel() {
   const start = useGameStore((state) => state.startMatch);
   const save = useGameStore((state) => state.saveMatch);
   const back = useGameStore((state) => state.backToWorldSetup);
+  const operation = useGameStore((state) => state.setupOperation);
   const [selectedDraftTerritoryId, setSelectedDraftTerritoryId] = useState(
     planet.territories[0]?.id ?? '',
   );
@@ -46,8 +47,9 @@ export function PregamePanel() {
 
   return (
     <aside
-      className="setup-panel pregame-panel"
+      className={`setup-panel pregame-panel ${operation ? 'is-busy' : ''}`}
       aria-labelledby="pregame-title"
+      aria-busy={operation !== null}
     >
       <div className="setup-heading-row">
         <div>
@@ -99,7 +101,10 @@ export function PregamePanel() {
                 </span>
                 <input
                   value={player.name}
-                  disabled={matchSetup.setupPhase !== 'neutral-preview'}
+                  disabled={
+                    matchSetup.setupPhase !== 'neutral-preview' ||
+                    operation !== null
+                  }
                   onChange={(event) =>
                     updatePlayer(player.id, { name: event.target.value })
                   }
@@ -110,7 +115,10 @@ export function PregamePanel() {
                 <span className="sr-only">{player.name} color</span>
                 <select
                   value={player.colorId}
-                  disabled={matchSetup.setupPhase !== 'neutral-preview'}
+                  disabled={
+                    matchSetup.setupPhase !== 'neutral-preview' ||
+                    operation !== null
+                  }
                   onChange={(event) =>
                     updatePlayer(player.id, { colorId: event.target.value })
                   }
@@ -142,7 +150,9 @@ export function PregamePanel() {
 
       <fieldset
         className="assignment-modes"
-        disabled={matchSetup.setupPhase !== 'neutral-preview'}
+        disabled={
+          matchSetup.setupPhase !== 'neutral-preview' || operation !== null
+        }
       >
         <legend>Territory assignment</legend>
         <label
@@ -356,22 +366,36 @@ export function PregamePanel() {
       )}
 
       <div className="pregame-actions">
-        <button type="button" className="secondary" onClick={back}>
+        <button
+          type="button"
+          className="secondary"
+          onClick={back}
+          disabled={operation !== null}
+        >
           World settings
         </button>
-        <button type="button" className="secondary" onClick={save}>
+        <button
+          type="button"
+          className="secondary"
+          onClick={save}
+          disabled={operation !== null}
+        >
           Save setup
         </button>
         {matchSetup.setupPhase === 'neutral-preview' && (
           <button
             type="button"
-            onClick={beginAssignment}
-            disabled={errors.length > 0}
+            onClick={() => void beginAssignment()}
+            disabled={errors.length > 0 || operation !== null}
+            aria-busy={operation === 'assign-territories'}
           >
-            Begin{' '}
-            {matchSetup.assignmentMode === 'random'
-              ? 'random assignment'
-              : 'player draft'}
+            {operation === 'assign-territories'
+              ? matchSetup.assignmentMode === 'random'
+                ? 'Assigning…'
+                : 'Starting draft…'
+              : matchSetup.assignmentMode === 'random'
+                ? 'Assign territories'
+                : 'Start player draft'}
           </button>
         )}
         {drafting && (
@@ -380,10 +404,16 @@ export function PregamePanel() {
               type="button"
               className="secondary"
               onClick={cancelAssignment}
+              disabled={operation !== null}
             >
               Cancel draft
             </button>
-            <button type="button" className="secondary" onClick={restartDraft}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={restartDraft}
+              disabled={operation !== null}
+            >
               Restart draft
             </button>
           </>
@@ -394,26 +424,36 @@ export function PregamePanel() {
               type="button"
               className="secondary"
               onClick={
-                ready.assignmentMode === 'random' ? reroll : restartDraft
+                ready.assignmentMode === 'random'
+                  ? () => void reroll()
+                  : restartDraft
               }
+              disabled={operation !== null}
+              aria-busy={operation === 'reroll-territories'}
             >
               {ready.assignmentMode === 'random'
-                ? 'Reroll assignment'
+                ? operation === 'reroll-territories'
+                  ? 'Rerolling…'
+                  : 'Reroll territories'
                 : 'Restart draft'}
             </button>
             <button
               type="button"
               className="secondary"
               onClick={cancelAssignment}
+              disabled={operation !== null}
             >
               Change strategy
             </button>
             <button
               type="button"
-              onClick={start}
-              disabled={errors.length > 0 || analysis?.hardFailure}
+              onClick={() => void start()}
+              disabled={
+                errors.length > 0 || analysis?.hardFailure || operation !== null
+              }
+              aria-busy={operation === 'start-game'}
             >
-              Start match
+              {operation === 'start-game' ? 'Starting…' : 'Start game'}
             </button>
           </>
         )}

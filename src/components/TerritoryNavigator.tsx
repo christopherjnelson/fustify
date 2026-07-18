@@ -12,6 +12,7 @@ import {
   type TerritoryNavigatorFilter,
 } from '../core/navigation/territoryNavigator';
 import { useGameStore } from '../state/useGameStore';
+import { CLOSE_DIALOG_SHORTCUT } from '../core/input/controlBindings';
 
 const STATUS_LABELS = {
   'valid-source': 'Valid source',
@@ -90,7 +91,7 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
   if (!open) return null;
 
   const trapFocus = (event: KeyboardEvent<HTMLDialogElement>) => {
-    if (event.key === 'Escape') {
+    if (event.key === CLOSE_DIALOG_SHORTCUT.key) {
       event.preventDefault();
       onClose();
       return;

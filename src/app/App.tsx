@@ -5,6 +5,7 @@ import { HandoffScreen } from '../components/HandoffScreen';
 import { PregamePanel } from '../components/PregamePanel';
 import { WorldSetupPanel } from '../components/WorldSetupPanel';
 import { Minimap } from '../components/Minimap';
+import { ControlLegend } from '../components/ControlLegend';
 import { useGameStore } from '../state/useGameStore';
 
 export function App() {
@@ -21,6 +22,7 @@ export function App() {
     <main className={`app-shell mode-${mode}`}>
       <GlobeScene />
       <Minimap />
+      <ControlLegend />
       {mode === 'world-setup' && <WorldSetupPanel />}
       {mode === 'pregame' && <PregamePanel />}
       {(mode === 'playing' || mode === 'game-over') && <TerritoryHud />}
@@ -30,9 +32,6 @@ export function App() {
           src={`/assets/worldseed-logo-${logoVariant}.png`}
           alt={`Worldseed logo variant ${logoVariant.toUpperCase()} — Generate a world. Conquer it.`}
         />
-      </div>
-      <div className="interaction-hint" aria-hidden="true">
-        Drag to orbit · Scroll to zoom · Follow the phase prompts
       </div>
     </main>
   );
