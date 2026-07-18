@@ -138,8 +138,14 @@ function queuedRng(values: number[]) {
 
 describe('local match rules', () => {
   it('creates deterministic initial match state', () => {
-    const planet = generatePlanet('match-repeatable');
+    const planet = smallPlanet();
     expect(createMatch(planet)).toEqual(createMatch(planet));
+  });
+
+  it('requires assignment before creating a match from generated geography', () => {
+    expect(() => createMatch(generatePlanet('match-repeatable'))).toThrow(
+      'complete territory assignment',
+    );
   });
 
   it('does not mutate PlanetDefinition during actions', () => {
@@ -380,19 +386,6 @@ describe('local match rules', () => {
     expect(result.error?.code).toBe('FORTIFY_ALREADY_USED');
   });
 
-  it('reset restores deterministic initial state', () => {
-    const planet = smallPlanet();
-    const original = createMatch(planet);
-    const changed = gameReducer(planet, original, {
-      type: 'PLACE_REINFORCEMENT',
-      territoryId: 'a',
-      amount: 1,
-    }).state;
-    expect(gameReducer(planet, changed, { type: 'RESET_MATCH' }).state).toEqual(
-      original,
-    );
-  });
-
   it('makes combat deterministic for the same seed and action sequence', () => {
     const planet = smallPlanet();
     const state = attackState();
@@ -422,7 +415,7 @@ describe('local match rules', () => {
   });
 
   it('keeps match state serializable and free of rendering objects', () => {
-    const state = createMatch(generatePlanet('test-world'));
+    const state = createMatch(smallPlanet());
     expect(JSON.parse(JSON.stringify(state))).toEqual(state);
     const visit = (value: unknown): void => {
       if (value === null || typeof value !== 'object') return;

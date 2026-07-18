@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createMatch } from '../game/createMatch';
 import { gameReducer } from '../game/gameReducer';
 import { generatePlanet } from '../generation/generatePlanet';
+import { createDefaultPlayerConfigs } from '../setup/playerConfig';
+import { createMatchSetup } from '../setup/startingPositions';
 import {
   createTerritorySelectionAction,
   filterTerritoryNavigationItems,
@@ -11,6 +13,7 @@ import {
 } from './territoryNavigator';
 
 const planet = generatePlanet('navigator-tests');
+const setup = createMatchSetup(planet, createDefaultPlayerConfigs(4));
 
 describe('territory navigator model', () => {
   it('starts closed and supports explicit open, Escape-close, and toggle transitions', () => {
@@ -20,7 +23,7 @@ describe('territory navigator model', () => {
   });
 
   it('represents phase-specific legal, selected, and invalid statuses', () => {
-    const match = createMatch(planet);
+    const match = createMatch(planet, setup);
     const items = getTerritoryNavigationItems(planet, match);
     const owned = items.filter((item) => item.status === 'valid-source');
     const invalid = items.filter((item) => item.status === 'invalid');
@@ -40,7 +43,7 @@ describe('territory navigator model', () => {
   });
 
   it('uses the same typed selection action as globe selection', () => {
-    const match = createMatch(planet);
+    const match = createMatch(planet, setup);
     const territoryId = getTerritoryNavigationItems(planet, match).find(
       (item) => item.status === 'valid-source',
     )!.id;
@@ -53,7 +56,7 @@ describe('territory navigator model', () => {
     const route = planet.connections.find(
       (connection) => connection.type === 'sea-route',
     )!;
-    const match = createMatch(planet);
+    const match = createMatch(planet, setup);
     const sourceId = route.fromTerritoryId;
     const targetId = route.toTerritoryId;
     const activePlayerId = match.activePlayerId;
@@ -81,7 +84,7 @@ describe('territory navigator model', () => {
   });
 
   it('filters active-player and all territories with correct counts', () => {
-    const match = createMatch(planet);
+    const match = createMatch(planet, setup);
     const items = getTerritoryNavigationItems(planet, match);
     const mine = filterTerritoryNavigationItems(
       items,
@@ -108,7 +111,7 @@ describe('territory navigator model', () => {
   });
 
   it('searches within either filter without changing the query', () => {
-    const match = createMatch(planet);
+    const match = createMatch(planet, setup);
     const items = getTerritoryNavigationItems(planet, match);
     const ownedItem = items.find(
       (item) => item.ownerId === match.activePlayerId,
@@ -132,7 +135,10 @@ describe('territory navigator model', () => {
   });
 
   it('falls back to all territories when the match is over', () => {
-    const match = { ...createMatch(planet), phase: 'game-over' as const };
+    const match = {
+      ...createMatch(planet, setup),
+      phase: 'game-over' as const,
+    };
     expect(getDefaultTerritoryFilter(match)).toBe('all');
   });
 });

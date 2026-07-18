@@ -2,12 +2,22 @@ import type { PlanetDefinition } from '../types/planet';
 import { makeEvent } from './events';
 import { calculateReinforcements } from './reinforcement';
 import type { MatchState } from './types';
-import type { MatchSetup } from '../setup/startingPositions';
+import type { ReadyMatchSetup } from '../setup/startingPositions';
 
 export function createMatch(
   planet: PlanetDefinition,
-  setup?: MatchSetup,
+  setup?: ReadyMatchSetup,
 ): MatchState {
+  if (
+    !setup &&
+    planet.territories.some(
+      (territory) => territory.ownerId === null || territory.armyCount < 1,
+    )
+  ) {
+    throw new Error(
+      'A complete territory assignment is required to create a match.',
+    );
+  }
   const orderedPlayers = setup
     ? setup.players.slice().sort((a, b) => a.seatIndex - b.seatIndex)
     : planet.players;

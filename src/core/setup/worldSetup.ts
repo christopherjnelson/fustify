@@ -3,6 +3,7 @@ import {
   DEFAULT_PLAYER_COUNT,
   DEFAULT_TERRITORY_COUNT,
 } from '../generation/constants';
+import type { TerritoryAssignmentMode } from './startingPositions';
 
 export const WORLD_SETUP_VERSION = 1;
 export const MIN_TERRITORY_COUNT = 12;
@@ -18,6 +19,7 @@ export interface WorldSetup {
   territoryCount: number;
   continentCount: number;
   playerCount: number;
+  assignmentMode: TerritoryAssignmentMode;
 }
 
 export interface ParsedWorldSetup {
@@ -31,6 +33,7 @@ export const DEFAULT_WORLD_SETUP: Readonly<WorldSetup> = Object.freeze({
   territoryCount: DEFAULT_TERRITORY_COUNT,
   continentCount: DEFAULT_CONTINENT_COUNT,
   playerCount: DEFAULT_PLAYER_COUNT,
+  assignmentMode: 'random',
 });
 
 function integerInRange(
@@ -75,6 +78,8 @@ export function normalizeWorldSetup(
     territoryCount,
     continentCount,
     playerCount,
+    assignmentMode:
+      candidate.assignmentMode === 'player-draft' ? 'player-draft' : 'random',
   };
 }
 
@@ -94,7 +99,7 @@ export function parseWorldSetup(
       warning: `Setup version ${rawVersion || '(empty)'} is unsupported; defaults were loaded.`,
     };
   }
-  const raw = {
+  const raw: WorldSetup = {
     version: WORLD_SETUP_VERSION,
     seed: params.get('seed') ?? DEFAULT_WORLD_SETUP.seed,
     territoryCount: integerInRange(
@@ -115,6 +120,8 @@ export function parseWorldSetup(
       MAX_PLAYER_COUNT,
       DEFAULT_WORLD_SETUP.playerCount,
     ),
+    assignmentMode:
+      params.get('assignment') === 'player-draft' ? 'player-draft' : 'random',
   };
   const setup = normalizeWorldSetup(raw);
   const malformed = [
@@ -139,6 +146,7 @@ const SETUP_KEYS = new Set([
   'territories',
   'continents',
   'players',
+  'assignment',
 ]);
 
 export function serializeWorldSetup(
@@ -152,6 +160,7 @@ export function serializeWorldSetup(
   result.set('territories', String(normalized.territoryCount));
   result.set('continents', String(normalized.continentCount));
   result.set('players', String(normalized.playerCount));
+  result.set('assignment', normalized.assignmentMode);
   [...existing.entries()]
     .filter(([key]) => !SETUP_KEYS.has(key))
     .sort(([keyA, valueA], [keyB, valueB]) =>
@@ -167,6 +176,7 @@ export function worldSetupsEqual(a: WorldSetup, b: WorldSetup): boolean {
     a.seed === b.seed &&
     a.territoryCount === b.territoryCount &&
     a.continentCount === b.continentCount &&
-    a.playerCount === b.playerCount
+    a.playerCount === b.playerCount &&
+    a.assignmentMode === b.assignmentMode
   );
 }

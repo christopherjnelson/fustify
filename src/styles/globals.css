@@ -285,10 +285,123 @@ select:focus-visible {
   font-size: 0.67rem;
 }
 
-.pregame-actions {
+.assignment-modes {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.15fr;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+
+.assignment-modes legend {
+  grid-column: 1 / -1;
+  margin-bottom: 6px;
+  color: #b9ccdc;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.assignment-modes label {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(153, 190, 224, 0.18);
+  border-radius: 10px;
+  background: rgba(2, 8, 16, 0.46);
+  cursor: pointer;
+}
+
+.assignment-modes label.selected {
+  border-color: rgba(116, 205, 241, 0.56);
+  background: rgba(27, 92, 119, 0.3);
+}
+
+.assignment-modes input {
+  margin-top: 2px;
+  accent-color: #78cdeb;
+}
+
+.assignment-modes span,
+.assignment-modes small {
+  display: block;
+}
+
+.assignment-modes small {
+  margin-top: 4px;
+  color: #8ca2b5;
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+
+.neutral-preview-card,
+.draft-card {
+  margin-bottom: 14px;
+  padding: 13px;
+  border: 1px solid rgba(118, 194, 228, 0.2);
+  border-radius: 11px;
+  background: rgba(17, 41, 57, 0.34);
+}
+
+.neutral-preview-card p,
+.draft-card p,
+.advisory-copy {
+  margin: 5px 0 0;
+  color: #94aabd;
+  font-size: 0.67rem;
+  line-height: 1.5;
+}
+
+.draft-card h2 {
+  margin: 4px 0 0;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1rem;
+}
+
+.draft-card label {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  color: #b9ccdc;
+  font-size: 0.68rem;
+}
+
+.draft-card select {
+  width: 100%;
+  padding: 8px;
+  color: #eef7ff;
+  border: 1px solid rgba(153, 190, 224, 0.22);
+  border-radius: 7px;
+  background: #111d2a;
+}
+
+.draft-card > button {
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px;
+  color: #f3f9ff;
+  border: 1px solid rgba(134, 204, 238, 0.28);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #226e90, #285f7c);
+}
+
+.draft-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  margin-top: 10px;
+  color: #91a6ba;
+  font-size: 0.61rem;
+}
+
+.pregame-actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: 7px;
+}
+
+.pregame-actions button {
+  flex: 1 1 130px;
 }
 
 .pregame-actions button,

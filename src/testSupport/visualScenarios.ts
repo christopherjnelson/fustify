@@ -7,13 +7,25 @@ import { GENERATOR_VERSION } from '../core/generation/constants';
 import { generatePlanet } from '../core/generation/generatePlanet';
 import { SAVE_SCHEMA_VERSION } from '../core/persistence/saveGame';
 import { createDefaultPlayerConfigs } from '../core/setup/playerConfig';
-import { createMatchSetup } from '../core/setup/startingPositions';
+import {
+  createMatchSetup,
+  createNeutralMatchSetup,
+  type MatchSetup,
+} from '../core/setup/startingPositions';
+import {
+  beginTerritoryAssignment,
+  pickDraftTerritory,
+} from '../core/setup/territoryAssignment';
 import type { WorldSetup } from '../core/setup/worldSetup';
 import { useGameStore } from '../state/useGameStore';
 
 export type VisualScenario =
   | 'world-setup'
   | 'pregame'
+  | 'pregame-random-ready'
+  | 'draft-in-progress'
+  | 'draft-complete'
+  | 'draft-invalid'
   | 'pregame-poor'
   | 'pregame-invalid'
   | 'pregame-expanded'
@@ -37,6 +49,7 @@ const FIXED_SETUP: WorldSetup = {
   territoryCount: 42,
   continentCount: 6,
   playerCount: 4,
+  assignmentMode: 'random',
 };
 
 function fixedWorld() {
@@ -209,21 +222,58 @@ function applyScenario(scenario: VisualScenario) {
   window.localStorage.clear();
   const fixed = fixedWorld();
   const { planet } = fixed;
-  let matchSetup = fixed.matchSetup;
+  let matchSetup: MatchSetup = fixed.matchSetup;
   let match = fixed.match;
   let applicationMode: ApplicationMode = 'world-setup';
-  let scenarioMatch = match;
+  let scenarioMatch: MatchState | null = match;
   let eventLogOpen = false;
+  let assignmentFeedback: string | null = null;
 
   if (scenario !== 'world-setup' && scenario !== 'saved-resume') {
-    applicationMode = scenario.startsWith('pregame') ? 'pregame' : 'playing';
+    applicationMode =
+      scenario.startsWith('pregame') || scenario.startsWith('draft')
+        ? 'pregame'
+        : 'playing';
+  }
+  if (scenario === 'world-setup' || scenario === 'pregame') {
+    matchSetup = createNeutralMatchSetup(fixed.players, 'random');
+    scenarioMatch = null;
+  }
+  if (scenario === 'pregame-random-ready') {
+    scenarioMatch = null;
+  }
+  if (
+    scenario === 'draft-in-progress' ||
+    scenario === 'draft-complete' ||
+    scenario === 'draft-invalid'
+  ) {
+    const neutral = createNeutralMatchSetup(fixed.players, 'player-draft');
+    let draftSetup = beginTerritoryAssignment(planet, neutral);
+    if (draftSetup.setupPhase !== 'assignment-in-progress') {
+      throw new Error('Visual draft scenario did not begin.');
+    }
+    const pickCount =
+      scenario === 'draft-complete' ? planet.territories.length : 8;
+    for (const territory of planet.territories.slice(0, pickCount)) {
+      if (draftSetup.setupPhase !== 'assignment-in-progress') break;
+      const result = pickDraftTerritory(planet, draftSetup, territory.id);
+      if (!result.ok) throw new Error(result.error);
+      draftSetup = result.setup;
+    }
+    matchSetup = draftSetup;
+    scenarioMatch = null;
+    if (scenario === 'draft-invalid') {
+      assignmentFeedback = 'That territory has already been drafted.';
+    }
   }
   if (scenario === 'pregame-rerolled') {
     matchSetup = createMatchSetup(planet, fixed.players, 1);
     match = createMatch(planet, matchSetup);
-    scenarioMatch = match;
+    scenarioMatch = null;
   }
   if (scenario === 'pregame-poor') {
+    if (matchSetup.setupPhase !== 'ready')
+      throw new Error('Expected ready setup.');
     matchSetup = {
       ...matchSetup,
       startingPosition: {
@@ -241,6 +291,8 @@ function applyScenario(scenario: VisualScenario) {
     };
   }
   if (scenario === 'pregame-invalid') {
+    if (matchSetup.setupPhase !== 'ready')
+      throw new Error('Expected ready setup.');
     matchSetup = {
       ...matchSetup,
       startingPosition: {
@@ -257,6 +309,7 @@ function applyScenario(scenario: VisualScenario) {
       },
     };
   }
+  if (applicationMode === 'pregame') scenarioMatch = null;
   if (scenario === 'handoff') applicationMode = 'handoff';
   if (scenario === 'reinforcement' || scenario === 'navigator') {
     applicationMode = 'playing';
@@ -323,6 +376,7 @@ function applyScenario(scenario: VisualScenario) {
     seedInput: FIXED_SETUP.seed,
     setupError: null,
     setupWarning: null,
+    assignmentFeedback,
     planet,
     matchSetup,
     match: scenarioMatch,
@@ -342,6 +396,11 @@ declare global {
       getState: () => {
         mode: ApplicationMode;
         phase: MatchState['phase'];
+        hasMatch: boolean;
+        setupPhase: MatchSetup['setupPhase'];
+        assignmentMode: MatchSetup['assignmentMode'];
+        draftPickIndex: number | null;
+        draftOwners: Record<string, string>;
         focusSequence: number;
         focusTargetTerritoryId: string | null;
         match: MatchState;
@@ -359,12 +418,24 @@ window.__WORLDSEED_VISUAL__ = {
   loadScenario: applyScenario,
   getState: () => {
     const state = useGameStore.getState();
+    const fallbackMatch = fixedWorld().match;
     return {
       mode: state.applicationMode,
-      phase: state.match.phase,
+      phase: state.match?.phase ?? fallbackMatch.phase,
+      hasMatch: state.match !== null,
+      setupPhase: state.matchSetup.setupPhase,
+      assignmentMode: state.matchSetup.assignmentMode,
+      draftPickIndex:
+        state.matchSetup.setupPhase === 'assignment-in-progress'
+          ? state.matchSetup.draft.pickIndex
+          : (state.matchSetup.draft?.pickIndex ?? null),
+      draftOwners:
+        state.matchSetup.setupPhase === 'assignment-in-progress'
+          ? structuredClone(state.matchSetup.draft.territoryOwners)
+          : structuredClone(state.matchSetup.draft?.territoryOwners ?? {}),
       focusSequence: state.focusSequence,
       focusTargetTerritoryId: state.focusTargetTerritoryId,
-      match: structuredClone(state.match),
+      match: structuredClone(state.match ?? fallbackMatch),
       planet: structuredClone(state.planet),
       ownershipVariant: state.matchSetup.ownershipVariant,
     };
@@ -373,7 +444,7 @@ window.__WORLDSEED_VISUAL__ = {
   save: () => useGameStore.getState().saveMatch(),
   prepareAttack: (type) => {
     const store = useGameStore.getState();
-    const match = advanceToAttack(store.match, store.planet);
+    const match = advanceToAttack(store.match!, store.planet);
     const connection = store.planet.connections.find(
       (item) => item.type === type,
     )!;

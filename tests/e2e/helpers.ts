@@ -3,6 +3,10 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 export type Scenario =
   | 'world-setup'
   | 'pregame'
+  | 'pregame-random-ready'
+  | 'draft-in-progress'
+  | 'draft-complete'
+  | 'draft-invalid'
   | 'pregame-poor'
   | 'pregame-invalid'
   | 'pregame-expanded'

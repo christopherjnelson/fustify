@@ -3,7 +3,7 @@ import { playerColorValue } from '../core/setup/playerConfig';
 import { useGameStore } from '../state/useGameStore';
 
 export function HandoffScreen() {
-  const match = useGameStore((state) => state.match);
+  const match = useGameStore((state) => state.match)!;
   const players = useGameStore((state) => state.matchSetup.players);
   const summary = useGameStore((state) => state.handoffSummary);
   const begin = useGameStore((state) => state.beginTurn);

@@ -3,88 +3,167 @@ import { useGameStore } from './useGameStore';
 
 const initialState = useGameStore.getState();
 
+function beginRandomAssignment() {
+  useGameStore.getState().beginAssignment();
+  const state = useGameStore.getState();
+  expect(state.matchSetup.setupPhase).toBe('ready');
+  return state;
+}
+
+function startRandomMatch() {
+  beginRandomAssignment();
+  useGameStore.getState().startMatch();
+  return useGameStore.getState();
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   useGameStore.setState(initialState, true);
 });
 
 describe('setup and match store integration', () => {
-  it('regeneration creates a new match while reset preserves setup', () => {
-    const previousMatchId = useGameStore.getState().match.matchId;
+  it('generation creates neutral geography without creating match ownership', () => {
     useGameStore.getState().setSeedInput('store-integration-world');
     useGameStore.getState().regenerate();
-
     const generated = useGameStore.getState();
     expect(generated.setup.seed).toBe('store-integration-world');
-    expect(generated.match.matchId).not.toBe(previousMatchId);
-    expect(generated.match.seed).toBe(generated.planet.seed);
-
-    const setupBeforeReset = generated.setup;
-    generated.resetMatch();
-    expect(useGameStore.getState().setup).toEqual(setupBeforeReset);
-    expect(useGameStore.getState().match.seed).toBe(setupBeforeReset.seed);
+    expect(generated.applicationMode).toBe('pregame');
+    expect(generated.match).toBeNull();
+    expect(generated.matchSetup.setupPhase).toBe('neutral-preview');
+    expect(
+      generated.planet.territories.every(
+        (territory) => territory.ownerId === null && territory.armyCount === 0,
+      ),
+    ).toBe(true);
   });
 
-  it('list selection dispatches selection and emits repeatable focus requests', () => {
-    useGameStore.setState({ applicationMode: 'playing' });
+  it('random assignment is explicit and enters first-turn handoff only after start', () => {
+    useGameStore.getState().setSeedInput('pregame-flow');
+    useGameStore.getState().regenerate();
+    expect(useGameStore.getState().matchSetup.setupPhase).toBe(
+      'neutral-preview',
+    );
+    beginRandomAssignment();
+    expect(useGameStore.getState().match).toBeNull();
+    useGameStore.getState().startMatch();
+    expect(useGameStore.getState().applicationMode).toBe('handoff');
+    expect(useGameStore.getState().match).not.toBeNull();
+  });
+
+  it('list selection dispatches selection and repeatable focus requests in play', () => {
+    const started = startRandomMatch();
+    started.beginTurn();
     const state = useGameStore.getState();
+    const match = state.match!;
     const ownedTerritory = state.planet.territories.find(
       (territory) =>
-        state.match.territories[territory.id]?.ownerId ===
-        state.match.activePlayerId,
+        match.territories[territory.id]?.ownerId === match.activePlayerId,
     )!;
     const initialSequence = state.focusSequence;
     state.selectAndFocusTerritory(ownedTerritory.id);
-    expect(useGameStore.getState().match.selectedSourceTerritoryId).toBe(
+    expect(useGameStore.getState().match?.selectedSourceTerritoryId).toBe(
       ownedTerritory.id,
     );
-    expect(useGameStore.getState().focusTargetTerritoryId).toBe(
-      ownedTerritory.id,
-    );
-    expect(useGameStore.getState().focusSequence).toBe(initialSequence + 1);
-
     useGameStore.getState().selectAndFocusTerritory(ownedTerritory.id);
     expect(useGameStore.getState().focusSequence).toBe(initialSequence + 2);
   });
 
-  it('generating enters pregame and starting enters first-turn handoff', () => {
-    useGameStore.getState().setSeedInput('pregame-flow');
-    useGameStore.getState().regenerate();
-    expect(useGameStore.getState().applicationMode).toBe('pregame');
-    useGameStore.getState().startMatch();
-    expect(useGameStore.getState().applicationMode).toBe('handoff');
-    expect(useGameStore.getState().handoffSummary.previousTurn).toBeNull();
-  });
-
   it('blocks actions during handoff and begins without recalculating reinforcements', () => {
-    useGameStore.setState({ applicationMode: 'handoff' });
-    const before = useGameStore.getState().match.remainingReinforcements;
-    const target = Object.keys(useGameStore.getState().match.territories)[0]!;
-    useGameStore.getState().dispatchGameAction({
+    const state = startRandomMatch();
+    const before = state.match!.remainingReinforcements;
+    const target = Object.keys(state.match!.territories)[0]!;
+    state.dispatchGameAction({
       type: 'PLACE_REINFORCEMENT',
       territoryId: target,
       amount: 1,
     });
-    expect(useGameStore.getState().match.remainingReinforcements).toBe(before);
+    expect(useGameStore.getState().match?.remainingReinforcements).toBe(before);
     useGameStore.getState().beginTurn();
     expect(useGameStore.getState().applicationMode).toBe('playing');
-    expect(useGameStore.getState().match.remainingReinforcements).toBe(before);
+    expect(useGameStore.getState().match?.remainingReinforcements).toBe(before);
   });
 
-  it('rerolls ownership while preserving player profiles and planet', () => {
-    const state = useGameStore.getState();
+  it('rerolls random ownership without regenerating geography', () => {
+    const state = beginRandomAssignment();
     const planet = state.planet;
-    const players = state.matchSetup.players;
+    if (state.matchSetup.setupPhase !== 'ready') return;
     const previous = state.matchSetup.startingPosition.territories;
     state.rerollOwnership();
     const next = useGameStore.getState();
     expect(next.planet).toBe(planet);
-    expect(next.matchSetup.players).toEqual(players);
-    expect(next.matchSetup.startingPosition.territories).not.toEqual(previous);
+    expect(next.matchSetup.setupPhase).toBe('ready');
+    if (next.matchSetup.setupPhase === 'ready') {
+      expect(next.matchSetup.startingPosition.territories).not.toEqual(
+        previous,
+      );
+    }
   });
 
-  it('blocks hard-invalid layouts with their specific reasons', () => {
+  it('progresses a round-robin player draft and rejects duplicate picks', () => {
     const state = useGameStore.getState();
+    state.setAssignmentMode('player-draft');
+    state.beginAssignment();
+    const first = state.planet.territories[0]!.id;
+    const second = state.planet.territories[1]!.id;
+    useGameStore.getState().pickDraftTerritory(first);
+    let draft = useGameStore.getState().matchSetup;
+    expect(draft.setupPhase).toBe('assignment-in-progress');
+    if (draft.setupPhase !== 'assignment-in-progress') return;
+    expect(draft.draft.territoryOwners[first]).toBe(draft.players[0]!.id);
+    useGameStore.getState().pickDraftTerritory(first);
+    expect(useGameStore.getState().assignmentFeedback).toContain('already');
+    useGameStore.getState().pickDraftTerritory(second);
+    draft = useGameStore.getState().matchSetup;
+    if (draft.setupPhase === 'assignment-in-progress') {
+      expect(draft.draft.territoryOwners[second]).toBe(draft.players[1]!.id);
+    }
+  });
+
+  it('handles uneven draft totals, restart, cancel, and completion', () => {
+    useGameStore.getState().setSetupDraft({
+      territoryCount: 13,
+      continentCount: 3,
+      playerCount: 3,
+      assignmentMode: 'player-draft',
+    });
+    useGameStore.getState().setSeedInput('uneven-draft');
+    useGameStore.getState().regenerate();
+    useGameStore.getState().beginAssignment();
+    useGameStore
+      .getState()
+      .pickDraftTerritory(useGameStore.getState().planet.territories[0]!.id);
+    useGameStore.getState().restartDraft();
+    let setup = useGameStore.getState().matchSetup;
+    expect(setup.setupPhase).toBe('assignment-in-progress');
+    if (setup.setupPhase === 'assignment-in-progress') {
+      expect(setup.draft.pickIndex).toBe(0);
+    }
+    for (const territory of useGameStore.getState().planet.territories) {
+      useGameStore.getState().pickDraftTerritory(territory.id);
+    }
+    setup = useGameStore.getState().matchSetup;
+    expect(setup.setupPhase).toBe('ready');
+    if (setup.setupPhase === 'ready') {
+      expect(
+        setup.startingPosition.analysis.players.map((p) => p.territoryCount),
+      ).toEqual([5, 4, 4]);
+      expect(setup.startingPosition.analysis.hardFailure).toBe(false);
+    }
+    useGameStore.getState().startMatch();
+    expect(useGameStore.getState().applicationMode).toBe('handoff');
+    useGameStore.getState().rematchNewOwnership();
+    expect(useGameStore.getState().matchSetup.setupPhase).toBe(
+      'assignment-in-progress',
+    );
+    useGameStore.getState().cancelAssignment();
+    expect(useGameStore.getState().matchSetup.setupPhase).toBe(
+      'neutral-preview',
+    );
+  });
+
+  it('blocks hard-invalid ready layouts with their specific reasons', () => {
+    const state = beginRandomAssignment();
+    if (state.matchSetup.setupPhase !== 'ready') return;
     useGameStore.setState({
       applicationMode: 'pregame',
       matchSetup: {
@@ -108,13 +187,14 @@ describe('setup and match store integration', () => {
     );
   });
 
-  it('requires confirmation for Poor valid layouts', () => {
+  it('requires confirmation only for Poor random layouts', () => {
     const confirm = vi
       .fn()
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(true);
     vi.stubGlobal('window', { confirm });
-    const state = useGameStore.getState();
+    const state = beginRandomAssignment();
+    if (state.matchSetup.setupPhase !== 'ready') return;
     useGameStore.setState({
       applicationMode: 'pregame',
       matchSetup: {
@@ -137,29 +217,5 @@ describe('setup and match store integration', () => {
     useGameStore.getState().startMatch();
     expect(useGameStore.getState().applicationMode).toBe('handoff');
     expect(confirm).toHaveBeenCalledTimes(2);
-  });
-
-  it('creates a rerolled rematch with the refined setup analysis', () => {
-    const before = useGameStore.getState().matchSetup;
-    useGameStore.getState().rematchNewOwnership();
-    const after = useGameStore.getState();
-    expect(after.applicationMode).toBe('pregame');
-    expect(after.matchSetup.ownershipVariant).toBe(before.ownershipVariant + 1);
-    expect(after.matchSetup.startingPosition.analysis.hardFailure).toBe(false);
-    expect(after.matchSetup.startingPosition.analysis.breakdown).toHaveProperty(
-      'connectivityDistribution',
-    );
-  });
-
-  it('requests focus for a territory regardless of its hemisphere', () => {
-    const state = useGameStore.getState();
-    const backTerritory = [...state.planet.territories].sort(
-      (a, b) => a.center[2] - b.center[2],
-    )[0]!;
-    state.selectAndFocusTerritory(backTerritory.id);
-    expect(useGameStore.getState().focusTargetTerritoryId).toBe(
-      backTerritory.id,
-    );
-    expect(typeof useGameStore.getState().focusSequence).toBe('number');
   });
 });

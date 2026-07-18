@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { createMatch } from '../game/createMatch';
-import { generatePlanet } from '../generation/generatePlanet';
 import { GENERATOR_VERSION } from '../generation/constants';
+import { generatePlanet } from '../generation/generatePlanet';
 import { createDefaultPlayerConfigs } from '../setup/playerConfig';
-import { createMatchSetup } from '../setup/startingPositions';
+import {
+  createMatchSetup,
+  createNeutralMatchSetup,
+} from '../setup/startingPositions';
+import {
+  beginTerritoryAssignment,
+  pickDraftTerritory,
+} from '../setup/territoryAssignment';
 import { DEFAULT_WORLD_SETUP } from '../setup/worldSetup';
 import {
   parseLocalMatchSave,
@@ -13,7 +20,8 @@ import {
 } from './saveGame';
 
 const planet = generatePlanet(DEFAULT_WORLD_SETUP.seed);
-const setup = createMatchSetup(planet, createDefaultPlayerConfigs(4));
+const players = createDefaultPlayerConfigs(4);
+const setup = createMatchSetup(planet, players);
 const match = createMatch(planet, setup);
 const save: LocalMatchSave = {
   schemaVersion: SAVE_SCHEMA_VERSION,
@@ -30,31 +38,30 @@ describe('local match persistence', () => {
     expect(serializeLocalMatchSave(save)).toBe(serializeLocalMatchSave(save));
   });
 
-  it('restores exact match state including RNG, events, and reinforcements', () => {
-    const result = parseLocalMatchSave(serializeLocalMatchSave(save));
+  it('restores exact match state and rebuilds derived balance analysis', () => {
+    const raw = structuredClone(save);
+    if (raw.matchSetup.setupPhase !== 'ready')
+      throw new Error('Expected ready setup.');
+    raw.matchSetup.startingPosition.analysis.overallScore = 0;
+    const result = parseLocalMatchSave(serializeLocalMatchSave(raw));
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.save.matchState).toEqual(match);
-      expect(result.save.matchState.combatSequence).toBe(match.combatSequence);
-      expect(result.save.matchState.remainingReinforcements).toBe(
-        match.remainingReinforcements,
-      );
-      expect(result.save.matchState.events).toEqual(match.events);
-      expect(result.save.matchSetup.ownershipVariant).toBe(
-        setup.ownershipVariant,
-      );
-      expect(result.save.matchSetup.startingPosition.analysis).toEqual(
-        setup.startingPosition.analysis,
-      );
+      expect(result.save.matchSetup.setupPhase).toBe('ready');
+      if (result.save.matchSetup.setupPhase === 'ready') {
+        expect(result.save.matchSetup.startingPosition.analysis).toEqual(
+          setup.startingPosition.analysis,
+        );
+      }
     }
   });
 
   it('preserves a pending capture', () => {
-    const pendingSave = {
+    const pendingSave: LocalMatchSave = {
       ...save,
       matchState: {
         ...match,
-        phase: 'capture' as const,
+        phase: 'capture',
         pendingCapture: {
           fromTerritoryId: planet.territories[0]!.id,
           toTerritoryId: planet.territories[1]!.id,
@@ -63,49 +70,107 @@ describe('local match persistence', () => {
       },
     };
     const result = parseLocalMatchSave(JSON.stringify(pendingSave));
-    expect(result.ok && result.save.matchState.pendingCapture).toEqual(
-      pendingSave.matchState.pendingCapture,
+    expect(result.ok ? result.save.matchState?.pendingCapture : null).toEqual(
+      pendingSave.matchState?.pendingCapture,
     );
   });
 
-  it('rejects malformed and future saves safely', () => {
+  it('saves and restores a neutral preview with no match ownership', () => {
+    const neutral = createNeutralMatchSetup(players, 'player-draft');
+    const neutralSave: LocalMatchSave = {
+      ...save,
+      worldSetup: {
+        ...DEFAULT_WORLD_SETUP,
+        assignmentMode: 'player-draft',
+      },
+      matchSetup: neutral,
+      matchState: null,
+      applicationMode: 'pregame',
+    };
+    const result = parseLocalMatchSave(JSON.stringify(neutralSave));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.save.matchState).toBeNull();
+      expect(result.save.matchSetup.setupPhase).toBe('neutral-preview');
+      expect(result.save.matchSetup.assignmentMode).toBe('player-draft');
+    }
+  });
+
+  it('saves and restores an in-progress player draft', () => {
+    const neutral = createNeutralMatchSetup(players, 'player-draft');
+    const begun = beginTerritoryAssignment(planet, neutral);
+    expect(begun.setupPhase).toBe('assignment-in-progress');
+    if (begun.setupPhase !== 'assignment-in-progress') return;
+    const picked = pickDraftTerritory(planet, begun, planet.territories[0]!.id);
+    expect(picked.ok).toBe(true);
+    if (!picked.ok) return;
+    const draftSave: LocalMatchSave = {
+      ...save,
+      worldSetup: {
+        ...DEFAULT_WORLD_SETUP,
+        assignmentMode: 'player-draft',
+      },
+      matchSetup: picked.setup,
+      matchState: null,
+      applicationMode: 'pregame',
+    };
+    const result = parseLocalMatchSave(JSON.stringify(draftSave));
+    expect(result.ok).toBe(true);
+    if (
+      result.ok &&
+      result.save.matchSetup.setupPhase === 'assignment-in-progress'
+    ) {
+      expect(result.save.matchSetup.draft.pickIndex).toBe(1);
+      expect(result.save.matchSetup.draft.territoryOwners).toEqual(
+        picked.setup.draft?.territoryOwners,
+      );
+    }
+    const tampered = structuredClone(draftSave);
+    if (tampered.matchSetup.setupPhase === 'assignment-in-progress') {
+      tampered.matchSetup.draft.territoryOwners[planet.territories[1]!.id] =
+        players[0]!.id;
+      tampered.matchSetup.draft.pickIndex = 2;
+      expect(parseLocalMatchSave(JSON.stringify(tampered)).ok).toBe(false);
+    }
+  });
+
+  it('rejects malformed, inconsistent, and future saves safely', () => {
     expect(parseLocalMatchSave('{oops').ok).toBe(false);
     expect(
       parseLocalMatchSave(JSON.stringify({ ...save, schemaVersion: 999 })).ok,
     ).toBe(false);
+    expect(
+      parseLocalMatchSave(
+        JSON.stringify({
+          ...save,
+          matchState: null,
+          applicationMode: 'playing',
+        }),
+      ).ok,
+    ).toBe(false);
   });
 
-  it('migrates the explicitly supported version zero', () => {
-    const old = { ...save, schemaVersion: 0 };
-    delete (old as Partial<LocalMatchSave>).savedAt;
-    const result = parseLocalMatchSave(JSON.stringify(old));
-    expect(result.ok && result.migrated).toBe(true);
-    if (result.ok) expect(result.save.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
-  });
-
-  it('migrates version-one saves by rebuilding the expanded analysis', () => {
-    const old = structuredClone(save);
-    old.schemaVersion = 1;
-    const legacyAnalysis = structuredClone(
-      old.matchSetup.startingPosition.analysis,
-    ) as unknown as Record<string, unknown>;
-    delete legacyAnalysis.breakdown;
-    delete legacyAnalysis.hardFailureReasons;
-    delete legacyAnalysis.players;
-    (
-      old.matchSetup.startingPosition as unknown as {
-        analysis: Record<string, unknown>;
+  it.each([0, 1, 2] as const)(
+    'migrates supported version %s to random ready setup',
+    (schemaVersion) => {
+      const old = structuredClone(save) as unknown as Record<string, unknown>;
+      old.schemaVersion = schemaVersion;
+      if (schemaVersion === 0) delete old.savedAt;
+      const oldWorld = old.worldSetup as Record<string, unknown>;
+      delete oldWorld.assignmentMode;
+      const oldSetup = old.matchSetup as Record<string, unknown>;
+      delete oldSetup.assignmentMode;
+      delete oldSetup.setupPhase;
+      delete oldSetup.draft;
+      const result = parseLocalMatchSave(JSON.stringify(old));
+      expect(result.ok && result.migrated).toBe(true);
+      if (result.ok) {
+        expect(result.save.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
+        expect(result.save.matchSetup.assignmentMode).toBe('random');
+        expect(result.save.matchSetup.setupPhase).toBe('ready');
       }
-    ).analysis = legacyAnalysis;
-    const result = parseLocalMatchSave(JSON.stringify(old));
-    expect(result.ok && result.migrated).toBe(true);
-    if (result.ok) {
-      expect(result.save.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
-      expect(result.save.matchSetup.startingPosition.analysis).toEqual(
-        setup.startingPosition.analysis,
-      );
-    }
-  });
+    },
+  );
 
   it('contains data only and no rendering objects', () => {
     expect(() => structuredClone(save)).not.toThrow();

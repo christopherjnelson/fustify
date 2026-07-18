@@ -10,13 +10,15 @@ The prototype currently provides:
 - A deterministic, smoothed land/ocean mask with multiple landmasses and islands
 - Exactly 42 playable land territories grouped into 6 connected gameplay continents
 - Two to six editable local players using a curated accessible color palette
-- A deterministic 32-candidate starting-position generator with balance preview and ownership rerolls
-- Explicit world setup, pregame, handoff, playing, and game-over application modes
+- A neutral generated-world preview before any player ownership exists
+- Random distributed assignment or a complete local round-robin territory draft
+- A deterministic 32-candidate random starting-position generator with balance preview and assignment rerolls
+- Explicit neutral-preview, assignment-in-progress, ready, handoff, playing, and game-over lifecycle states
 - Browser-local save, autosave, validation, migration, deletion, and exact resume
 - A separate serializable match state containing live ownership, armies, phase, selections, events, elimination, and victory
 - Reinforcement, repeated attacks, deterministic dice combat, mandatory post-capture movement, one connected-path fortification, and turn advancement
 - Phase-aware globe selection and numbered army markers with non-color source/target cues
-- Versioned setup URLs that reproduce the seed, territory count, continent count, player count, and initial match
+- Versioned setup URLs that reproduce the seed, territory count, continent count, player count, and assignment strategy
 - A searchable, keyboard-operable territory navigator with owner, armies, continent, legal status, and sea-route cues
 - Ownership, continent, and terrain display modes that do not affect rules state
 - Camera-facing marker hiding and silhouette fading so back-side markers do not detach from the globe
@@ -25,7 +27,7 @@ The prototype currently provides:
 - Smooth camera focus for selected territories and selected-route highlighting outside debug mode
 - Serializable graph analysis for degrees, gateways, articulation points, bridges, landmass degrees, route redundancy, and continent cohesion
 - A responsive HUD with selection details and a compact graph/debug panel
-- Generator and graph tests covering terrain, ownership, armies, compact continents, routes, bonuses, graph algorithms, validation, and serialization
+- Generator and graph tests covering neutral terrain, assignment, armies, compact continents, routes, bonuses, graph algorithms, validation, and serialization
 
 ## Run locally
 
@@ -66,7 +68,7 @@ pnpm test:visual
 pnpm test:visual:update
 ```
 
-`test:e2e` covers real world setup and pregame validation, ownership rerolls, first and later handoffs, reinforcement, land-border and sea-route combat, invalid actions, capture movement, elimination, connected-path fortification, turn completion, four in-progress save/resume phases, rematches, navigator keyboard behavior, event-log controls, and victory. `test:visual` compares stable UI-region screenshots with the committed baselines in `tests/e2e/visual.spec.ts-snapshots/`. Use `test:visual:update` only after reviewing intentional UI changes.
+`test:e2e` covers neutral setup, keyboard assignment selection, random rerolls, draft turn order and duplicate feedback, neutral/draft save-resume, first and later handoffs, reinforcement, land-border and sea-route combat, invalid actions, capture movement, elimination, connected-path fortification, turn completion, in-progress match save-resume, rematches, navigator keyboard behavior, event-log controls, and victory. `test:visual` compares stable UI-region screenshots with the committed baselines in `tests/e2e/visual.spec.ts-snapshots/`. Use `test:visual:update` only after reviewing intentional UI changes.
 
 Every visual run also writes full-page human-review captures to `test-results/ui-review/<project>/`. Playwright failure screenshots, traces, and its HTML report remain under `test-results/`. Those generated results are ignored by Git.
 
@@ -98,7 +100,7 @@ pnpm test:simulation:replay
 
 `pnpm test:coverage` writes text, HTML, and JSON-summary reports for the pure game and save-validation modules. The HTML report is generated under `coverage/`. Coverage is used to identify rule branches—not as a 100% target. Remaining low-value branches are mainly malformed/unknown command variants and defensive lookup failures; browser-local storage exceptions, free-form globe dragging, and subjective play balance still require integration or manual playtesting.
 
-The current focused report is 92.54% statements, 87.5% branches, 100% functions, and 92.68% lines. Combat, match creation, events, reinforcement, and legal-action lines have complete coverage; the principal meaningful gaps are defensive reducer command variants and malformed save-version/shape branches.
+The current focused report is 92% statements, 85.76% branches, 100% functions, and 93.05% lines. The change in scope includes the new schema-v3 lifecycle validation; the principal remaining gaps are defensive reducer command variants and malformed save/setup consistency branches.
 
 In the current deterministic matrices, the smoke suite reached 7 victories in 20 bounded runs and exercised 7,767 state transitions. The stress suite reached 124 victories in 270 bounded runs and exercised 146,287 transitions; the remaining runs stopped cleanly at their configured action limit rather than failing an invariant.
 
@@ -129,29 +131,32 @@ World setup is plain serializable data kept separate from both immutable `Planet
 | `territories` | `42`          | Whole numbers from 12–48                            |
 | `continents`  | `6`           | Whole numbers from 2–8, never more than territories |
 | `players`     | `4`           | Whole numbers from 2–6                              |
+| `assignment`  | `random`      | `random` or `player-draft`                          |
 | `logo`        | `b`           | `a` or `b`                                          |
 
 Example:
 
 ```text
-http://localhost:5173/?v=1&seed=atlas-prime&territories=42&continents=6&players=4&logo=b
+http://localhost:5173/?v=1&seed=atlas-prime&territories=42&continents=6&players=4&assignment=random&logo=b
 ```
 
 Missing parameters use defaults. Malformed counts fall back or clamp to supported ranges and show a concise setup warning; an unsupported `v` falls back to the complete default setup. Serialization has a stable parameter order. The current `logo` value and unknown query parameters are preserved when applying or randomizing a setup.
 
-Generate / apply and Random seed create a new deterministic `PlanetDefinition`, update the URL with `history.pushState`, and enter pregame without starting Turn 1. Browser back and forward navigation rebuilds the selected world and enters its pregame flow. Rematches, ownership rerolls, saves, and resumed turns never put active match state in the URL.
+Generate / apply and Random seed create only a new deterministic `PlanetDefinition`, update the URL with `history.pushState`, and enter a neutral preview without calculating ownership or starting Turn 1. Browser back and forward navigation rebuilds the selected neutral world. Assignment variants, player profiles, draft picks, saves, and active turns never enter the URL.
 
 ## World setup, pregame, and match flow
 
-`WorldSetup` contains only the versioned URL parameters listed above. `PlanetDefinition` remains immutable geography and topology. A separate `MatchSetup` contains stable player IDs, names, palette color IDs, seat order, ownership variant, the selected starting assignment, and its balance analysis. `MatchState` contains mutable turns, ownership, armies, selections, pending captures, deterministic combat sequence, elimination, victory, and events. Camera, dialogs, hover, and display preferences remain view state.
+`WorldSetup` contains the versioned URL parameters listed above, including the assignment-strategy choice. `PlanetDefinition` remains immutable geography and topology; generated territories are neutral (`ownerId: null`, zero armies). A discriminated `MatchSetup` contains stable player IDs, names, palette colors, seat order, strategy, and one of three setup phases: `neutral-preview`, `assignment-in-progress`, or `ready`. Only `ready` contains a complete `StartingPosition`. `MatchState` is nullable before play and is created only from a ready setup; it contains mutable turns, ownership, armies, selections, pending captures, deterministic combat sequence, elimination, victory, and events. Camera, dialogs, hover, and display preferences remain view state.
 
-Generating a world enters pregame. Player names are trimmed when the match starts and blank or normalized duplicate names are blocked. Colors come from six named, high-contrast choices and cannot be duplicated. Rerolling increments a local ownership variant and replaces only the assignment and starting armies; it does not recreate geography, change the world seed, or modify the setup URL.
+Generating a world enters pregame with geographical/continent colors, no army markers, no starting-balance claim, and no playable match. Player names are normalized before assignment and blank or duplicate names are blocked. Colors come from six named, high-contrast choices and cannot be duplicated. The table then explicitly begins either random assignment or a player draft. A ready setup must be explicitly started before the first handoff. Gameplay commands are rejected until the application is in `playing` with a real match.
 
 Starting ownership evaluates 32 deterministic candidates derived from the world seed, generator version, stable player IDs, ownership variant, and candidate index. The default `distributed` strategy uses shuffled round-robin placement followed by bounded, count-preserving local swaps; it deliberately targets several useful ownership regions instead of growing one empire per player. Hard-invalid candidates are rejected before score comparison, and a failed bounded search reports its leading blocking conditions without changing the world seed.
 
+The local player draft starts with an empty owner map. Pick `n` belongs to seat `n % playerCount`, so the order is deterministic round-robin; when territory totals are uneven, the earliest seats receive one extra territory. The active player may claim only an unowned territory using the globe or the keyboard-ready territory list. Cancel and restart clear picks without changing geography. After the final pick, fixed starting-army totals are distributed deterministically, balance is rebuilt, and the setup enters `ready` rather than starting immediately.
+
 The visible 0–100 score is a weighted average of eight serialized 0–100 categories: territory parity (16%), army parity (12%), continent fairness (18%), connectivity distribution (18%), geographic spread (10%), border exposure (10%), sea-route access (8%), and gateway access (8%). Parity awards full credit for a spread of at most one. Continent fairness deducts for full, majority, and one-away shares plus potential-bonus disparity. Connectivity uses a scaled middle-range target (roughly the square root of a player's territory count, bounded to 2–5 regions), a preferred 25–60% largest-region share, and a scaled isolated-territory allowance. The remaining categories compare player ranges for pairwise world spread, borders, sea endpoints, and gateways. Ratings are Excellent (90+), Good (75+), Uneven (55+), or Poor.
 
-Hard-invalid conditions are: missing or unknown ownership, territory or army spread above one, a fully owned gameplay continent with at least two territories, at least 80% of a five-or-more-territory position in one region, no strategic adjacency, sea-route or gateway ownership above the table average plus the greater of two or 75% of that average, majority control of three or more mixable continents, or a territory with no army. A one-territory continent cannot have mixed ownership, so only that impossible constraint is relaxed and a warning names the continent and its owner. Other failed bounded searches report their leading reasons without changing the world seed. A technically valid Poor layout requires explicit confirmation before play. This remains a practical playtest heuristic, not a mathematical fairness proof.
+Random hard-invalid conditions are: missing, unknown, or extra ownership; territory or army spread above one; a fully owned gameplay continent with at least two territories; at least 80% of a five-or-more-territory position in one region; no strategic adjacency; excessive sea-route or gateway ownership; majority control of three or more mixable continents; or a territory with no army. A technically valid Poor random layout requires explicit confirmation before play. Player drafts share structural checks—complete valid IDs and owners, count parity, equal starting armies, at least one territory per player, and positive armies—but clustered regions, full continents, gateway concentration, and Poor strategic scores are advisory because the players intentionally made those choices.
 
 Starting armies use fixed equal totals inspired by classic Risk: 40 each for two players, 35 for three, 30 for four, 25 for five, and 20 for six. Every territory receives one army first; the remainder is distributed by a candidate-specific deterministic stream. Turn reinforcement calculation remains separate.
 
@@ -161,11 +166,11 @@ Starting a match opens a mandatory full-screen handoff before Turn 1. End Turn p
 
 Worldseed uses one browser-local `localStorage` slot (`worldseed.local-match`). Match start and every semantic rules transition are autosaved; a manual Save match action is also available. Camera, hover, animation, live Three.js objects, and open utility dialogs are never saved.
 
-Save schema version 2 stores the world setup and generator version, player and ownership setup, serialized balance categories and player metrics, full match state, deterministic combat counter, pending capture, reinforcement pool, events, winner, mode, and timestamp. Parsed storage is runtime-validated with Zod. Malformed and unsupported future saves are reported without crashing and can be deleted. The intentionally small migration path accepts versions 0 and 1, then deterministically rebuilds the expanded setup analysis from the saved world and ownership.
+Save schema version 3 stores the world setup and generator version, assignment mode, explicit setup phase, player profiles, ownership variant, optional in-progress draft owner map and pick index, optional completed starting position, nullable match state, application mode, and timestamp. The Save setup control supports neutral, drafting, and ready states; match transitions continue to autosave. Parsed storage is runtime-validated with Zod. Versions 0, 1, and 2 migrate to random/ready active-match saves. Every load or migration reconstructs the planet and rebuilds balance analysis from ownership rather than trusting serialized derived metrics.
 
-On load, the world-setup panel presents both the setup from the current URL and any local saved match. Resume reconstructs and validates the deterministic planet, restores the exact match without replaying combat or duplicating events, and enters handoff before revealing the active turn. Local saves are browser- and device-specific; setup URLs are shareable but never contain active matches.
+On load, the world-setup panel presents both the setup from the current URL and any local saved session. Resume restores neutral, drafting, and ready setup saves directly to pregame; active match saves enter handoff before revealing the current turn. Local saves are browser- and device-specific; setup URLs never contain draft picks or active matches.
 
-Rematch choices are explicit: restart the same world and ownership, keep the world and players but reroll ownership, or return to world setup for different geography. These actions do not silently delete the local save.
+Rematch choices are explicit: restart the same world and ownership, keep the world and reroll a random assignment (or restart a player draft), or return to world setup for different geography. These actions do not silently delete the local save.
 
 ## Local match rules
 
@@ -214,7 +219,7 @@ Rendering uses separate non-indexed land and ocean meshes. Only the land mesh ha
 
 ### Visual hierarchy and army markers
 
-Player ownership is the strongest normal land-fill signal. A restrained blend with each territory's continent color, deterministic brightness variation, dark territory borders, amber continent borders, and blue coastlines keep individual territories, gameplay continents, physical landmasses, and oceans readable at the same time. Selection and hover add stronger lightening without replacing ownership identity.
+Before assignment, continent/geographical territory colors, dark territory borders, amber continent borders, and blue coastlines make the neutral globe readable without suggesting player control. During a draft, claimed territories switch to player colors while unclaimed territory remains geographical. After assignment, player ownership becomes the strongest normal land-fill signal, with selection and hover adding stronger lightening without replacing identity.
 
 Army counts are visualization placeholders in the configured 2–9 range. One renderer component creates Three.js sprites directly and caches canvas textures/materials by owner and army value, avoiding a separate React subtree or unique material for every territory. Markers sit just above territory centers, use normal depth testing for globe occlusion, and enlarge when selected.
 
@@ -248,7 +253,7 @@ The value is explicitly a visualization/setup placeholder, not a finalized reinf
 
 ### Starting ownership generation
 
-Two to six named local profiles use stable IDs, explicit seats, and palette color IDs. Deterministic distributed assignment gives every territory exactly one owner with exact count fairness, then bounded local swaps improve continent mixing, medium-cluster ownership, access, and exposure. Armies use an independent named random stream so unrelated visual changes do not perturb counts. The strategy boundary is kept inside starting-position generation so regional or chaotic styles can be introduced later without changing match rules.
+Two to six named local profiles use stable IDs, explicit seats, and palette color IDs. The assignment boundary exposes deterministic distributed random assignment and player-controlled round-robin draft as separate strategies. Random assignment gives every territory exactly one owner with count fairness, then bounded local swaps improve mixing, medium clusters, access, and exposure. Draft completion derives armies through an independent named stream. Additional strategies can be added without changing geography generation or match rules.
 
 ### Graph analysis and route readability
 
@@ -262,7 +267,7 @@ The selected-territory Focus action interpolates the camera direction toward the
 
 ### Validation and warnings
 
-Runtime validation checks the Zod data shape plus the fixed 42-territory / 6-continent / 4-player defaults, ownership validity and balance, army bounds, ocean ownership, complete land assignment, cell and territory contiguity, physical landmass definitions, explicit connection uniqueness, sea-route validity, adjacency symmetry, global strategic connectivity, continent connectivity, memberships, bonuses, gateway analysis, and a full recomputation of serialized graph metrics.
+Planet runtime validation checks the Zod data shape plus the requested territory/continent/player metadata, neutral territory state, ocean ownership, complete land assignment, cell and territory contiguity, physical landmass definitions, explicit connection uniqueness, sea-route validity, adjacency symmetry, global strategic connectivity, continent connectivity, memberships, bonuses, gateway analysis, and a full recomputation of serialized graph metrics. Assignment and match validation are separate layers.
 
 Non-fatal warnings flag land coverage outside 45–60%, landmass counts outside 4–8, uneven territory sizes, excessive sea routes, disconnected player regions, gateway-heavy continents, missing defensibility, low continent cohesion, dominated color pockets, protrusions, excessive interleaving, and sea-route-dependent continents.
 

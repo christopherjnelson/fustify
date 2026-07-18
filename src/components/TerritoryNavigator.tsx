@@ -36,7 +36,7 @@ interface TerritoryNavigatorProps {
 
 export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
   const planet = useGameStore((state) => state.planet);
-  const match = useGameStore((state) => state.match);
+  const match = useGameStore((state) => state.match)!;
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
   const selectAndFocus = useGameStore((state) => state.selectAndFocusTerritory);
   const dialogRef = useRef<HTMLDialogElement>(null);

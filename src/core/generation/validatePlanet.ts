@@ -10,10 +10,8 @@ import {
   DEFAULT_TERRITORY_COUNT,
   MAX_LAND_COVERAGE,
   MAX_SUBSTANTIAL_LANDMASSES,
-  MAX_PLACEHOLDER_ARMIES,
   MIN_LAND_COVERAGE,
   MIN_SUBSTANTIAL_LANDMASSES,
-  MIN_PLACEHOLDER_ARMIES,
   PLANET_SUBDIVISIONS,
 } from './constants';
 import { buildCellAdjacency, connectedComponents } from './surfaceTopology';
@@ -274,26 +272,12 @@ export function validatePlanet(
         errors.push(`${territory.id} is not geographically contiguous.`);
       }
     }
-    if (territory.ownerId === null || !players.has(territory.ownerId)) {
-      errors.push(`${territory.id} must have exactly one valid owner.`);
+    if (territory.ownerId !== null) {
+      errors.push(`${territory.id} must be neutral in generated geography.`);
     }
-    if (
-      territory.armyCount < MIN_PLACEHOLDER_ARMIES ||
-      territory.armyCount > MAX_PLACEHOLDER_ARMIES
-    ) {
-      errors.push(`${territory.id} army count is outside placeholder bounds.`);
+    if (territory.armyCount !== 0) {
+      errors.push(`${territory.id} cannot contain armies before assignment.`);
     }
-  }
-  const playerTerritoryCounts = planet.players.map(
-    (player) =>
-      planet.territories.filter((territory) => territory.ownerId === player.id)
-        .length,
-  );
-  if (
-    playerTerritoryCounts.length > 0 &&
-    Math.max(...playerTerritoryCounts) - Math.min(...playerTerritoryCounts) > 1
-  ) {
-    errors.push('Placeholder ownership is not balanced by territory count.');
   }
 
   const detectedLandmasses = connectedComponents(landCells, cellAdjacency);
@@ -412,22 +396,6 @@ export function validatePlanet(
       errors.push('Full strategic territory graph is not connected.');
     }
   }
-  for (const player of planet.players) {
-    const owned = new Set(
-      planet.territories
-        .filter((territory) => territory.ownerId === player.id)
-        .map((territory) => territory.id),
-    );
-    if (
-      owned.size > 0 &&
-      visitGraph([...owned][0]!, owned, strategicAdjacency).size !== owned.size
-    ) {
-      warnings.push(
-        `${player.id} has a disconnected placeholder distribution.`,
-      );
-    }
-  }
-
   const membership = new Map<string, number>();
   for (const continent of planet.continents) {
     const allowed = new Set(continent.territoryIds);

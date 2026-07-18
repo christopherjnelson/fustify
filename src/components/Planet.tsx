@@ -37,27 +37,27 @@ type VisualKind =
 
 function territoryFillColor(
   territory: TerritoryDefinition,
-  playerColor: string,
+  playerColor: string | null,
   viewMode: PlanetViewMode,
   active: boolean,
   kind: VisualKind,
 ) {
   let color: THREE.Color;
   if (viewMode === 'continents') {
-    color = new THREE.Color(territory.displayColor).lerp(
-      new THREE.Color(playerColor),
-      0.16,
-    );
+    color = new THREE.Color(territory.displayColor);
+    if (playerColor) color.lerp(new THREE.Color(playerColor), 0.16);
   } else if (viewMode === 'terrain') {
     const landmassIndex = Number(territory.landmassId.split('-').at(-1) ?? 0);
     color = new THREE.Color(landmassIndex % 2 === 0 ? '#58714d' : '#6b7650')
       .lerp(new THREE.Color(territory.displayColor), 0.16)
       .offsetHSL(0, -0.12, 0);
-  } else {
+  } else if (playerColor) {
     color = new THREE.Color(playerColor).lerp(
       new THREE.Color(territory.displayColor),
       0.18,
     );
+  } else {
+    color = new THREE.Color(territory.displayColor).offsetHSL(0, -0.08, -0.03);
   }
   const numericId = Number(territory.id.slice('territory-'.length));
   color.offsetHSL(0, 0, ((numericId % 5) - 2) * 0.022);
@@ -74,12 +74,31 @@ function territoryFillColor(
 
 export function Planet({ planet }: PlanetProps) {
   const match = useGameStore((state) => state.match);
+  const applicationMode = useGameStore((state) => state.applicationMode);
+  const matchSetup = useGameStore((state) => state.matchSetup);
   const hoveredId = useGameStore((state) => state.hoveredTerritoryId);
   const debugView = useGameStore((state) => state.debugView);
   const viewMode = useGameStore((state) => state.viewMode);
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
   const setHovered = useGameStore((state) => state.setHoveredTerritory);
   const select = useGameStore((state) => state.selectTerritory);
+  const displayedTerritories = useMemo(() => {
+    if (match) return match.territories;
+    if (matchSetup.setupPhase === 'ready') {
+      return matchSetup.startingPosition.territories;
+    }
+    if (matchSetup.setupPhase === 'assignment-in-progress') {
+      return Object.fromEntries(
+        Object.entries(matchSetup.draft.territoryOwners).map(
+          ([territoryId, ownerId]) => [territoryId, { ownerId, armyCount: 1 }],
+        ),
+      );
+    }
+    return {};
+  }, [match, matchSetup]);
+  const gameplayActive =
+    match !== null &&
+    ['handoff', 'playing', 'game-over'].includes(applicationMode);
   const sphere = useMemo(() => createIcosphere(PLANET_SUBDIVISIONS), []);
   const territoryById = useMemo(
     () => new Map(planet.territories.map((item) => [item.id, item])),
@@ -98,6 +117,13 @@ export function Planet({ planet }: PlanetProps) {
   const legal = useMemo(() => {
     let sources: string[] = [];
     let targets: string[] = [];
+    if (!match || applicationMode !== 'playing') {
+      return {
+        sources: new Set<string>(),
+        targets: new Set<string>(),
+        seaTargets: new Set<string>(),
+      };
+    }
     if (match.phase === 'reinforce') {
       sources = getReinforcementTargets(match);
     } else if (match.phase === 'attack') {
@@ -138,10 +164,13 @@ export function Planet({ planet }: PlanetProps) {
         .filter((id) => targets.includes(id)),
     );
     return { sources: new Set(sources), targets: new Set(targets), seaTargets };
-  }, [match, planet]);
+  }, [applicationMode, match, planet]);
 
   const visualKind = useCallback(
     (territoryId: string): VisualKind => {
+      if (!match || applicationMode !== 'playing') {
+        return territoryId === hoveredId ? 'hovered' : null;
+      }
       if (territoryId === match.selectedTargetTerritoryId) return 'target';
       if (territoryId === match.selectedSourceTerritoryId) return 'source';
       if (territoryId === hoveredId) return 'hovered';
@@ -157,14 +186,7 @@ export function Planet({ planet }: PlanetProps) {
       }
       return null;
     },
-    [
-      hoveredId,
-      legal,
-      match.phase,
-      match.recentlyCapturedTerritoryId,
-      match.selectedSourceTerritoryId,
-      match.selectedTargetTerritoryId,
-    ],
+    [hoveredId, applicationMode, legal, match],
   );
 
   const { landGeometry, oceanGeometry, landCellIds } = useMemo(() => {
@@ -179,14 +201,14 @@ export function Planet({ planet }: PlanetProps) {
       const positions = territory ? landPositions : oceanPositions;
       if (territory) visibleLandCellIds.push(cellId);
       const ownerId = territory
-        ? match.territories[territory.id]!.ownerId
+        ? (displayedTerritories[territory.id]?.ownerId ?? null)
         : null;
       const color = territory
         ? territoryFillColor(
             territory,
-            playerById.get(ownerId!)!.color,
+            ownerId ? (playerById.get(ownerId)?.color ?? null) : null,
             viewMode,
-            ownerId === match.activePlayerId,
+            ownerId === match?.activePlayerId,
             null,
           )
         : null;
@@ -219,8 +241,8 @@ export function Planet({ planet }: PlanetProps) {
       landCellIds: visibleLandCellIds,
     };
   }, [
-    match.activePlayerId,
-    match.territories,
+    displayedTerritories,
+    match?.activePlayerId,
     planet,
     playerById,
     sphere,
@@ -235,12 +257,12 @@ export function Planet({ planet }: PlanetProps) {
     landCellIds.forEach((cellId, renderedFaceIndex) => {
       const territoryId = planet.surfaceCells[cellId]!.territoryId!;
       const territory = territoryById.get(territoryId)!;
-      const ownerId = match.territories[territoryId]!.ownerId;
+      const ownerId = displayedTerritories[territoryId]?.ownerId ?? null;
       const color = territoryFillColor(
         territory,
-        playerById.get(ownerId)!.color,
+        ownerId ? (playerById.get(ownerId)?.color ?? null) : null,
         viewMode,
-        ownerId === match.activePlayerId,
+        ownerId === match?.activePlayerId,
         visualKind(territoryId),
       );
       const vertexOffset = renderedFaceIndex * 3;
@@ -252,7 +274,8 @@ export function Planet({ planet }: PlanetProps) {
   }, [
     landCellIds,
     landGeometry,
-    match,
+    displayedTerritories,
+    match?.activePlayerId,
     planet,
     playerById,
     territoryById,
@@ -308,16 +331,18 @@ export function Planet({ planet }: PlanetProps) {
       />
       <SeaRouteOverlay
         planet={planet}
-        selectedTerritoryId={match.selectedSourceTerritoryId}
+        selectedTerritoryId={match?.selectedSourceTerritoryId ?? null}
         debugView={debugView}
       />
-      <ArmyMarkers
-        planet={planet}
-        match={match}
-        validSourceIds={legal.sources}
-        validTargetIds={legal.targets}
-        seaTargetIds={legal.seaTargets}
-      />
+      {gameplayActive && match && (
+        <ArmyMarkers
+          planet={planet}
+          match={match}
+          validSourceIds={legal.sources}
+          validTargetIds={legal.targets}
+          seaTargetIds={legal.seaTargets}
+        />
+      )}
       <GraphDebugOverlay planet={planet} visible={debugView} />
       <mesh scale={1.045}>
         <sphereGeometry args={[PLANET_RADIUS, 48, 32]} />

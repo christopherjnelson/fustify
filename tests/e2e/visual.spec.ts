@@ -14,27 +14,47 @@ const scenarios: Array<{
   {
     name: 'pregame',
     region: '.pregame-panel',
-    heading: /Choose your factions/i,
+    heading: /Preview and assign territories/i,
+  },
+  {
+    name: 'pregame-random-ready',
+    region: '.pregame-panel',
+    heading: /Preview and assign territories/i,
+  },
+  {
+    name: 'draft-in-progress',
+    region: '.pregame-panel',
+    heading: /chooses now/i,
+  },
+  {
+    name: 'draft-complete',
+    region: '.pregame-panel',
+    heading: /Preview and assign territories/i,
+  },
+  {
+    name: 'draft-invalid',
+    region: '.pregame-panel',
+    heading: /chooses now/i,
   },
   {
     name: 'pregame-poor',
     region: '.pregame-panel',
-    heading: /Choose your factions/i,
+    heading: /Preview and assign territories/i,
   },
   {
     name: 'pregame-invalid',
     region: '.pregame-panel',
-    heading: /Choose your factions/i,
+    heading: /Preview and assign territories/i,
   },
   {
     name: 'pregame-expanded',
     region: '.pregame-panel',
-    heading: /Choose your factions/i,
+    heading: /Preview and assign territories/i,
   },
   {
     name: 'pregame-rerolled',
     region: '.pregame-panel',
-    heading: /Choose your factions/i,
+    heading: /Preview and assign territories/i,
   },
   { name: 'handoff', region: '.handoff-card', heading: /Pass the device/i },
   { name: 'reinforcement', region: '.hud', heading: /Crimson League/i },
@@ -50,7 +70,7 @@ const scenarios: Array<{
   {
     name: 'saved-resume',
     region: '.setup-panel',
-    heading: /Local match available/i,
+    heading: /Local session available/i,
   },
 ];
 
@@ -73,6 +93,14 @@ for (const scenario of scenarios) {
     }
     if (scenario.name === 'pregame-expanded') {
       await page.getByText('How is this scored?').click();
+      await page.locator('.pregame-panel').evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+    }
+    if (
+      scenario.name === 'draft-complete' ||
+      scenario.name === 'draft-invalid'
+    ) {
       await page.locator('.pregame-panel').evaluate((element) => {
         element.scrollTop = element.scrollHeight;
       });

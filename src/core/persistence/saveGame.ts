@@ -6,9 +6,12 @@ import type { WorldSetup } from '../setup/worldSetup';
 import {
   analyzeStartingPosition,
   type MatchSetup,
+  type ReadyMatchSetup,
+  type StartingPosition,
+  type TerritoryAssignmentMode,
 } from '../setup/startingPositions';
 
-export const SAVE_SCHEMA_VERSION = 2;
+export const SAVE_SCHEMA_VERSION = 3;
 
 export interface LocalMatchSave {
   schemaVersion: number;
@@ -16,7 +19,7 @@ export interface LocalMatchSave {
   generatorVersion: number;
   worldSetup: WorldSetup;
   matchSetup: MatchSetup;
-  matchState: MatchState;
+  matchState: MatchState | null;
   applicationMode: ApplicationMode;
 }
 
@@ -34,63 +37,28 @@ const territoryStateSchema = z.object({
   ownerId: z.string().min(1),
   armyCount: z.number().int().min(0),
 });
-const balancePlayerSchema = z.object({
-  playerId: z.string(),
-  territoryCount: z.number().int().nonnegative(),
-  armyCount: z.number().int().nonnegative(),
-  connectedComponentCount: z.number().int().nonnegative(),
-  largestComponentSize: z.number().int().nonnegative(),
-  largestComponentRatio: z.number().min(0).max(1),
-  sameOwnerAdjacencyRatio: z.number().min(0).max(1),
-  geographicSpread: z.number().min(0).max(1),
-  borderTerritoryCount: z.number().int().nonnegative(),
-  gatewayTerritoryCount: z.number().int().nonnegative(),
-  seaRouteEndpointCount: z.number().int().nonnegative(),
-  fullyOwnedContinentCount: z.number().int().nonnegative(),
-  maximumContinentShare: z.number().min(0).max(1),
-  majorityContinentCount: z.number().int().nonnegative(),
-  nearCompleteContinentCount: z.number().int().nonnegative(),
-  potentialStartingBonus: z.number().nonnegative(),
-  averageDegree: z.number().nonnegative(),
-  landmassCount: z.number().int().nonnegative(),
-  isolatedTerritoryCount: z.number().int().nonnegative(),
+const startingPositionSchema = z.object({
+  variant: z.number().int().nonnegative(),
+  candidateIndex: z.number().int().nonnegative(),
+  territories: z.record(z.string(), territoryStateSchema),
+  analysis: z.unknown().optional(),
+});
+const draftSchema = z.object({
+  pickIndex: z.number().int().nonnegative(),
+  territoryOwners: z.record(z.string(), z.string().min(1)),
 });
 const matchSetupSchema = z.object({
   players: z.array(playerSchema).min(2).max(6),
+  assignmentMode: z.enum(['random', 'player-draft']),
+  setupPhase: z.enum(['neutral-preview', 'assignment-in-progress', 'ready']),
   ownershipVariant: z.number().int().nonnegative(),
-  startingPosition: z.object({
-    variant: z.number().int().nonnegative(),
-    candidateIndex: z.number().int().nonnegative(),
-    territories: z.record(z.string(), territoryStateSchema),
-    analysis: z.object({
-      overallScore: z.number().min(0).max(100),
-      rating: z.enum(['excellent', 'good', 'uneven', 'poor']),
-      breakdown: z.object({
-        territoryParity: z.number().min(0).max(100),
-        armyParity: z.number().min(0).max(100),
-        continentFairness: z.number().min(0).max(100),
-        connectivityDistribution: z.number().min(0).max(100),
-        geographicSpread: z.number().min(0).max(100),
-        borderExposure: z.number().min(0).max(100),
-        seaRouteAccess: z.number().min(0).max(100),
-        gatewayAccess: z.number().min(0).max(100),
-      }),
-      warnings: z.array(z.string()),
-      hardFailure: z.boolean(),
-      hardFailureReasons: z.array(z.string()),
-      players: z.array(balancePlayerSchema),
-    }),
-  }),
+  startingPosition: startingPositionSchema.nullable(),
+  draft: draftSchema.nullable(),
 });
 const legacyMatchSetupSchema = z.object({
   players: z.array(playerSchema).min(2).max(6),
   ownershipVariant: z.number().int().nonnegative(),
-  startingPosition: z.object({
-    variant: z.number().int().nonnegative(),
-    candidateIndex: z.number().int().nonnegative(),
-    territories: z.record(z.string(), territoryStateSchema),
-    analysis: z.unknown().optional(),
-  }),
+  startingPosition: startingPositionSchema,
 });
 const worldSetupSchema = z.object({
   version: z.number().int(),
@@ -98,7 +66,9 @@ const worldSetupSchema = z.object({
   territoryCount: z.number().int().min(12).max(48),
   continentCount: z.number().int().min(2).max(8),
   playerCount: z.number().int().min(2).max(6),
+  assignmentMode: z.enum(['random', 'player-draft']),
 });
+const legacyWorldSetupSchema = worldSetupSchema.omit({ assignmentMode: true });
 const eventSchema = z.object({
   id: z.string(),
   turnNumber: z.number().int().positive(),
@@ -166,27 +136,41 @@ export function validateMatchState(
     ? { ok: true, state: parsed.data }
     : { ok: false, error: 'The match state failed runtime validation.' };
 }
+
 const currentSaveSchema = z.object({
   schemaVersion: z.literal(SAVE_SCHEMA_VERSION),
   savedAt: z.string().datetime(),
   generatorVersion: z.number().int().positive(),
   worldSetup: worldSetupSchema,
   matchSetup: matchSetupSchema,
-  matchState: matchStateSchema,
-  applicationMode: z.enum(['handoff', 'playing', 'game-over']),
+  matchState: matchStateSchema.nullable(),
+  applicationMode: z.enum(['pregame', 'handoff', 'playing', 'game-over']),
 });
 
 function migrateLegacySave(
   value: Record<string, unknown>,
-  version: 0 | 1,
+  version: 0 | 1 | 2,
 ): unknown {
-  const migrated: Record<string, unknown> = {
+  const worldSetup = legacyWorldSetupSchema.safeParse(value.worldSetup);
+  const matchSetup = legacyMatchSetupSchema.safeParse(value.matchSetup);
+  return {
     ...value,
     schemaVersion: SAVE_SCHEMA_VERSION,
     savedAt:
       typeof value.savedAt === 'string'
         ? value.savedAt
         : new Date(0).toISOString(),
+    worldSetup: worldSetup.success
+      ? { ...worldSetup.data, assignmentMode: 'random' }
+      : value.worldSetup,
+    matchSetup: matchSetup.success
+      ? {
+          ...matchSetup.data,
+          assignmentMode: 'random',
+          setupPhase: 'ready',
+          draft: null,
+        }
+      : value.matchSetup,
     applicationMode:
       version === 0
         ? value.applicationMode === 'game-over'
@@ -194,22 +178,114 @@ function migrateLegacySave(
           : 'handoff'
         : value.applicationMode,
   };
-  const worldSetup = worldSetupSchema.safeParse(value.worldSetup);
-  const matchSetup = legacyMatchSetupSchema.safeParse(value.matchSetup);
-  if (!worldSetup.success || !matchSetup.success) return migrated;
-  const planet = generatePlanet(worldSetup.data.seed, worldSetup.data);
-  migrated.matchSetup = {
-    ...matchSetup.data,
-    startingPosition: {
-      ...matchSetup.data.startingPosition,
-      analysis: analyzeStartingPosition(
-        planet,
-        matchSetup.data.players,
-        matchSetup.data.startingPosition.territories,
-      ),
-    },
+}
+
+function rebuildMatchSetup(
+  worldSetup: WorldSetup,
+  raw: z.infer<typeof matchSetupSchema>,
+): MatchSetup | null {
+  const planet = generatePlanet(worldSetup.seed, worldSetup);
+  const playerIds = new Set(raw.players.map((player) => player.id));
+  if (raw.players.length !== worldSetup.playerCount) return null;
+  const territoryIds = new Set(
+    planet.territories.map((territory) => territory.id),
+  );
+  const base = {
+    players: raw.players,
+    assignmentMode: raw.assignmentMode as TerritoryAssignmentMode,
+    ownershipVariant: raw.ownershipVariant,
   };
-  return migrated;
+  if (raw.setupPhase === 'neutral-preview') {
+    if (raw.startingPosition !== null || raw.draft !== null) return null;
+    return {
+      ...base,
+      setupPhase: 'neutral-preview',
+      startingPosition: null,
+      draft: null,
+    };
+  }
+  if (raw.setupPhase === 'assignment-in-progress') {
+    const expectedPickCounts = raw.players
+      .slice()
+      .sort((left, right) => left.seatIndex - right.seatIndex)
+      .map(
+        (_, seatIndex) =>
+          Math.floor((raw.draft?.pickIndex ?? 0) / raw.players.length) +
+          (seatIndex < (raw.draft?.pickIndex ?? 0) % raw.players.length
+            ? 1
+            : 0),
+      );
+    if (
+      raw.assignmentMode !== 'player-draft' ||
+      raw.startingPosition !== null ||
+      raw.draft === null ||
+      raw.draft.pickIndex !== Object.keys(raw.draft.territoryOwners).length ||
+      raw.draft.pickIndex >= planet.territories.length ||
+      Object.entries(raw.draft.territoryOwners).some(
+        ([territoryId, ownerId]) =>
+          !territoryIds.has(territoryId) || !playerIds.has(ownerId),
+      ) ||
+      raw.players
+        .slice()
+        .sort((left, right) => left.seatIndex - right.seatIndex)
+        .some(
+          (player, seatIndex) =>
+            Object.values(raw.draft!.territoryOwners).filter(
+              (ownerId) => ownerId === player.id,
+            ).length !== expectedPickCounts[seatIndex],
+        )
+    )
+      return null;
+    return {
+      ...base,
+      assignmentMode: 'player-draft',
+      setupPhase: 'assignment-in-progress',
+      startingPosition: null,
+      draft: raw.draft,
+    };
+  }
+  if (raw.startingPosition === null) return null;
+  const startingTerritories = raw.startingPosition.territories;
+  if (
+    Object.keys(startingTerritories).length !== territoryIds.size ||
+    Object.entries(startingTerritories).some(
+      ([territoryId, state]) =>
+        !territoryIds.has(territoryId) ||
+        !playerIds.has(state.ownerId) ||
+        state.armyCount < 1,
+    )
+  )
+    return null;
+  if (
+    (raw.assignmentMode === 'random' && raw.draft !== null) ||
+    (raw.assignmentMode === 'player-draft' &&
+      (raw.draft === null ||
+        raw.draft.pickIndex !== planet.territories.length ||
+        Object.keys(raw.draft.territoryOwners).length !== territoryIds.size ||
+        Object.entries(raw.draft.territoryOwners).some(
+          ([territoryId, ownerId]) =>
+            startingTerritories[territoryId]?.ownerId !== ownerId,
+        )))
+  )
+    return null;
+  const startingPosition: StartingPosition = {
+    variant: raw.startingPosition.variant,
+    candidateIndex: raw.startingPosition.candidateIndex,
+    territories: startingTerritories,
+    analysis: analyzeStartingPosition(
+      planet,
+      raw.players,
+      startingTerritories,
+      raw.assignmentMode,
+    ),
+  };
+  const ready: ReadyMatchSetup = {
+    ...base,
+    setupPhase: 'ready',
+    startingPosition,
+    draft: raw.assignmentMode === 'player-draft' ? raw.draft : null,
+  };
+  return ready;
 }
 
 export function parseLocalMatchSave(serialized: string): SaveParseResult {
@@ -226,25 +302,50 @@ export function parseLocalMatchSave(serialized: string): SaveParseResult {
   if (typeof version !== 'number') {
     return { ok: false, error: 'The local save has no schema version.' };
   }
-  if (version > SAVE_SCHEMA_VERSION) {
+  if (version > SAVE_SCHEMA_VERSION || version < 0) {
     return { ok: false, error: `Save version ${version} is not supported.` };
   }
-  const migrated = version === 0 || version === 1;
-  if (
-    version < 0 ||
-    (version !== 0 && version !== 1 && version !== SAVE_SCHEMA_VERSION)
-  ) {
+  const migrated = version === 0 || version === 1 || version === 2;
+  if (!migrated && version !== SAVE_SCHEMA_VERSION) {
     return { ok: false, error: `Save version ${version} is not supported.` };
   }
   const parsed = currentSaveSchema.safeParse(
     migrated
-      ? migrateLegacySave(value as Record<string, unknown>, version as 0 | 1)
+      ? migrateLegacySave(
+          value as Record<string, unknown>,
+          version as 0 | 1 | 2,
+        )
       : value,
   );
   if (!parsed.success) {
     return { ok: false, error: 'The local save is malformed or incomplete.' };
   }
-  return { ok: true, save: parsed.data, migrated };
+  const matchSetup = rebuildMatchSetup(
+    parsed.data.worldSetup,
+    parsed.data.matchSetup,
+  );
+  if (!matchSetup) {
+    return { ok: false, error: 'The saved setup is inconsistent.' };
+  }
+  const activeMode = ['handoff', 'playing', 'game-over'].includes(
+    parsed.data.applicationMode,
+  );
+  if (
+    (activeMode &&
+      (parsed.data.matchState === null || matchSetup.setupPhase !== 'ready')) ||
+    (!activeMode && parsed.data.matchState !== null)
+  ) {
+    return { ok: false, error: 'The saved lifecycle state is inconsistent.' };
+  }
+  return {
+    ok: true,
+    migrated,
+    save: {
+      ...parsed.data,
+      matchSetup,
+      matchState: parsed.data.matchState,
+    },
+  };
 }
 
 export function serializeLocalMatchSave(save: LocalMatchSave): string {

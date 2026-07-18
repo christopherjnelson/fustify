@@ -20,18 +20,13 @@ import {
   DEFAULT_PLAYER_COUNT,
   DEFAULT_TERRITORY_COUNT,
   GENERATOR_VERSION,
-  MAX_PLACEHOLDER_ARMIES,
-  MIN_PLACEHOLDER_ARMIES,
   PLANET_SUBDIVISIONS,
 } from './constants';
 import {
   calculateContinentBonus,
   chooseSpatialContinentAssignments,
 } from './generateContinents';
-import {
-  generateOwnershipAssignments,
-  generatePlayers,
-} from './generatePlayers';
+import { generatePlayers } from './generatePlayers';
 import { generateTerrain } from './generateTerrain';
 import { generateTerritoryLayout } from './generateTerritories';
 import { createSeededRandom } from './seededRandom';
@@ -154,16 +149,8 @@ export function generatePlanet(
     `${normalizedSeed}|v${GENERATOR_VERSION}`,
   );
   const players = generatePlayers(playerCount);
-  const ownershipAssignments = generateOwnershipAssignments(
-    strategicAdjacency,
-    playerCount,
-    `${normalizedSeed}|v${GENERATOR_VERSION}`,
-  );
   const detailRandom = createSeededRandom(
     `${normalizedSeed}|details|${GENERATOR_VERSION}`,
-  );
-  const armyRandom = createSeededRandom(
-    `${normalizedSeed}|armies|${GENERATOR_VERSION}`,
   );
 
   const territories: TerritoryDefinition[] = layout.territoryCenters.map(
@@ -180,11 +167,8 @@ export function generatePlanet(
           detailRandom.integer(-15, 15),
         ),
         adjacentTerritoryIds: strategicAdjacency[index]!.map(territoryId),
-        ownerId: players[ownershipAssignments[index]!]!.id,
-        armyCount: armyRandom.integer(
-          MIN_PLACEHOLDER_ARMIES,
-          MAX_PLACEHOLDER_ARMIES,
-        ),
+        ownerId: null,
+        armyCount: 0,
         cellCount: layout.territoryCellCounts[index]!,
         landmassId: landmassId(layout.territoryLandmassIndices[index]!),
       };

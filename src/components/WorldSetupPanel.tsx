@@ -13,12 +13,12 @@ export function WorldSetupPanel() {
       <span className="eyebrow">Local hot-seat</span>
       <h1 id="world-setup-title">Configure your world</h1>
       <p>
-        The shareable URL stores geography settings only. Player setup and saved
-        turns stay in this browser.
+        The shareable URL stores geography and assignment strategy. Player
+        profiles, draft progress, and turns stay in this browser.
       </p>
       {saved && (
-        <section className="resume-card" aria-label="Local saved match">
-          <strong>Local match available</strong>
+        <section className="resume-card" aria-label="Local saved session">
+          <strong>Local session available</strong>
           <span>
             {savedAt
               ? `Saved ${new Date(savedAt).toLocaleString()}`
@@ -27,7 +27,7 @@ export function WorldSetupPanel() {
           {saveError && <p role="alert">{saveError}</p>}
           <div className="setup-actions">
             <button type="button" onClick={resume} disabled={!savedAt}>
-              Resume saved match
+              Resume saved session
             </button>
             <button type="button" className="secondary" onClick={deleteSave}>
               Delete save

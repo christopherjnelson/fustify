@@ -2,90 +2,67 @@
 
 ## Current state
 
-Worldseed is ready for small trusted local hot-seat playtests. It has explicit `world-setup`, `pregame`, `handoff`, `playing`, and `game-over` modes, editable player profiles, deterministic starting-position candidates, balance preview, mandatory turn handoffs, and one validated browser-local save slot.
+Worldseed now has three explicit pregame lifecycle states—`neutral-preview`, `assignment-in-progress`, and `ready`—before its existing `handoff`, `playing`, and `game-over` application modes. A generated world is neutral: every `PlanetDefinition` territory has `ownerId: null` and zero armies. No `MatchState` exists until a complete assignment is explicitly started.
 
-The important boundaries are:
+Players can choose deterministic distributed random assignment or a local player-controlled territory draft. Random remains the default for URLs, existing saves, simulations, and broad gameplay tests. The working tree should be clean at handoff.
 
-- `WorldSetup`: URL-shareable world parameters only.
-- `PlanetDefinition`: immutable generated geography and topology.
-- `MatchSetup`: local profiles, stable seats, ownership variant, starting assignment, and balance analysis.
-- `MatchState`: mutable rules state, combat sequence, events, and victory.
-- View state: camera focus, hover, drawers, display mode, and debug preferences.
+## Important boundaries
 
-Setup URLs never contain an active match. A local save and URL setup may coexist; the opening panel offers Resume saved match or generation from the URL without silently destroying either.
+- `WorldSetup`: URL-shareable seed, world counts, player count, and assignment strategy.
+- `PlanetDefinition`: immutable neutral geography and topology. It no longer supplies playable ownership.
+- `MatchSetup`: a discriminated union for neutral preview, draft in progress, or ready assignment.
+- `StartingPosition`: complete owner/army map plus rebuilt balance analysis; present only in ready setup.
+- `MatchState`: nullable before play, then mutable rules state for turns, combat, events, elimination, and victory.
+- View state: camera focus, hover, panels, display mode, and debug preferences.
+
+`createMatch` rejects neutral generated geography unless it receives a ready `MatchSetup`. Gameplay actions remain rejected outside `playing`. Reset/rematch is a store-level setup operation rather than a reducer command because the pure game state does not own starting setup.
 
 ## Main implementation locations
 
-- `src/core/setup/playerConfig.ts`: profiles, palette IDs, normalization, validation.
-- `src/core/setup/startingPositions.ts`: 32-candidate deterministic generation, fixed starting-army totals, hard validation, metrics, and 0–100 scoring.
-- `src/core/appFlow.ts`: explicit application modes and handoff summary shape.
-- `src/core/persistence/saveGame.ts`: save schema v1, Zod validation, deterministic serialization, and explicit v0 migration.
-- `src/browser/localSave.ts`: the single `worldseed.local-match` localStorage slot.
-- `src/state/useGameStore.ts`: flow transitions, autosave, resume, rematch, URL-history confirmation, and action blocking during handoff.
-- `src/components/WorldSetupPanel.tsx`: URL setup versus local resume choice.
-- `src/components/PregamePanel.tsx`: profiles, preview metrics, reroll, and start validation.
-- `src/components/HandoffScreen.tsx`: focus-contained, non-dismissible next-player gate.
-- `src/components/TerritoryHud.tsx`: existing rules controls plus compact save/rematch actions.
-- `playwright.config.ts`: Chromium, deterministic Vite port 4173, failure artifacts, and the 1920×1080, 1366×768, and 390×844 projects.
-- `tests/e2e/`: interaction/accessibility coverage, visual scenarios, and committed UI-region baselines.
-- `src/testSupport/visualScenarios.ts`: development-only deterministic scenario construction using the real domain pipeline.
-- `src/core/game/testFixtures.ts`: small explicit graph, ownership, continent, capture, and victory fixtures.
-- `src/core/game/gameFixtures.test.ts`: readable fixture-based rules and invalid-action coverage.
-- `src/core/simulation/simulator.ts`: deterministic conservative/aggressive reducer simulator with transition invariants and failure traces.
-- `src/core/simulation/simulator.test.ts`: fast, stress, and single-seed replay matrices.
+- `src/core/setup/startingPositions.ts`: setup discriminated union, deterministic random assignment, balance scoring, and mode-aware validation.
+- `src/core/setup/territoryAssignment.ts`: assignment strategy boundary, round-robin draft commands, duplicate prevention, completion, and deterministic draft armies.
+- `src/core/generation/generatePlanet.ts`: neutral geography generation only.
+- `src/core/persistence/saveGame.ts`: schema v3, setup/draft saves, v0/v1/v2 migrations, and derived-analysis rebuilding.
+- `src/state/useGameStore.ts`: lifecycle transitions, nullable match boundary, setup save/resume, random reroll, draft commands, and action gating.
+- `src/components/PregamePanel.tsx`: profiles, accessible strategy radios, neutral messaging, keyboard draft picker, balance review, and explicit start.
+- `src/components/Planet.tsx`: neutral geography colors, progressive draft ownership colors, and active-match markers/legal cues.
+- `src/testSupport/visualScenarios.ts`: development-only neutral, random-ready, draft-progress, draft-complete, and draft-invalid scenarios plus gameplay fixtures.
 
-## Starting-position rules
+## Neutral setup and assignment behavior
 
-The candidate seed includes world seed, generator version, stable player IDs, ownership variant, and candidate index. Shuffled round-robin placement plus bounded count-preserving swaps produces several local ownership regions without growing a prebuilt empire or falling back to a checkerboard. Each valid candidate owns every territory exactly once, gives every territory at least one army, keeps territory totals within one, keeps equal army totals, and mixes every continent that has at least two territories. A singleton continent emits an explicit impossibility warning instead of invalidating the world.
+Initial load and every world generation/reroll display only geography. No ownership generator runs and no balance result is shown. Player names and colors can be edited only while neutral. Assignment mode is included as the optional URL parameter `assignment=random|player-draft`; old URLs omit it and continue to default to random.
 
-The serialized score contains territory parity, army parity, continent fairness, connectivity distribution, geographic spread, border exposure, sea-route access, and gateway access categories. The documented weights are 16/12/18/18/10/10/8/8 percent. Hard-failure reasons remain separate; Poor but valid layouts require confirmation. Ratings are Excellent 90+, Good 75+, Uneven 55+, and Poor below 55. The scoring is deliberately heuristic.
+Beginning random assignment calls the existing 32-candidate distributed generator without duplicating it. A successful result enters ready; reroll increments only `ownershipVariant`, preserving the planet and URL. Random hard blockers and Poor-layout confirmation remain unchanged.
 
-Equal starting-army totals are 40/35/30/25/20 for 2/3/4/5/6 players. One army is assigned to every owned territory before deterministic distribution of the remainder.
+The player draft is deterministic round-robin: accepted pick `n` belongs to seat `n % playerCount`. With uneven totals, earlier seats receive one extra territory. The active player can pick an unowned territory from the globe or accessible select/button controls. Duplicate and unknown picks are rejected without advancing. Cancel and restart clear ownership without regenerating geography. The last pick derives equal fixed starting-army totals with a named deterministic stream and enters ready before play.
 
-## Turn handoff and persistence
+Manual balance is advisory. Drafts still hard-fail incomplete/extra/unknown ownership, invalid players, count or army parity violations, zero allocations, and non-positive territory armies. Clusters, full continents, gateway concentration, and Poor balance scores are warnings rather than blockers.
 
-`END_TURN` still prepares the next turn and reinforcement pool in the pure reducer. The store then switches to `handoff`; Begin turn only clears selections and reveals that already-prepared state, so reinforcements are not calculated twice. Game actions are rejected outside `playing`.
+## Persistence and migration
 
-Autosave occurs after match start, Begin turn, reinforcement, combat, capture movement, phase transitions, fortification, turn advancement, handoff, and victory. Selection, hover, focus, camera, and display changes do not save. Resume reconstructs the planet from validated `WorldSetup`, verifies territory IDs/count, restores the exact match, clears private selections, and enters handoff unless the match is over.
+Save schema version 3 stores assignment mode, setup phase, optional draft `{pickIndex, territoryOwners}`, optional completed starting position, nullable match state, application mode, and timestamp. Save setup works in neutral, drafting, and ready states. Match start and semantic gameplay transitions continue to autosave.
 
-## Visual inspection workflow
+Versions 0, 1, and 2 migrate to `assignmentMode: random`, `setupPhase: ready`, and `draft: null`. All schema versions reconstruct the planet and recompute balance analysis from the saved ownership map. Active saves resume through handoff; pregame saves resume directly to their setup phase. Large mutable draft state is deliberately local-only and never serialized into the URL.
 
-Playwright 1.61.1 uses its bundled Chromium 149 fallback build for Ubuntu 24.04. The configuration starts Vite automatically on port 4173. Run `pnpm exec playwright install chromium` once on a new machine, then use:
+## Visual and accessibility coverage
 
-```bash
-pnpm test:e2e
-pnpm test:visual
-pnpm test:visual:update
-```
+The visual suite now covers 22 scenarios at 1920×1080, 1366×768, and 390×844: world setup, neutral pregame, random ready, draft in progress, draft complete, duplicate-pick feedback, Poor/invalid/expanded/rerolled random states, and the existing handoff/gameplay/save states. Draft-complete and draft-invalid captures intentionally scroll the setup panel to prove the final Start match control and alert are reachable.
 
-The visual suite covers world setup, pregame, first handoff, reinforcement, attack source/target, combat result, pending capture, player elimination, fortification, game over, navigator, event log, and saved-resume prompt at all three viewport sizes. UI-region baselines live in `tests/e2e/visual.spec.ts-snapshots/`; full-page human-review captures are generated under `test-results/ui-review/<project>/` and intentionally ignored by Git.
+Manual inspection of all affected full-page captures found a clear neutral/owned distinction, progressive draft coloring, reachable internal scrolling, no setup-panel/globe obstruction beyond the intended mobile overlay, no clipped controls, and visible invalid feedback at every maintained viewport. No detached horizon markers or underlying gameplay controls appear during setup.
 
-The visual driver is available only in Vite development mode with `visual-review=1`. Production-build inspection confirmed that `__WORLDSEED_VISUAL__` and `visualScenarios` are absent from `dist`. The fixed seed, camera, reduced motion, UTC timezone, deterministic font, disabled orbit controls, and hidden star field keep captures stable. Do not replace human review with baseline assertions: inspect clipping, scroll regions, globe overlap, dialog obstruction, contrast, phase-control visibility, and horizon markers after UI changes. `AGENTS.md` contains the required agent checklist.
-
-The first full inspection found and fixed two issues: the mobile event-log capture did not reveal the log below the HUD's internal fold, and the translucent game-over surface allowed underlying controls to reduce contrast. No remaining desktop/laptop clipping, inaccessible mobile phase controls, modal obstruction, or detached horizon markers was observed.
-
-## Gameplay simulation and coverage
-
-`pnpm test:simulation` runs the quick deterministic matrix. `pnpm test:simulation:stress` covers 135 world/setup combinations across 2–6 players, 12/18/24 territories, 2/3/4 continents, three ownership variants, both bot policies, and a 750-action limit per match. The bounded world or starting-position candidate search can reject an individual small-world seed; the simulator retries deterministic suffixes and uses the successful actual planet seed in every transition failure trace.
-
-Replay a failure using the reported values:
-
-```bash
-SIMULATION_SEED='<seed>' SIMULATION_TERRITORIES=18 \
-SIMULATION_CONTINENTS=3 SIMULATION_PLAYERS=4 \
-SIMULATION_VARIANT=0 SIMULATION_POLICY=aggressive \
-pnpm test:simulation:replay
-```
-
-`pnpm test:coverage` reports the pure game and save-schema modules and writes an HTML report to `coverage/`. Focus on meaningful command, phase, and validation branches rather than an arbitrary 100% target.
-
-The current focused report is 92.54% statements, 87.5% branches, 100% functions, and 92.68% lines. The main gaps are defensive reducer command variants and malformed save-version/shape cases; combat, match creation, event construction, reinforcement, and legal-action lines have complete coverage.
-
-Current deterministic results: smoke reached 7 victories in 20 runs over 7,767 transitions; stress reached 124 victories in 270 runs over 146,287 transitions. Other runs reached the configured action bound without invariant failure.
+The interaction suite covers radio keyboard operation, turn announcements, duplicate feedback, explicit completion/start, neutral save/resume, in-progress draft save/resume, plus all existing gameplay and navigator behavior.
 
 ## Verification baseline
 
-The current baseline is 112 passing Vitest tests across 11 files (plus two intentionally gated simulation cases), 57 Playwright interaction/accessibility checks, and 42 Playwright visual comparisons. Run:
+- Unit: 127 passing tests across 12 files, plus two intentionally gated simulation tests.
+- Playwright interaction: 66 passing checks (22 at each maintained viewport). The all-project run reached 61 passes before the execution environment stopped Vite at its ten-minute boundary; a separate complete mobile run passed all 22, including the five connection-refused cases.
+- Playwright visual: 66 passing comparisons after baseline update and human inspection.
+- Coverage: 92% statements, 85.76% branches, 100% functions, 93.05% lines.
+- Simulation smoke: 20 deterministic random-assignment runs pass without invariant failure.
+- Simulation stress: 270 deterministic random-assignment runs across 135 world/setup combinations pass without invariant failure.
+- Lint, production build, formatting, and `git diff --check`: passing. Vite retains the existing non-blocking bundle-size warning.
+
+Run the complete gates with:
 
 ```bash
 pnpm test
@@ -100,14 +77,12 @@ pnpm format:check
 git diff --check
 ```
 
-Vite may emit the existing non-blocking Three.js/R3F chunk-size warning.
+## Known limitations and next steps
 
-## Known limitations and next milestone
+- Draft order is simple round-robin rather than snake order. It is predictable and fair by territory count, but it does not compensate for strategic first-pick value.
+- Draft progress uses the existing single browser-local save slot and requires the explicit Save setup control; it is not cloud-backed or automatically synchronized.
+- Balance remains heuristic. Manual layouts intentionally permit strategically lopsided choices that are structurally legal.
+- Native confirmation remains for destructive flow changes and Poor random starts.
+- There is no AI, backend, authentication, online multiplayer, spectator mode, or hidden-information protection.
 
-- Balance is heuristic rather than mathematically perfect.
-- Saves are browser-local, single-slot, and tied to a compatible generator version.
-- Confirmation prompts use native browser confirmation for destructive flow changes.
-- Broader production mobile polish and formal usability testing remain outstanding.
-- There is no AI, backend, authentication, cloud save, matchmaking, or online multiplayer.
-
-The repository is ready for the next task. Start with structured friend playtesting, using the local save/resume flow and the Playwright screenshots to record reproducible UI states. Follow with evidence-based tuning of balance weights, starting-army totals, handoff copy, and narrow-screen pregame layout. Keep online authority and cards deferred until the local loop is validated.
+The logical next step is structured local playtesting of both assignment modes, especially first-seat advantage in round-robin drafts, mobile pass-the-device ergonomics during 42 picks, and whether an optional snake strategy is justified by evidence.

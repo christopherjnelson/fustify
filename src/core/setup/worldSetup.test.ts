@@ -28,6 +28,7 @@ describe('versioned world setup URLs', () => {
       territoryCount: 36,
       continentCount: 5,
       playerCount: 3,
+      assignmentMode: 'player-draft' as const,
     };
     const first = serializeWorldSetup(
       setup,
@@ -35,7 +36,7 @@ describe('versioned world setup URLs', () => {
     );
     const second = serializeWorldSetup(setup, first);
     expect(first.toString()).toBe(
-      'v=1&seed=shared-world&territories=36&continents=5&players=3&a=first&logo=a&z=last',
+      'v=1&seed=shared-world&territories=36&continents=5&players=3&assignment=player-draft&a=first&logo=a&z=last',
     );
     expect(second.toString()).toBe(first.toString());
     expect(worldSetupsEqual(parseWorldSetup(first).setup, setup)).toBe(true);
@@ -48,6 +49,17 @@ describe('versioned world setup URLs', () => {
     const planetA = generatePlanet(a.seed, a);
     const planetB = generatePlanet(b.seed, b);
     expect(planetB).toEqual(planetA);
+  });
+
+  it('keeps old URLs valid and round-trips assignment mode', () => {
+    expect(parseWorldSetup('v=1&seed=legacy').setup.assignmentMode).toBe(
+      'random',
+    );
+    const drafted = parseWorldSetup(
+      'v=1&seed=draft&assignment=player-draft',
+    ).setup;
+    expect(drafted.assignmentMode).toBe('player-draft');
+    expect(serializeWorldSetup(drafted).get('assignment')).toBe('player-draft');
   });
 
   it('uses defaults for malformed numbers without throwing', () => {

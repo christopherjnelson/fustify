@@ -1,7 +1,6 @@
 import { createSeededRandom } from '../generation/seededRandom';
 import type { PlanetDefinition } from '../types/planet';
 import { resolveCombat, type DiceRng } from './combat';
-import { createMatch } from './createMatch';
 import { makeEvent } from './events';
 import {
   getAttackSources,
@@ -210,7 +209,6 @@ export function gameReducer(
   action: GameAction,
   options: GameReducerOptions = {},
 ): GameTransition {
-  if (action.type === 'RESET_MATCH') return success(createMatch(planet));
   if (state.phase === 'game-over') {
     return invalid(state, 'GAME_OVER', 'The match is already over.');
   }

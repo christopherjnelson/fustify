@@ -85,8 +85,7 @@ export type GameAction =
       amount: number;
     }
   | { type: 'SKIP_FORTIFY' }
-  | { type: 'END_TURN' }
-  | { type: 'RESET_MATCH' };
+  | { type: 'END_TURN' };
 
 export type GameErrorCode =
   | 'WRONG_PHASE'

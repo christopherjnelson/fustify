@@ -34,8 +34,11 @@ const VIEW_MODES: { id: PlanetViewMode; label: string }[] = [
 
 export function TerritoryHud() {
   const planet = useGameStore((state) => state.planet);
-  const match = useGameStore((state) => state.match);
+  const match = useGameStore((state) => state.match)!;
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
+  const assignmentMode = useGameStore(
+    (state) => state.matchSetup.assignmentMode,
+  );
   const debugView = useGameStore((state) => state.debugView);
   const viewMode = useGameStore((state) => state.viewMode);
   const eventLogOpen = useGameStore((state) => state.eventLogOpen);
@@ -520,7 +523,9 @@ export function TerritoryHud() {
                     rematchNewOwnership();
                 }}
               >
-                Reroll ownership
+                {assignmentMode === 'random'
+                  ? 'Reroll ownership'
+                  : 'Restart player draft'}
               </button>
               <button
                 type="button"
@@ -624,7 +629,9 @@ export function TerritoryHud() {
                 Same ownership rematch
               </button>
               <button type="button" onClick={rematchNewOwnership}>
-                Reroll ownership
+                {assignmentMode === 'random'
+                  ? 'Reroll ownership'
+                  : 'Restart player draft'}
               </button>
               <button type="button" onClick={backToWorldSetup}>
                 Different world

@@ -57,11 +57,44 @@ export interface StartingPosition {
   analysis: StartingBalanceAnalysis;
 }
 
-export interface MatchSetup {
-  players: LocalPlayerConfig[];
-  ownershipVariant: number;
-  startingPosition: StartingPosition;
+export type TerritoryAssignmentMode = 'random' | 'player-draft';
+export type SetupPhase = 'neutral-preview' | 'assignment-in-progress' | 'ready';
+
+export interface TerritoryDraft {
+  /** Zero-based number of accepted picks. The active seat is pickIndex % player count. */
+  pickIndex: number;
+  territoryOwners: Record<string, string>;
 }
+
+interface MatchSetupBase {
+  players: LocalPlayerConfig[];
+  assignmentMode: TerritoryAssignmentMode;
+  ownershipVariant: number;
+}
+
+export interface NeutralMatchSetup extends MatchSetupBase {
+  setupPhase: 'neutral-preview';
+  startingPosition: null;
+  draft: null;
+}
+
+export interface DraftingMatchSetup extends MatchSetupBase {
+  assignmentMode: 'player-draft';
+  setupPhase: 'assignment-in-progress';
+  startingPosition: null;
+  draft: TerritoryDraft;
+}
+
+export interface ReadyMatchSetup extends MatchSetupBase {
+  setupPhase: 'ready';
+  startingPosition: StartingPosition;
+  draft: TerritoryDraft | null;
+}
+
+export type MatchSetup =
+  NeutralMatchSetup | DraftingMatchSetup | ReadyMatchSetup;
+
+export type StartingPositionValidationMode = 'random' | 'player-draft';
 
 export const STARTING_CANDIDATE_COUNT = 32;
 
@@ -169,6 +202,7 @@ export function analyzeStartingPosition(
   planet: PlanetDefinition,
   players: LocalPlayerConfig[],
   territories: Record<string, StartingTerritoryState>,
+  validationMode: StartingPositionValidationMode = 'random',
 ): StartingBalanceAnalysis {
   const adjacency = new Map(
     planet.territories.map((item) => [item.id, item.adjacentTerritoryIds]),
@@ -335,6 +369,14 @@ export function analyzeStartingPosition(
     planet.territories.some((item) => !territories[item.id])
   )
     hardFailureReasons.push('Not every territory has a starting owner.');
+  const territoryIds = new Set(planet.territories.map((item) => item.id));
+  const unknownTerritoryId = Object.keys(territories).find(
+    (id) => !territoryIds.has(id),
+  );
+  if (unknownTerritoryId)
+    hardFailureReasons.push(
+      `Starting ownership references unknown territory ${unknownTerritoryId}.`,
+    );
   if (territorySpread > 1)
     hardFailureReasons.push(
       `Territory totals differ by ${territorySpread}; the allowed difference is one.`,
@@ -355,11 +397,15 @@ export function analyzeStartingPosition(
     const name = names.get(metric.playerId) ?? metric.playerId;
     if (!metric.territoryCount || !metric.armyCount)
       hardFailureReasons.push(`${name} has no practical starting position.`);
-    if (metric.territoryCount >= 5 && metric.largestComponentRatio >= 0.8)
+    if (
+      validationMode === 'random' &&
+      metric.territoryCount >= 5 &&
+      metric.largestComponentRatio >= 0.8
+    )
       hardFailureReasons.push(
         `${name} owns nearly all territories in one connected region.`,
       );
-    if (metric.averageDegree === 0)
+    if (validationMode === 'random' && metric.averageDegree === 0)
       hardFailureReasons.push(
         `${name} has no practical access to the strategic graph.`,
       );
@@ -370,7 +416,7 @@ export function analyzeStartingPosition(
       ).length;
       return owned / continent.territoryIds.length > 0.5;
     }).length;
-    if (mixableMajorities >= 3)
+    if (validationMode === 'random' && mixableMajorities >= 3)
       hardFailureReasons.push(
         `${name} controls an excessive share of multiple continents.`,
       );
@@ -385,11 +431,17 @@ export function analyzeStartingPosition(
   const gatewayTolerance = Math.max(2, Math.ceil(meanGateway * 0.75));
   for (const metric of metrics) {
     const name = names.get(metric.playerId) ?? metric.playerId;
-    if (metric.seaRouteEndpointCount > meanSea + seaTolerance)
+    if (
+      validationMode === 'random' &&
+      metric.seaRouteEndpointCount > meanSea + seaTolerance
+    )
       hardFailureReasons.push(
         `${name} has too many sea-route endpoints (${metric.seaRouteEndpointCount}; table average ${meanSea.toFixed(1)}).`,
       );
-    if (metric.gatewayTerritoryCount > meanGateway + gatewayTolerance)
+    if (
+      validationMode === 'random' &&
+      metric.gatewayTerritoryCount > meanGateway + gatewayTolerance
+    )
       hardFailureReasons.push(
         `${name} has too many gateway territories (${metric.gatewayTerritoryCount}; table average ${meanGateway.toFixed(1)}).`,
       );
@@ -407,10 +459,12 @@ export function analyzeStartingPosition(
       warnings.push(
         `${continent.name} contains only one territory, so mixed starting ownership there is impossible; ${ownerName} begins with it.`,
       );
-    } else {
+    } else if (validationMode === 'random') {
       hardFailureReasons.push(
         `${ownerName} begins with all of ${continent.name}.`,
       );
+    } else {
+      warnings.push(`${ownerName} drafted all of ${continent.name}.`);
     }
   }
   if (
@@ -644,14 +698,32 @@ export function createMatchSetup(
   planet: PlanetDefinition,
   players: LocalPlayerConfig[],
   ownershipVariant = 0,
-): MatchSetup {
+): ReadyMatchSetup {
   return {
     players,
+    assignmentMode: 'random',
+    setupPhase: 'ready',
     ownershipVariant,
+    draft: null,
     startingPosition: generateStartingPosition(
       planet,
       players,
       ownershipVariant,
     ),
+  };
+}
+
+export function createNeutralMatchSetup(
+  players: LocalPlayerConfig[],
+  assignmentMode: TerritoryAssignmentMode = 'random',
+  ownershipVariant = 0,
+): NeutralMatchSetup {
+  return {
+    players,
+    assignmentMode,
+    setupPhase: 'neutral-preview',
+    ownershipVariant,
+    startingPosition: null,
+    draft: null,
   };
 }

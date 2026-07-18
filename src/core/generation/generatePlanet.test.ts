@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createIcosphere } from '../geometry/icosphere';
-import {
-  MAX_PLACEHOLDER_ARMIES,
-  MIN_PLACEHOLDER_ARMIES,
-  PLANET_SUBDIVISIONS,
-} from './constants';
+import { PLANET_SUBDIVISIONS } from './constants';
 import { generatePlanet } from './generatePlanet';
 import { buildCellAdjacency, connectedComponents } from './surfaceTopology';
 import { validatePlanet } from './validatePlanet';
@@ -272,66 +268,15 @@ describe('generatePlanet', () => {
     ).toBe(true);
   });
 
-  it('assigns deterministic valid ownership to every territory', () => {
+  it('generates neutral territories without ownership or armies', () => {
     const first = generatePlanet('ownership-world');
     const second = generatePlanet('ownership-world');
     expect(first.territories.map((territory) => territory.ownerId)).toEqual(
       second.territories.map((territory) => territory.ownerId),
     );
-    const playerIds = new Set(first.players.map((player) => player.id));
     for (const territory of first.territories) {
-      expect(territory.ownerId).not.toBeNull();
-      expect(playerIds.has(territory.ownerId!)).toBe(true);
-    }
-  });
-
-  it('balances territory counts between placeholder players', () => {
-    const totals = planet.players.map(
-      (player) =>
-        planet.territories.filter(
-          (territory) => territory.ownerId === player.id,
-        ).length,
-    );
-    expect(Math.max(...totals) - Math.min(...totals)).toBeLessThanOrEqual(1);
-  });
-
-  it('keeps each placeholder player distribution strategically connected', () => {
-    const byId = new Map(
-      planet.territories.map((territory) => [territory.id, territory]),
-    );
-    for (const player of planet.players) {
-      const owned = new Set(
-        planet.territories
-          .filter((territory) => territory.ownerId === player.id)
-          .map((territory) => territory.id),
-      );
-      const visited = new Set<string>();
-      const queue = [[...owned][0]!];
-      while (queue.length > 0) {
-        const current = queue.shift()!;
-        if (visited.has(current)) continue;
-        visited.add(current);
-        queue.push(
-          ...byId
-            .get(current)!
-            .adjacentTerritoryIds.filter((neighbor) => owned.has(neighbor)),
-        );
-      }
-      expect(visited.size).toBe(owned.size);
-    }
-  });
-
-  it('generates deterministic army counts within configured bounds', () => {
-    const first = generatePlanet('army-world').territories.map(
-      (territory) => territory.armyCount,
-    );
-    const second = generatePlanet('army-world').territories.map(
-      (territory) => territory.armyCount,
-    );
-    expect(first).toEqual(second);
-    for (const armyCount of first) {
-      expect(armyCount).toBeGreaterThanOrEqual(MIN_PLACEHOLDER_ARMIES);
-      expect(armyCount).toBeLessThanOrEqual(MAX_PLACEHOLDER_ARMIES);
+      expect(territory.ownerId).toBeNull();
+      expect(territory.armyCount).toBe(0);
     }
   });
 

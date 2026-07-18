@@ -26,10 +26,17 @@ import {
   type LocalPlayerConfig,
 } from '../core/setup/playerConfig';
 import {
-  createMatchSetup,
+  createNeutralMatchSetup,
   generateStartingPosition,
   type MatchSetup,
+  type TerritoryAssignmentMode,
 } from '../core/setup/startingPositions';
+import {
+  beginTerritoryAssignment,
+  cancelTerritoryAssignment,
+  pickDraftTerritory as applyDraftPick,
+  restartPlayerDraft,
+} from '../core/setup/territoryAssignment';
 import {
   DEFAULT_WORLD_SETUP,
   normalizeWorldSetup,
@@ -63,7 +70,10 @@ try {
   initialPlanet = generateSetupPlanet(initialSetup);
 }
 const initialPlayers = createDefaultPlayerConfigs(initialSetup.playerCount);
-const initialMatchSetup = createMatchSetup(initialPlanet, initialPlayers);
+const initialMatchSetup = createNeutralMatchSetup(
+  initialPlayers,
+  initialSetup.assignmentMode,
+);
 
 function initialSaveStatus(): Pick<
   GameState,
@@ -103,11 +113,12 @@ export interface GameState {
   setupDraft: WorldSetup;
   setupWarning: string | null;
   setupError: string | null;
+  assignmentFeedback: string | null;
   seedInput: string;
   planet: PlanetDefinition;
   matchSetup: MatchSetup;
   playerSetupErrors: string[];
-  match: MatchState;
+  match: MatchState | null;
   handoffSummary: HandoffSummary;
   savedMatchAvailable: boolean;
   savedAt: string | null;
@@ -129,6 +140,11 @@ export interface GameState {
     id: string,
     update: Partial<Pick<LocalPlayerConfig, 'name' | 'colorId'>>,
   ) => void;
+  setAssignmentMode: (mode: TerritoryAssignmentMode) => void;
+  beginAssignment: () => void;
+  cancelAssignment: () => void;
+  restartDraft: () => void;
+  pickDraftTerritory: (territoryId: string) => void;
   rerollOwnership: () => void;
   startMatch: () => void;
   backToWorldSetup: () => void;
@@ -156,8 +172,9 @@ function makeRandomSeed(): string {
 
 function selectedTerritory(state: GameState): string | null {
   return (
-    state.match.selectedTargetTerritoryId ??
-    state.match.selectedSourceTerritoryId
+    state.match?.selectedTargetTerritoryId ??
+    state.match?.selectedSourceTerritoryId ??
+    null
   );
 }
 
@@ -187,19 +204,15 @@ function saveSnapshot(
   state: GameState,
   mode = state.applicationMode,
 ): LocalMatchSave {
+  const applicationMode = mode === 'world-setup' ? 'pregame' : mode;
   return {
     schemaVersion: SAVE_SCHEMA_VERSION,
     savedAt: new Date().toISOString(),
     generatorVersion: state.planet.generatorVersion,
     worldSetup: state.setup,
     matchSetup: state.matchSetup,
-    matchState: state.match,
-    applicationMode:
-      mode === 'game-over'
-        ? 'game-over'
-        : mode === 'playing'
-          ? 'playing'
-          : 'handoff',
+    matchState: applicationMode === 'pregame' ? null : state.match,
+    applicationMode,
   };
 }
 
@@ -213,11 +226,14 @@ export const useGameStore = create<GameState>((set, get) => {
         savedMatchAvailable: true,
         savedAt: save.savedAt,
         saveError: null,
-        saveMessage: 'Match saved locally.',
+        saveMessage:
+          save.applicationMode === 'pregame'
+            ? 'World setup saved locally.'
+            : 'Match saved locally.',
       });
     } catch {
       set({
-        saveError: 'The match could not be saved locally.',
+        saveError: 'The current session could not be saved locally.',
         saveMessage: null,
       });
     }
@@ -233,17 +249,18 @@ export const useGameStore = create<GameState>((set, get) => {
         ? { ...fallback, name: existing.name, colorId: existing.colorId }
         : fallback;
     });
-    const matchSetup = createMatchSetup(planet, players);
+    const matchSetup = createNeutralMatchSetup(players, setup.assignmentMode);
     set({
       applicationMode: 'pregame',
       setup,
       setupDraft: setup,
       setupWarning: warning,
       setupError: null,
+      assignmentFeedback: null,
       planet,
       matchSetup,
       playerSetupErrors: validatePlayerConfigs(players),
-      match: createMatch(planet, matchSetup),
+      match: null,
       seedInput: planet.seed,
       hoveredTerritoryId: null,
       focusTargetTerritoryId: null,
@@ -258,11 +275,12 @@ export const useGameStore = create<GameState>((set, get) => {
     setupDraft: initialSetup,
     setupWarning: initialWarning,
     setupError: null,
+    assignmentFeedback: null,
     seedInput: initialSetup.seed,
     planet: initialPlanet,
     matchSetup: initialMatchSetup,
     playerSetupErrors: [],
-    match: createMatch(initialPlanet, initialMatchSetup),
+    match: null,
     handoffSummary: { previousTurn: null, messages: [] },
     ...initialSaveStatus(),
     saveMessage: null,
@@ -289,7 +307,7 @@ export const useGameStore = create<GameState>((set, get) => {
         get().savedMatchAvailable &&
         typeof window !== 'undefined' &&
         !window.confirm(
-          'Start a new world setup? Your existing local save will remain available.',
+          'Start a new world setup? Your existing local save will remain available until you save this setup.',
         )
       )
         return;
@@ -315,7 +333,7 @@ export const useGameStore = create<GameState>((set, get) => {
         get().savedMatchAvailable &&
         typeof window !== 'undefined' &&
         !window.confirm(
-          'Start a new random world setup? Your existing local save will remain available.',
+          'Start a new random world setup? Your existing local save will remain available until you save this setup.',
         )
       )
         return;
@@ -340,9 +358,8 @@ export const useGameStore = create<GameState>((set, get) => {
         !window.confirm(
           'Use the world setup from browser history? The active match will remain in its local save.',
         )
-      ) {
+      )
         return;
-      }
       const parsed = readSetupFromLocation();
       try {
         applyGeneratedSetup(parsed.setup, parsed.warning);
@@ -355,6 +372,7 @@ export const useGameStore = create<GameState>((set, get) => {
     },
     updatePlayer: (id, update) =>
       set((state) => {
+        if (state.matchSetup.setupPhase !== 'neutral-preview') return state;
         const players = state.matchSetup.players.map((player) =>
           player.id === id
             ? {
@@ -369,8 +387,111 @@ export const useGameStore = create<GameState>((set, get) => {
           playerSetupErrors: validatePlayerConfigs(players),
         };
       }),
+    setAssignmentMode: (assignmentMode) => {
+      const state = get();
+      if (state.matchSetup.setupPhase !== 'neutral-preview') return;
+      const setup = { ...state.setup, assignmentMode };
+      set({
+        setup,
+        setupDraft: { ...state.setupDraft, assignmentMode },
+        matchSetup: { ...state.matchSetup, assignmentMode },
+        assignmentFeedback: null,
+      });
+      if (typeof window !== 'undefined') writeSetupToLocation(setup, 'replace');
+    },
+    beginAssignment: () => {
+      const state = get();
+      if (state.matchSetup.setupPhase !== 'neutral-preview') return;
+      const players = state.matchSetup.players.map((player) => ({
+        ...player,
+        name: normalizePlayerName(player.name),
+      }));
+      const errors = validatePlayerConfigs(players);
+      if (errors.length) {
+        set({ playerSetupErrors: errors });
+        return;
+      }
+      try {
+        const matchSetup = beginTerritoryAssignment(state.planet, {
+          ...state.matchSetup,
+          players,
+        });
+        set({
+          matchSetup,
+          playerSetupErrors: [],
+          assignmentFeedback:
+            matchSetup.setupPhase === 'ready'
+              ? 'Random assignment is ready to review.'
+              : `${players[0]!.name} chooses first.`,
+          match: null,
+          lastActionError: null,
+        });
+      } catch (error) {
+        set({
+          setupError:
+            error instanceof Error
+              ? error.message
+              : 'Territory assignment could not begin.',
+        });
+      }
+    },
+    cancelAssignment: () => {
+      const state = get();
+      set({
+        matchSetup: cancelTerritoryAssignment(state.matchSetup),
+        assignmentFeedback:
+          'Territory assignment canceled. Geography is unchanged.',
+        match: null,
+      });
+    },
+    restartDraft: () => {
+      const state = get();
+      if (state.matchSetup.assignmentMode !== 'player-draft') return;
+      set({
+        matchSetup: restartPlayerDraft(state.matchSetup),
+        assignmentFeedback: `${state.matchSetup.players[0]!.name} chooses first.`,
+        match: null,
+      });
+    },
+    pickDraftTerritory: (territoryId) => {
+      const state = get();
+      if (state.matchSetup.setupPhase !== 'assignment-in-progress') {
+        set({
+          assignmentFeedback:
+            'Begin a player draft before choosing territories.',
+        });
+        return;
+      }
+      const result = applyDraftPick(
+        state.planet,
+        state.matchSetup,
+        territoryId,
+      );
+      if (!result.ok) {
+        set({ assignmentFeedback: result.error });
+        return;
+      }
+      const ownerId = result.setup.draft?.territoryOwners[territoryId];
+      const owner = state.matchSetup.players.find(
+        (player) => player.id === ownerId,
+      );
+      const feedback =
+        result.setup.setupPhase === 'ready'
+          ? `${owner?.name ?? 'The final player'} completed the draft. Review the layout before play.`
+          : `${owner?.name ?? 'Player'} claimed ${state.planet.territories.find((territory) => territory.id === territoryId)?.name ?? territoryId}.`;
+      set({
+        matchSetup: result.setup,
+        assignmentFeedback: feedback,
+        hoveredTerritoryId: null,
+      });
+    },
     rerollOwnership: () => {
       const state = get();
+      if (
+        state.matchSetup.setupPhase !== 'ready' ||
+        state.matchSetup.assignmentMode !== 'random'
+      )
+        return;
       const ownershipVariant = state.matchSetup.ownershipVariant + 1;
       try {
         const startingPosition = generateStartingPosition(
@@ -384,12 +505,8 @@ export const useGameStore = create<GameState>((set, get) => {
             ownershipVariant,
             startingPosition,
           },
-          match: createMatch(state.planet, {
-            ...state.matchSetup,
-            ownershipVariant,
-            startingPosition,
-          }),
-          saveMessage: `Ownership variant ${ownershipVariant} is ready.`,
+          match: null,
+          assignmentFeedback: `Random assignment variant ${ownershipVariant} is ready.`,
         });
       } catch (error) {
         set({
@@ -402,11 +519,15 @@ export const useGameStore = create<GameState>((set, get) => {
     },
     startMatch: () => {
       const state = get();
-      const players = state.matchSetup.players.map((player) => ({
-        ...player,
-        name: normalizePlayerName(player.name),
-      }));
-      const errors = validatePlayerConfigs(players);
+      if (state.matchSetup.setupPhase !== 'ready') {
+        set({
+          playerSetupErrors: [
+            'Complete territory assignment before starting play.',
+          ],
+        });
+        return;
+      }
+      const errors = validatePlayerConfigs(state.matchSetup.players);
       if (state.matchSetup.startingPosition.analysis.hardFailure) {
         errors.push(
           ...state.matchSetup.startingPosition.analysis.hardFailureReasons,
@@ -417,33 +538,30 @@ export const useGameStore = create<GameState>((set, get) => {
         return;
       }
       if (
+        state.matchSetup.assignmentMode === 'random' &&
         state.matchSetup.startingPosition.analysis.rating === 'poor' &&
         typeof window !== 'undefined' &&
         !window.confirm(
-          `This starting position is rated Poor. ${state.matchSetup.startingPosition.analysis.warnings.slice(0, 2).join(' ')} Start anyway?`,
+          `This random starting position is rated Poor. ${state.matchSetup.startingPosition.analysis.warnings.slice(0, 2).join(' ')} Start anyway?`,
         )
-      ) {
+      )
         return;
-      }
-      const matchSetup = { ...state.matchSetup, players };
-      const match = createMatch(state.planet, matchSetup);
+      const match = createMatch(state.planet, state.matchSetup);
       set({
         applicationMode: 'handoff',
-        matchSetup,
         match,
         handoffSummary: { previousTurn: null, messages: [] },
         playerSetupErrors: [],
+        assignmentFeedback: null,
         lastActionError: null,
       });
-      persist(
-        { ...get(), match, matchSetup, applicationMode: 'handoff' },
-        'handoff',
-      );
+      persist({ ...get(), match, applicationMode: 'handoff' }, 'handoff');
     },
     backToWorldSetup: () =>
       set({ applicationMode: 'world-setup', saveMessage: null }),
     beginTurn: () => {
       const state = get();
+      if (!state.match) return;
       const match = {
         ...state.match,
         selectedSourceTerritoryId: null,
@@ -454,6 +572,7 @@ export const useGameStore = create<GameState>((set, get) => {
     },
     resetMatch: () => {
       const state = get();
+      if (state.matchSetup.setupPhase !== 'ready') return;
       const match = createMatch(state.planet, state.matchSetup);
       set({
         applicationMode: 'handoff',
@@ -464,12 +583,22 @@ export const useGameStore = create<GameState>((set, get) => {
       persist({ ...get(), match, applicationMode: 'handoff' }, 'handoff');
     },
     rematchNewOwnership: () => {
-      get().rerollOwnership();
-      set({ applicationMode: 'pregame' });
+      const state = get();
+      if (state.matchSetup.assignmentMode === 'player-draft') {
+        set({
+          applicationMode: 'pregame',
+          matchSetup: restartPlayerDraft(state.matchSetup),
+          match: null,
+          assignmentFeedback: `${state.matchSetup.players[0]!.name} chooses first.`,
+        });
+      } else {
+        get().rerollOwnership();
+        set({ applicationMode: 'pregame', match: null });
+      }
     },
     dispatchGameAction: (action) => {
       const state = get();
-      if (state.applicationMode !== 'playing') {
+      if (state.applicationMode !== 'playing' || !state.match) {
         set({
           lastActionError: {
             code: 'WRONG_PHASE',
@@ -511,7 +640,7 @@ export const useGameStore = create<GameState>((set, get) => {
         if (!parsed || !parsed.ok) {
           set({
             saveError:
-              parsed && !parsed.ok ? parsed.error : 'No local match was found.',
+              parsed && !parsed.ok ? parsed.error : 'No local save was found.',
           });
           return;
         }
@@ -527,11 +656,12 @@ export const useGameStore = create<GameState>((set, get) => {
           planet.territories.map((territory) => territory.id),
         );
         if (
-          Object.keys(save.matchState.territories).length !==
+          save.matchState &&
+          (Object.keys(save.matchState.territories).length !==
             territoryIds.size ||
-          Object.keys(save.matchState.territories).some(
-            (id) => !territoryIds.has(id),
-          )
+            Object.keys(save.matchState.territories).some(
+              (id) => !territoryIds.has(id),
+            ))
         ) {
           set({
             saveError:
@@ -539,14 +669,21 @@ export const useGameStore = create<GameState>((set, get) => {
           });
           return;
         }
-        const match = {
-          ...save.matchState,
-          selectedSourceTerritoryId: null,
-          selectedTargetTerritoryId: null,
-        };
+        const match = save.matchState
+          ? {
+              ...save.matchState,
+              selectedSourceTerritoryId: null,
+              selectedTargetTerritoryId: null,
+            }
+          : null;
+        const applicationMode =
+          save.applicationMode === 'pregame'
+            ? 'pregame'
+            : save.matchState?.phase === 'game-over'
+              ? 'game-over'
+              : 'handoff';
         set({
-          applicationMode:
-            save.matchState.phase === 'game-over' ? 'game-over' : 'handoff',
+          applicationMode,
           setup: save.worldSetup,
           setupDraft: save.worldSetup,
           seedInput: save.worldSetup.seed,
@@ -557,16 +694,17 @@ export const useGameStore = create<GameState>((set, get) => {
           handoffSummary: { previousTurn: null, messages: [] },
           saveError: null,
           saveMessage: parsed.migrated
-            ? 'Local match resumed and upgraded.'
-            : 'Local match resumed.',
+            ? 'Local session resumed and upgraded.'
+            : 'Local session resumed.',
           savedAt: save.savedAt,
           savedMatchAvailable: true,
           hoveredTerritoryId: null,
+          assignmentFeedback: null,
           lastActionError: null,
         });
-        if (parsed.migrated) persist(get(), 'handoff');
+        if (parsed.migrated) persist(get(), applicationMode);
       } catch {
-        set({ saveError: 'The local match could not be read safely.' });
+        set({ saveError: 'The local session could not be read safely.' });
       }
     },
     deleteSavedMatch: () => {
@@ -589,13 +727,27 @@ export const useGameStore = create<GameState>((set, get) => {
           ? state
           : { hoveredTerritoryId },
       ),
-    selectTerritory: (territoryId) =>
-      get().dispatchGameAction(createTerritorySelectionAction(territoryId)),
+    selectTerritory: (territoryId) => {
+      const state = get();
+      if (
+        territoryId &&
+        state.applicationMode === 'pregame' &&
+        state.matchSetup.setupPhase === 'assignment-in-progress'
+      ) {
+        state.pickDraftTerritory(territoryId);
+        return;
+      }
+      if (state.applicationMode === 'playing') {
+        state.dispatchGameAction(createTerritorySelectionAction(territoryId));
+      }
+    },
     selectAndFocusTerritory: (territoryId) => {
-      get().dispatchGameAction(createTerritorySelectionAction(territoryId));
-      set((state) => ({
+      const state = get();
+      if (state.applicationMode !== 'playing') return;
+      state.dispatchGameAction(createTerritorySelectionAction(territoryId));
+      set((current) => ({
         focusTargetTerritoryId: territoryId,
-        focusSequence: state.focusSequence + 1,
+        focusSequence: current.focusSequence + 1,
       }));
     },
     toggleDebugView: () => set((state) => ({ debugView: !state.debugView })),

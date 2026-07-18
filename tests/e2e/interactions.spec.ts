@@ -15,10 +15,12 @@ test('world and pregame controls have accessible labels and headings', async ({
 
   await openScenario(page, 'pregame');
   await expect(
-    page.getByRole('heading', { name: 'Choose your factions' }),
+    page.getByRole('heading', { name: 'Preview and assign territories' }),
   ).toBeVisible();
   await expect(page.getByLabel('Player 1 name')).toBeVisible();
   await expect(page.getByLabel(/Crimson League color/i)).toBeVisible();
+  await expect(page.getByLabel('Random assignment')).toBeChecked();
+  await expect(page.getByLabel('Player draft')).toBeEnabled();
 });
 
 test('world setup, player validation, ownership reroll, and match start flow', async ({
@@ -31,8 +33,14 @@ test('world setup, player validation, ownership reroll, and match start flow', a
   await page.getByLabel('Player count').fill('3');
   await page.getByRole('button', { name: 'Generate / apply' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Choose your factions' }),
+    page.getByRole('heading', { name: 'Preview and assign territories' }),
   ).toBeVisible();
+  expect((await stateSnapshot(page)).hasMatch).toBe(false);
+  expect(
+    (await stateSnapshot(page)).planet.territories.every(
+      (territory) => territory.ownerId === null && territory.armyCount === 0,
+    ),
+  ).toBe(true);
 
   const firstName = page.getByLabel('Player 1 name');
   const secondName = page.getByLabel('Player 2 name');
@@ -40,7 +48,7 @@ test('world setup, player validation, ownership reroll, and match start flow', a
   await secondName.fill('North');
   await expect(page.getByRole('alert')).toContainText(/names must be unique/i);
   await expect(
-    page.getByRole('button', { name: 'Start match' }),
+    page.getByRole('button', { name: 'Begin random assignment' }),
   ).toBeDisabled();
   await secondName.fill('South');
   const firstColor = page.locator('select').nth(0);
@@ -50,9 +58,10 @@ test('world setup, player validation, ownership reroll, and match start flow', a
     secondColor.locator(`option[value="${firstColorValue}"]`),
   ).toHaveAttribute('disabled', '');
 
-  await expect(page.getByText('Variant 0', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Reroll ownership' }).click();
-  await expect(page.getByText('Variant 1', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Begin random assignment' }).click();
+  await expect(page.getByText(/Ready · Variant 0/)).toBeVisible();
+  await page.getByRole('button', { name: 'Reroll assignment' }).click();
+  await expect(page.getByText(/Ready · Variant 1/)).toBeVisible();
   await page.getByRole('button', { name: 'Start match' }).click();
   await expect(page.getByRole('dialog')).toContainText('Pass the device');
   await page.getByRole('button', { name: /Begin turn 1/i }).click();
@@ -74,13 +83,13 @@ test('pregame balance states enforce start behavior and expose details', async (
   page.once('dialog', (dialog) => dialog.dismiss());
   await page.getByRole('button', { name: 'Start match' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Choose your factions' }),
+    page.getByRole('heading', { name: 'Preview and assign territories' }),
   ).toBeVisible();
 
   await openScenario(page, 'pregame-expanded');
   await page.getByText('How is this scored?').click();
   await expect(
-    page.getByText('Ownership regions', { exact: true }),
+    page.getByText(/Eight categories compare totals/i),
   ).toBeVisible();
   await page.locator('.pregame-panel').evaluate((element) => {
     element.scrollTop = element.scrollHeight;
@@ -88,7 +97,52 @@ test('pregame balance states enforce start behavior and expose details', async (
   await expect(page.getByRole('button', { name: 'Start match' })).toBeVisible();
 
   await openScenario(page, 'pregame-rerolled');
-  await expect(page.getByText('Variant 1', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Ready · Variant 1/)).toBeVisible();
+});
+
+test('player draft is keyboard-operable, advances turns, rejects duplicates, and starts explicitly', async ({
+  page,
+}) => {
+  await openScenario(page, 'pregame');
+  await page.getByLabel('Player draft').focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByLabel('Player draft')).toBeChecked();
+  await page.getByRole('button', { name: 'Begin player draft' }).click();
+  await expect(
+    page.getByRole('heading', { name: /Crimson League chooses now/i }),
+  ).toBeVisible();
+  await page.getByLabel('Territory to claim').selectOption('territory-01');
+  await page.getByRole('button', { name: /Claim for Crimson League/i }).click();
+  await expect(
+    page.getByRole('heading', { name: /Azure Pact chooses now/i }),
+  ).toBeVisible();
+  await page.getByLabel('Territory to claim').selectOption('territory-01');
+  await page.getByRole('button', { name: /Claim for Azure Pact/i }).click();
+  await expect(page.getByRole('alert')).toContainText(/already been drafted/i);
+
+  await openScenario(page, 'draft-complete');
+  await expect(page.getByText('Draft ready')).toBeVisible();
+  await expect(page.getByText(/Draft balance is advisory/i)).toBeVisible();
+  await page.getByRole('button', { name: 'Start match' }).click();
+  await expect(page.getByRole('dialog')).toContainText('Pass the device');
+});
+
+test('neutral and in-progress draft setups save and resume', async ({
+  page,
+}) => {
+  for (const scenario of ['pregame', 'draft-in-progress'] as const) {
+    await openScenario(page, scenario);
+    const expectedPhase = (await stateSnapshot(page)).setupPhase;
+    const expectedPick = (await stateSnapshot(page)).draftPickIndex;
+    await page.getByRole('button', { name: 'Save setup' }).click();
+    await page.reload();
+    await page.waitForFunction(() => window.__WORLDSEED_VISUAL__ !== undefined);
+    await page.getByRole('button', { name: 'Resume saved session' }).click();
+    const resumed = await stateSnapshot(page);
+    expect(resumed.setupPhase).toBe(expectedPhase);
+    expect(resumed.draftPickIndex).toBe(expectedPick);
+    expect(resumed.hasMatch).toBe(false);
+  }
 });
 
 test('handoff traps focus and reveals the prepared turn', async ({ page }) => {
@@ -350,7 +404,7 @@ for (const scenario of [
     await page.evaluate(() => window.__WORLDSEED_VISUAL__!.save());
     await page.reload();
     await page.waitForFunction(() => window.__WORLDSEED_VISUAL__ !== undefined);
-    await page.getByRole('button', { name: 'Resume saved match' }).click();
+    await page.getByRole('button', { name: 'Resume saved session' }).click();
     await expect(page.getByRole('dialog')).toContainText('Pass the device');
     await page.getByRole('button', { name: /Begin turn/i }).click();
     expect((await stateSnapshot(page)).phase).toBe(expectedPhase);
@@ -381,7 +435,7 @@ test('turn completion, next-player handoff, and both rematch modes retain intend
   await openScenario(page, 'game-over');
   await page.getByRole('button', { name: 'Reroll ownership' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Choose your factions' }),
+    page.getByRole('heading', { name: 'Preview and assign territories' }),
   ).toBeVisible();
   expect((await stateSnapshot(page)).ownershipVariant).toBe(
     originalVariant + 1,
@@ -397,8 +451,8 @@ test('event log and saved resume controls are operable', async ({ page }) => {
   await expect(page.getByText('Latest events')).toBeHidden();
 
   await openScenario(page, 'saved-resume');
-  await expect(page.getByText('Local match available')).toBeVisible();
-  await page.getByRole('button', { name: 'Resume saved match' }).click();
+  await expect(page.getByText('Local session available')).toBeVisible();
+  await page.getByRole('button', { name: 'Resume saved session' }).click();
   await expect(page.getByRole('dialog')).toContainText('Pass the device');
 });
 
