@@ -16,10 +16,10 @@ export function WorldSetupPanel() {
       aria-busy={operation !== null}
     >
       <span className="eyebrow">Local hot-seat</span>
-      <h1 id="world-setup-title">Configure your world</h1>
+      <h1 id="world-setup-title">Choose your world</h1>
       <p>
-        The shareable URL stores geography and assignment strategy. Player
-        profiles, draft progress, and turns stay in this browser.
+        Generate neutral worlds until the globe and minimap show the world you
+        want to play. Type a custom seed and press Enter to use it.
       </p>
       {saved && (
         <section className="resume-card" aria-label="Local saved session">

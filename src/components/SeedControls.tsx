@@ -1,10 +1,8 @@
 import type { FormEvent } from 'react';
 import {
   MAX_CONTINENT_COUNT,
-  MAX_PLAYER_COUNT,
   MAX_TERRITORY_COUNT,
   MIN_CONTINENT_COUNT,
-  MIN_PLAYER_COUNT,
   MIN_TERRITORY_COUNT,
 } from '../core/setup/worldSetup';
 import { useGameStore } from '../state/useGameStore';
@@ -17,15 +15,18 @@ export function SeedControls() {
   const setDraft = useGameStore((state) => state.setSetupDraft);
   const warning = useGameStore((state) => state.setupWarning);
   const error = useGameStore((state) => state.setupError);
-  const regenerate = useGameStore((state) => state.regenerate);
-  const randomize = useGameStore((state) => state.randomizeSeed);
+  const applySeed = useGameStore((state) => state.applySeed);
+  const generateWorld = useGameStore((state) => state.generateWorld);
+  const continueToMatchSetup = useGameStore(
+    (state) => state.continueToMatchSetup,
+  );
   const operation = useGameStore((state) => state.setupOperation);
   const generating =
-    operation === 'preview-world' || operation === 'random-seed';
+    operation === 'apply-seed' || operation === 'generate-world';
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    void regenerate();
+    void applySeed();
   };
 
   return (
@@ -73,20 +74,6 @@ export function SeedControls() {
             disabled={operation !== null}
           />
         </label>
-        <label>
-          <span>Players</span>
-          <input
-            type="number"
-            min={MIN_PLAYER_COUNT}
-            max={MAX_PLAYER_COUNT}
-            value={draft.playerCount}
-            onChange={(event) =>
-              setDraft({ playerCount: Number(event.target.value) })
-            }
-            aria-label="Player count"
-            disabled={operation !== null}
-          />
-        </label>
       </div>
       {(warning || error) && (
         <p
@@ -98,20 +85,21 @@ export function SeedControls() {
       )}
       <div className="setup-actions">
         <button
-          type="submit"
+          type="button"
+          className="secondary"
+          onClick={() => void generateWorld()}
           disabled={operation !== null}
-          aria-busy={operation === 'preview-world'}
+          aria-busy={operation === 'generate-world'}
         >
-          {operation === 'preview-world' ? 'Generating…' : 'Preview world'}
+          {operation === 'generate-world' ? 'Generating…' : 'Generate World'}
         </button>
         <button
           type="button"
-          className="secondary"
-          onClick={() => void randomize()}
+          className="continue-setup"
+          onClick={continueToMatchSetup}
           disabled={operation !== null}
-          aria-busy={operation === 'random-seed'}
         >
-          {operation === 'random-seed' ? 'Generating…' : 'Random seed'}
+          Start Game
         </button>
       </div>
     </form>

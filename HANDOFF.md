@@ -2,6 +2,24 @@
 
 ## Current state
 
+The opening experience now begins on an already generated neutral world. A
+fresh production root creates one curated readable canonical seed, writes the
+complete setup into the current URL with `replaceState`, and renders the same
+planet on the globe and minimap. Explicit/shared setup URLs and deterministic
+visual fixtures bypass this initialization; refreshing the generated URL is
+therefore deterministic. Local save restoration remains an explicit,
+higher-priority reconstruction from the save's own seed.
+
+World selection and match setup are separate application modes. Generate World
+creates a new readable seed, rebuilds neutral geography, updates the URL, and
+stays in `world-setup`. Typing a custom seed and pressing Enter applies that
+deterministic world without adding a third primary action. Start Game is the
+only opening transition to `pregame`, where player count, profiles, and
+assignment mode live. The final ready action is Begin Match. The naming module
+uses 32 curated
+descriptors, 32 curated landmarks, and 900 short suffixes (921,600 slugs); the
+slug itself feeds the one existing deterministic geography generator.
+
 Worldseed now includes a responsive, read-only equirectangular minimap throughout world preview, assignment, ready setup, and active play. The 3D globe remains the authoritative gameplay surface. The minimap projects the existing `PlanetDefinition.surfaceCells`, canonical territory centers and connections, setup ownership, and live `MatchState`; it does not regenerate from the seed or own parallel IDs or state.
 
 The existing three pregame lifecycle states—`neutral-preview`, `assignment-in-progress`, and `ready`—remain intact before `handoff`, `playing`, and `game-over`. A generated world is neutral: every `PlanetDefinition` territory has `ownerId: null` and zero armies. No `MatchState` exists until a complete assignment is explicitly started.

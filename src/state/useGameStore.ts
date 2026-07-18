@@ -14,6 +14,7 @@ import { gameReducer } from '../core/game/gameReducer';
 import type { GameAction, GameError, MatchState } from '../core/game/types';
 import { GENERATOR_VERSION } from '../core/generation/constants';
 import { generatePlanet } from '../core/generation/generatePlanet';
+import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
 import { createTerritorySelectionAction } from '../core/navigation/territoryNavigator';
 import {
   SAVE_SCHEMA_VERSION,
@@ -46,10 +47,32 @@ import {
 import type { PlanetDefinition } from '../core/types/planet';
 import type { GeographicPoint } from '../core/minimap/projection';
 
-const initialParsedSetup =
-  typeof window === 'undefined'
-    ? { setup: { ...DEFAULT_WORLD_SETUP }, warning: null }
-    : readSetupFromLocation();
+function initializeSetupFromLocation() {
+  if (typeof window === 'undefined') {
+    return { setup: { ...DEFAULT_WORLD_SETUP }, warning: null };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const hasSharedSetup = [
+    'v',
+    'seed',
+    'territories',
+    'continents',
+    'players',
+    'assignment',
+  ].some((key) => params.has(key));
+  const deterministicFixture = params.get('visual-review') === '1';
+  if (!hasSharedSetup && !deterministicFixture) {
+    const setup = normalizeWorldSetup({
+      ...DEFAULT_WORLD_SETUP,
+      seed: generateReadableWorldSeed(),
+    });
+    writeSetupToLocation(setup, 'replace');
+    return { setup, warning: 'A new neutral world is ready to explore.' };
+  }
+  return readSetupFromLocation();
+}
+
+const initialParsedSetup = initializeSetupFromLocation();
 
 function generateSetupPlanet(setup: WorldSetup): PlanetDefinition {
   return generatePlanet(setup.seed, {
@@ -108,8 +131,8 @@ function initialSaveStatus(): Pick<
 
 export type PlanetViewMode = 'ownership' | 'continents' | 'terrain';
 export type SetupOperation =
-  | 'preview-world'
-  | 'random-seed'
+  | 'apply-seed'
+  | 'generate-world'
   | 'assign-territories'
   | 'reroll-territories'
   | 'start-game'
@@ -143,8 +166,10 @@ export interface GameState {
   setupOperation: SetupOperation | null;
   setSeedInput: (seed: string) => void;
   setSetupDraft: (update: Partial<WorldSetup>) => void;
-  regenerate: () => Promise<void>;
-  randomizeSeed: () => Promise<void>;
+  setPlayerCount: (playerCount: number) => void;
+  applySeed: () => Promise<void>;
+  generateWorld: () => Promise<void>;
+  continueToMatchSetup: () => void;
   loadSetupFromUrl: () => void;
   updatePlayer: (
     id: string,
@@ -173,12 +198,6 @@ export interface GameState {
   toggleEventLog: () => void;
   focusSelectedTerritory: () => void;
   setGlobeFocus: (focus: GeographicPoint) => void;
-}
-
-function makeRandomSeed(): string {
-  const values = new Uint32Array(2);
-  crypto.getRandomValues(values);
-  return `world-${values[0]!.toString(36)}-${values[1]!.toString(36)}`;
 }
 
 function allowBusyStateToPaint(): Promise<void> {
@@ -271,7 +290,7 @@ export const useGameStore = create<GameState>((set, get) => {
     });
     const matchSetup = createNeutralMatchSetup(players, setup.assignmentMode);
     set({
-      applicationMode: 'pregame',
+      applicationMode: 'world-setup',
       setup,
       setupDraft: setup,
       setupWarning: warning,
@@ -324,7 +343,35 @@ export const useGameStore = create<GameState>((set, get) => {
         setupDraft: { ...state.setupDraft, ...update },
         setupError: null,
       })),
-    regenerate: async () => {
+    setPlayerCount: (playerCount) => {
+      const state = get();
+      if (
+        state.applicationMode !== 'pregame' ||
+        state.matchSetup.setupPhase !== 'neutral-preview' ||
+        state.setupOperation
+      )
+        return;
+      const setup = normalizeWorldSetup({ ...state.setup, playerCount });
+      const defaults = createDefaultPlayerConfigs(setup.playerCount);
+      const players = defaults.map((fallback, index) => {
+        const existing = state.matchSetup.players[index];
+        return existing
+          ? { ...fallback, name: existing.name, colorId: existing.colorId }
+          : fallback;
+      });
+      set({
+        setup,
+        setupDraft: { ...state.setupDraft, playerCount: setup.playerCount },
+        matchSetup: createNeutralMatchSetup(
+          players,
+          state.matchSetup.assignmentMode,
+        ),
+        playerSetupErrors: validatePlayerConfigs(players),
+        assignmentFeedback: null,
+      });
+      if (typeof window !== 'undefined') writeSetupToLocation(setup, 'replace');
+    },
+    applySeed: async () => {
       if (get().setupOperation) return;
       if (
         get().savedMatchAvailable &&
@@ -334,7 +381,7 @@ export const useGameStore = create<GameState>((set, get) => {
         )
       )
         return;
-      set({ setupOperation: 'preview-world', setupError: null });
+      set({ setupOperation: 'apply-seed', setupError: null });
       await allowBusyStateToPaint();
       const requestedSetup = { ...get().setupDraft, seed: get().seedInput };
       const setup = normalizeWorldSetup(requestedSetup);
@@ -343,7 +390,10 @@ export const useGameStore = create<GameState>((set, get) => {
         : 'Setup values were normalized to the supported ranges.';
       try {
         if (typeof window !== 'undefined') writeSetupToLocation(setup);
-        applyGeneratedSetup(setup, warning);
+        applyGeneratedSetup(
+          setup,
+          warning ?? `Neutral world generated: ${setup.seed}.`,
+        );
       } catch (error) {
         set({
           setupError:
@@ -355,33 +405,47 @@ export const useGameStore = create<GameState>((set, get) => {
         set({ setupOperation: null });
       }
     },
-    randomizeSeed: async () => {
+    generateWorld: async () => {
       if (get().setupOperation) return;
       if (
         get().savedMatchAvailable &&
         typeof window !== 'undefined' &&
         !window.confirm(
-          'Start a new random world setup? Your existing local save will remain available until you save this setup.',
+          'Generate a new world setup? Your existing local save will remain available until you save this setup.',
         )
       )
         return;
-      set({ setupOperation: 'random-seed', setupError: null });
+      set({ setupOperation: 'generate-world', setupError: null });
       await allowBusyStateToPaint();
       try {
-        const seedInput = makeRandomSeed();
+        const seedInput = generateReadableWorldSeed();
         const setup = normalizeWorldSetup({
           ...get().setupDraft,
           seed: seedInput,
         });
         if (typeof window !== 'undefined') writeSetupToLocation(setup);
-        applyGeneratedSetup(setup, null);
+        applyGeneratedSetup(
+          setup,
+          `New neutral world generated: ${setup.seed}.`,
+        );
       } catch {
         set({
-          setupError: 'That random setup could not be generated. Try again.',
+          setupError: 'That world could not be generated. Try again.',
         });
       } finally {
         set({ setupOperation: null });
       }
+    },
+    continueToMatchSetup: () => {
+      const state = get();
+      if (state.setupOperation) return;
+      if (state.matchSetup.setupPhase !== 'neutral-preview' || state.match)
+        return;
+      set({
+        applicationMode: 'pregame',
+        setupError: null,
+        assignmentFeedback: null,
+      });
     },
     loadSetupFromUrl: () => {
       if (typeof window === 'undefined') return;

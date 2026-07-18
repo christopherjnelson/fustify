@@ -1,12 +1,58 @@
 import { expect, test } from '@playwright/test';
 import { openScenario, stateSnapshot } from './helpers';
 
+test('fresh root launch creates one readable URL-stable neutral world', async ({
+  page,
+}) => {
+  await page.addInitScript(() => window.localStorage.clear());
+  await page.goto('/');
+  const seedInput = page.getByLabel('Planet seed');
+  await expect(seedInput).toHaveValue(/^[a-z]+-[a-z]+-[1-9][0-9]{2}$/);
+  const seed = await seedInput.inputValue();
+  await expect(page).toHaveURL(new RegExp(`seed=${seed}`));
+  await expect(
+    page.getByRole('heading', { name: 'Choose your world' }),
+  ).toBeVisible();
+  await expect(page.locator('.setup-actions button')).toHaveCount(2);
+  await expect(
+    page.getByRole('button', { name: 'Generate World' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start Game' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Randomize World' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Continue to match setup' }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel('Player 1 name')).toHaveCount(0);
+  const minimap = page.getByTestId('minimap');
+  await expect(minimap).toBeVisible();
+  await expect(
+    minimap.locator('.minimap-territories path:not([data-owner-id=""])'),
+  ).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByLabel('Planet seed')).toHaveValue(seed);
+  await expect(
+    page.getByRole('heading', { name: 'Choose your world' }),
+  ).toBeVisible();
+});
+
+test('an explicit seed bypasses fresh-root randomization', async ({ page }) => {
+  await page.goto('/?v=1&seed=amber-meridian&territories=18&continents=3');
+  await expect(page.getByLabel('Planet seed')).toHaveValue('amber-meridian');
+  await expect(page).toHaveURL(/seed=amber-meridian/);
+  await expect(
+    page.getByRole('heading', { name: 'Choose your world' }),
+  ).toBeVisible();
+});
+
 test('world and pregame controls have accessible labels and headings', async ({
   page,
 }) => {
   await openScenario(page, 'world-setup');
   await expect(
-    page.getByRole('heading', { name: 'Configure your world' }),
+    page.getByRole('heading', { name: 'Choose your world' }),
   ).toBeVisible();
   await expect(page.getByLabel('Planet seed')).toHaveValue(
     'visual-review-atlas',
@@ -146,46 +192,128 @@ test('minimap stays in bounds and separate from primary controls', async ({
   expect(minimap!.y + minimap!.height).toBeGreaterThan(viewport.height - 100);
 });
 
-test('random seed paints busy feedback and returns to a synchronized neutral preview', async ({
+test('Generate World repeats on the neutral world-selection screen before Start Game advances', async ({
   page,
 }) => {
-  await openScenario(page, 'pregame');
-  await page.getByLabel('Player draft').check();
-  await page.getByLabel('Player 1 name').fill('North Star');
+  await openScenario(page, 'world-setup');
+  await page.evaluate(() => {
+    const original = window.requestAnimationFrame;
+    let pending: FrameRequestCallback | null = null;
+    window.requestAnimationFrame = (callback) => {
+      pending = callback;
+      return 1;
+    };
+    Object.assign(window, {
+      __releaseGenerationFrame: () => {
+        window.requestAnimationFrame = original;
+        pending?.(performance.now());
+      },
+    });
+  });
+  await expect(
+    page.getByRole('heading', { name: 'Choose your world' }),
+  ).toBeVisible();
+  await expect(page.locator('.setup-actions button')).toHaveCount(2);
+  await expect(
+    page.getByRole('button', { name: 'Generate World' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start Game' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Randomize World' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Continue to match setup' }),
+  ).toHaveCount(0);
+
   const before = await stateSnapshot(page);
-  await page.getByRole('button', { name: 'World settings' }).click();
-  const randomSeed = page.getByRole('button', { name: 'Random seed' });
-  await randomSeed.evaluate((button: HTMLButtonElement) => button.click());
-  const generating = page.locator('.seed-controls button.secondary');
+  const beforeMinimap = await page
+    .getByTestId('minimap')
+    .locator('.minimap-territories')
+    .innerHTML();
+  const generate = page.locator('.setup-actions button.secondary');
+  await generate.evaluate((button: HTMLButtonElement) => button.click());
   expect(
-    await generating.evaluate((button: HTMLButtonElement) => ({
+    await generate.evaluate((button: HTMLButtonElement) => ({
       disabled: button.disabled,
       busy: button.getAttribute('aria-busy'),
       label: button.textContent?.trim(),
     })),
   ).toEqual({ disabled: true, busy: 'true', label: 'Generating…' });
+  await page.evaluate(() => {
+    (
+      window as typeof window & { __releaseGenerationFrame: () => void }
+    ).__releaseGenerationFrame();
+  });
   await expect(
-    page.getByRole('heading', { name: 'Preview and assign territories' }),
+    page.getByRole('heading', { name: 'Choose your world' }),
   ).toBeVisible();
+  await expect(page.getByLabel('Planet seed')).not.toHaveValue(
+    before.planet.seed,
+  );
   const after = await stateSnapshot(page);
+  const afterMinimap = await page
+    .getByTestId('minimap')
+    .locator('.minimap-territories')
+    .innerHTML();
   expect(after.setupPhase).toBe('neutral-preview');
-  expect(after.assignmentMode).toBe('player-draft');
   expect(after.hasMatch).toBe(false);
   expect(after.planet.seed).not.toBe(before.planet.seed);
+  expect(afterMinimap).not.toBe(beforeMinimap);
   expect(
     after.planet.territories.every(
       (territory) => territory.ownerId === null && territory.armyCount === 0,
     ),
   ).toBe(true);
-  await expect(page.getByLabel('Player 1 name')).toHaveValue('North Star');
   await expect(
     page
       .getByTestId('minimap')
       .locator('.minimap-territories path[data-owner-id=""]'),
   ).toHaveCount(after.planet.territories.length);
+  await expect(page.getByLabel('Player 1 name')).toHaveCount(0);
+  await page.waitForTimeout(400);
+  expect((await stateSnapshot(page)).mode).toBe('world-setup');
+
+  const seenSeeds = new Set([before.planet.seed, after.planet.seed]);
+  for (let count = 0; count < 3; count += 1) {
+    const previousSeed = (await stateSnapshot(page)).planet.seed;
+    await page.getByRole('button', { name: 'Generate World' }).click();
+    await expect(page.getByLabel('Planet seed')).not.toHaveValue(previousSeed);
+    await expect(
+      page.getByRole('heading', { name: 'Choose your world' }),
+    ).toBeVisible();
+    await page.waitForTimeout(400);
+    const settled = await stateSnapshot(page);
+    expect(settled.mode).toBe('world-setup');
+    expect(settled.setupPhase).toBe('neutral-preview');
+    expect(settled.hasMatch).toBe(false);
+    expect(
+      settled.planet.territories.every(
+        (territory) => territory.ownerId === null && territory.armyCount === 0,
+      ),
+    ).toBe(true);
+    seenSeeds.add(settled.planet.seed);
+  }
+  expect(seenSeeds.size).toBe(5);
+
+  const selectedWorld = await stateSnapshot(page);
+  await page.getByRole('button', { name: 'Start Game' }).click();
   await expect(
-    page.getByRole('button', { name: 'Start player draft' }),
+    page.getByRole('heading', { name: 'Preview and assign territories' }),
   ).toBeVisible();
+  const setup = await stateSnapshot(page);
+  expect(setup.planet.seed).toBe(selectedWorld.planet.seed);
+  expect(setup.planet.territories).toHaveLength(
+    selectedWorld.planet.territories.length,
+  );
+  expect(setup.planet.continents).toHaveLength(
+    selectedWorld.planet.continents.length,
+  );
+  expect(setup.hasMatch).toBe(false);
+  await page.getByRole('button', { name: 'Assign territories' }).click();
+  await expect(page.getByText(/Ready · Variant 0/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Begin Match' })).toBeVisible();
+  await page.getByRole('button', { name: 'Begin Match' }).click();
+  await expect(page.getByRole('dialog')).toContainText('Pass the device');
 });
 
 test('assignment and reroll busy locks prevent repeated activation', async ({
@@ -220,8 +348,12 @@ test('world setup, player validation, ownership reroll, and match start flow', a
   await page.getByLabel('Planet seed').fill('browser-gameplay-flow');
   await page.getByLabel('Territory count').fill('18');
   await page.getByLabel('Continent count').fill('3');
+  await page.getByLabel('Planet seed').press('Enter');
+  await expect(
+    page.getByRole('heading', { name: 'Choose your world' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Start Game' }).click();
   await page.getByLabel('Player count').fill('3');
-  await page.getByRole('button', { name: 'Preview world' }).click();
   await expect(
     page.getByRole('heading', { name: 'Preview and assign territories' }),
   ).toBeVisible();
@@ -257,7 +389,7 @@ test('world setup, player validation, ownership reroll, and match start flow', a
   ).toHaveCount(0);
   await page.getByRole('button', { name: 'Reroll territories' }).click();
   await expect(page.getByText(/Ready · Variant 1/)).toBeVisible();
-  await page.getByRole('button', { name: 'Start game' }).click();
+  await page.getByRole('button', { name: 'Begin Match' }).click();
   await expect(page.getByRole('dialog')).toContainText('Pass the device');
   await page.getByRole('button', { name: /Begin turn 1/i }).click();
   await expect(page.locator('.turn-banner')).toContainText(
@@ -270,11 +402,13 @@ test('pregame balance states enforce start behavior and expose details', async (
 }) => {
   await openScenario(page, 'pregame-invalid');
   await expect(page.getByText('Start blocked')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Start game' })).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Begin Match' }),
+  ).toBeDisabled();
 
   await openScenario(page, 'pregame-poor');
   page.once('dialog', (dialog) => dialog.dismiss());
-  await page.getByRole('button', { name: 'Start game' }).click();
+  await page.getByRole('button', { name: 'Begin Match' }).click();
   await expect(
     page.getByRole('heading', { name: 'Preview and assign territories' }),
   ).toBeVisible();
@@ -287,7 +421,7 @@ test('pregame balance states enforce start behavior and expose details', async (
   await page.locator('.pregame-panel').evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
-  await expect(page.getByRole('button', { name: 'Start game' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Begin Match' })).toBeVisible();
 
   await openScenario(page, 'pregame-rerolled');
   await expect(page.getByText(/Ready · Variant 1/)).toBeVisible();
@@ -316,7 +450,7 @@ test('player draft is keyboard-operable, advances turns, rejects duplicates, and
   await openScenario(page, 'draft-complete');
   await expect(page.getByText('Draft ready')).toBeVisible();
   await expect(page.getByText(/Draft balance is advisory/i)).toBeVisible();
-  await page.getByRole('button', { name: 'Start game' }).click();
+  await page.getByRole('button', { name: 'Begin Match' }).click();
   await expect(page.getByRole('dialog')).toContainText('Pass the device');
 });
 

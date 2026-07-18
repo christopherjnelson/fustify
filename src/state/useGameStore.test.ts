@@ -26,7 +26,7 @@ describe('setup and match store integration', () => {
     useGameStore.getState().setAssignmentMode('player-draft');
     useGameStore.getState().updatePlayer('player-01', { name: 'North Star' });
     const previousPlanet = useGameStore.getState().planet;
-    await useGameStore.getState().randomizeSeed();
+    await useGameStore.getState().generateWorld();
     const state = useGameStore.getState();
     expect(state.planet).not.toBe(previousPlanet);
     expect(state.setup.assignmentMode).toBe('player-draft');
@@ -44,7 +44,7 @@ describe('setup and match store integration', () => {
   it('generation clears ready ownership analysis and remains deterministic for an explicit seed', async () => {
     await beginRandomAssignment();
     useGameStore.getState().setSeedInput('explicit-preview-seed');
-    await useGameStore.getState().regenerate();
+    await useGameStore.getState().applySeed();
     const first = useGameStore.getState();
     expect(first.matchSetup.setupPhase).toBe('neutral-preview');
     expect(first.matchSetup.startingPosition).toBeNull();
@@ -54,7 +54,7 @@ describe('setup and match store integration', () => {
       center: territory.center,
       adjacentTerritoryIds: territory.adjacentTerritoryIds,
     }));
-    await useGameStore.getState().regenerate();
+    await useGameStore.getState().applySeed();
     expect(
       useGameStore.getState().planet.territories.map((territory) => ({
         id: territory.id,
@@ -65,10 +65,10 @@ describe('setup and match store integration', () => {
   });
 
   it('paints a busy lock before generation and ignores duplicate activation', async () => {
-    const first = useGameStore.getState().randomizeSeed();
-    expect(useGameStore.getState().setupOperation).toBe('random-seed');
+    const first = useGameStore.getState().generateWorld();
+    expect(useGameStore.getState().setupOperation).toBe('generate-world');
     const seedBeforeWork = useGameStore.getState().setup.seed;
-    const duplicate = useGameStore.getState().randomizeSeed();
+    const duplicate = useGameStore.getState().generateWorld();
     await duplicate;
     expect(useGameStore.getState().setup.seed).toBe(seedBeforeWork);
     await first;
@@ -83,7 +83,7 @@ describe('setup and match store integration', () => {
         throw new Error('Random source unavailable');
       },
     });
-    await useGameStore.getState().randomizeSeed();
+    await useGameStore.getState().generateWorld();
     expect(useGameStore.getState().setupOperation).toBeNull();
     expect(useGameStore.getState().setupError).toMatch(
       /could not be generated/i,
@@ -93,10 +93,10 @@ describe('setup and match store integration', () => {
 
   it('generation creates neutral geography without creating match ownership', async () => {
     useGameStore.getState().setSeedInput('store-integration-world');
-    await useGameStore.getState().regenerate();
+    await useGameStore.getState().applySeed();
     const generated = useGameStore.getState();
     expect(generated.setup.seed).toBe('store-integration-world');
-    expect(generated.applicationMode).toBe('pregame');
+    expect(generated.applicationMode).toBe('world-setup');
     expect(generated.match).toBeNull();
     expect(generated.matchSetup.setupPhase).toBe('neutral-preview');
     expect(
@@ -106,9 +106,20 @@ describe('setup and match store integration', () => {
     ).toBe(true);
   });
 
+  it('advances only through the explicit match setup action', async () => {
+    await useGameStore.getState().generateWorld();
+    expect(useGameStore.getState().applicationMode).toBe('world-setup');
+    expect(useGameStore.getState().matchSetup.setupPhase).toBe(
+      'neutral-preview',
+    );
+    useGameStore.getState().continueToMatchSetup();
+    expect(useGameStore.getState().applicationMode).toBe('pregame');
+    expect(useGameStore.getState().match).toBeNull();
+  });
+
   it('random assignment is explicit and enters first-turn handoff only after start', async () => {
     useGameStore.getState().setSeedInput('pregame-flow');
-    await useGameStore.getState().regenerate();
+    await useGameStore.getState().applySeed();
     expect(useGameStore.getState().matchSetup.setupPhase).toBe(
       'neutral-preview',
     );
@@ -196,7 +207,7 @@ describe('setup and match store integration', () => {
       assignmentMode: 'player-draft',
     });
     useGameStore.getState().setSeedInput('uneven-draft');
-    await useGameStore.getState().regenerate();
+    await useGameStore.getState().applySeed();
     await useGameStore.getState().beginAssignment();
     useGameStore
       .getState()

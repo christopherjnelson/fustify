@@ -9,12 +9,12 @@ const scenarios: Array<{
   {
     name: 'world-setup',
     region: '.setup-panel',
-    heading: /Configure your world/i,
+    heading: /Choose your world/i,
   },
   {
-    name: 'random-seed-busy',
+    name: 'generate-world-busy',
     region: '.setup-panel',
-    heading: /Configure your world/i,
+    heading: /Choose your world/i,
   },
   {
     name: 'pregame',

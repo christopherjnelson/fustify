@@ -2,7 +2,7 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 
 export type Scenario =
   | 'world-setup'
-  | 'random-seed-busy'
+  | 'generate-world-busy'
   | 'pregame'
   | 'pregame-random-ready'
   | 'draft-started'

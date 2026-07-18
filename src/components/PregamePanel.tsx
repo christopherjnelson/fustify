@@ -1,5 +1,6 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { PLAYER_COLORS, playerColorValue } from '../core/setup/playerConfig';
+import { MAX_PLAYER_COUNT, MIN_PLAYER_COUNT } from '../core/setup/worldSetup';
 import { activeDraftPlayer } from '../core/setup/territoryAssignment';
 import { useGameStore } from '../state/useGameStore';
 
@@ -12,6 +13,7 @@ export function PregamePanel() {
   const saveMessage = useGameStore((state) => state.saveMessage);
   const saveError = useGameStore((state) => state.saveError);
   const updatePlayer = useGameStore((state) => state.updatePlayer);
+  const setPlayerCount = useGameStore((state) => state.setPlayerCount);
   const setAssignmentMode = useGameStore((state) => state.setAssignmentMode);
   const beginAssignment = useGameStore((state) => state.beginAssignment);
   const cancelAssignment = useGameStore((state) => state.cancelAssignment);
@@ -70,6 +72,21 @@ export function PregamePanel() {
         Configure the table while the globe is neutral. Ownership is created
         only when you begin an assignment strategy.
       </p>
+
+      <label className="player-count-control">
+        <span>Players</span>
+        <input
+          type="number"
+          min={MIN_PLAYER_COUNT}
+          max={MAX_PLAYER_COUNT}
+          value={setup.playerCount}
+          onChange={(event) => setPlayerCount(Number(event.target.value))}
+          aria-label="Player count"
+          disabled={
+            matchSetup.setupPhase !== 'neutral-preview' || operation !== null
+          }
+        />
+      </label>
 
       <div className="player-config-list">
         {orderedPlayers.map((player) => {
@@ -453,7 +470,7 @@ export function PregamePanel() {
               }
               aria-busy={operation === 'start-game'}
             >
-              {operation === 'start-game' ? 'Starting…' : 'Start game'}
+              {operation === 'start-game' ? 'Beginning…' : 'Begin Match'}
             </button>
           </>
         )}

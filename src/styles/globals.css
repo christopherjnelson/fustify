@@ -114,6 +114,10 @@ select:focus-visible {
   backdrop-filter: blur(20px);
 }
 
+.mode-world-setup .setup-panel {
+  width: min(440px, calc(100vw - 48px));
+}
+
 .setup-panel h1,
 .handoff-card h1 {
   margin: 5px 0 8px;
@@ -171,6 +175,26 @@ select:focus-visible {
   display: grid;
   gap: 7px;
   margin-bottom: 14px;
+}
+
+.player-count-control {
+  display: grid;
+  grid-template-columns: 1fr 84px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: #b9ccdc;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.player-count-control input {
+  width: 100%;
+  padding: 8px;
+  color: #eef7ff;
+  border: 1px solid rgba(153, 190, 224, 0.22);
+  border-radius: 7px;
+  background: #111d2a;
 }
 
 .player-config {
@@ -540,6 +564,10 @@ select:focus-visible {
     width: calc(100vw - 20px);
     max-height: calc(100vh - 20px);
     padding: 16px;
+  }
+
+  .mode-world-setup .setup-panel {
+    width: calc(100vw - 20px);
   }
 
   .player-config {
@@ -1243,7 +1271,7 @@ h2 {
 
 .setup-counts {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 7px;
   margin-top: 8px;
 }

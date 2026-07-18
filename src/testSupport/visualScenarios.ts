@@ -22,7 +22,7 @@ import { useGameStore } from '../state/useGameStore';
 
 export type VisualScenario =
   | 'world-setup'
-  | 'random-seed-busy'
+  | 'generate-world-busy'
   | 'pregame'
   | 'pregame-random-ready'
   | 'draft-started'
@@ -269,7 +269,7 @@ function applyScenario(scenario: VisualScenario) {
 
   if (
     scenario !== 'world-setup' &&
-    scenario !== 'random-seed-busy' &&
+    scenario !== 'generate-world-busy' &&
     scenario !== 'saved-resume'
   ) {
     applicationMode =
@@ -279,7 +279,7 @@ function applyScenario(scenario: VisualScenario) {
   }
   if (
     scenario === 'world-setup' ||
-    scenario === 'random-seed-busy' ||
+    scenario === 'generate-world-busy' ||
     scenario === 'pregame' ||
     scenario === 'minimap-seam'
   ) {
@@ -445,8 +445,8 @@ function applyScenario(scenario: VisualScenario) {
     focusSequence: focusScenario ? 1 : 0,
     globeFocus: scenarioFocus,
     setupOperation:
-      scenario === 'random-seed-busy'
-        ? 'random-seed'
+      scenario === 'generate-world-busy'
+        ? 'generate-world'
         : scenario === 'reroll-busy'
           ? 'reroll-territories'
           : null,

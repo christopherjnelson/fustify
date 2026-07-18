@@ -11,7 +11,8 @@ The prototype currently provides:
 - A deterministic, smoothed land/ocean mask with multiple landmasses and islands
 - Exactly 42 playable land territories grouped into 6 connected gameplay continents
 - Two to six editable local players using a curated accessible color palette
-- A neutral generated-world preview before any player ownership exists
+- A randomly named neutral world on fresh launch, before any player ownership exists
+- Curated readable names that are also canonical deterministic world seeds
 - Random distributed assignment or a complete local round-robin territory draft
 - A deterministic 32-candidate random starting-position generator with balance preview and assignment rerolls
 - Explicit neutral-preview, assignment-in-progress, ready, handoff, playing, and game-over lifecycle states
@@ -125,15 +126,15 @@ Missing or unsupported values fall back to variant B. Both assets are trimmed RG
 
 World setup is plain serializable data kept separate from both immutable `PlanetDefinition` geography and mutable `MatchState` gameplay. Version 1 supports:
 
-| Parameter     | Default       | Valid values                                        |
-| ------------- | ------------- | --------------------------------------------------- |
-| `v`           | `1`           | `1`                                                 |
-| `seed`        | `atlas-prime` | Any non-empty string                                |
-| `territories` | `42`          | Whole numbers from 12–48                            |
-| `continents`  | `6`           | Whole numbers from 2–8, never more than territories |
-| `players`     | `4`           | Whole numbers from 2–6                              |
-| `assignment`  | `random`      | `random` or `player-draft`                          |
-| `logo`        | `b`           | `a` or `b`                                          |
+| Parameter     | Default                   | Valid values                                        |
+| ------------- | ------------------------- | --------------------------------------------------- |
+| `v`           | `1`                       | `1`                                                 |
+| `seed`        | generated on a fresh root | Any non-empty string                                |
+| `territories` | `42`                      | Whole numbers from 12–48                            |
+| `continents`  | `6`                       | Whole numbers from 2–8, never more than territories |
+| `players`     | `4`                       | Whole numbers from 2–6                              |
+| `assignment`  | `random`                  | `random` or `player-draft`                          |
+| `logo`        | `b`                       | `a` or `b`                                          |
 
 Example:
 
@@ -141,15 +142,19 @@ Example:
 http://localhost:5173/?v=1&seed=atlas-prime&territories=42&continents=6&players=4&assignment=random&logo=b
 ```
 
-Missing parameters use defaults. Malformed counts fall back or clamp to supported ranges and show a concise setup warning; an unsupported `v` falls back to the complete default setup. Serialization has a stable parameter order. The current `logo` value and unknown query parameters are preserved when applying or randomizing a setup.
+On a normal root launch with no supported setup parameters, Worldseed creates a readable slug such as `amber-meridian-482`, generates that neutral world once, and replaces the current URL with its complete setup. Refresh therefore reconstructs the same world. An explicit seed or supported shared setup URL takes precedence. Fixed seeds such as `atlas-prime` and `visual-review-atlas` remain test/demo fixtures, not the production root default. A requested local-save resume reconstructs the saved seed and is never replaced by fresh-launch naming.
 
-Generate / apply and Random seed create only a new deterministic `PlanetDefinition`, update the URL with `history.pushState`, and enter a neutral preview without calculating ownership or starting Turn 1. Browser back and forward navigation rebuilds the selected neutral world. Assignment variants, player profiles, draft picks, saves, and active turns never enter the URL.
+Missing parameters in an otherwise supported setup URL use defaults. Malformed counts fall back or clamp to supported ranges and show a concise setup warning; an unsupported `v` falls back to the complete default setup. Serialization has a stable parameter order. The current `logo` value and unknown query parameters are preserved when applying or generating a setup.
+
+**Generate World** creates a new curated readable seed, updates the seed field and URL with `history.pushState`, rebuilds one neutral `PlanetDefinition`, updates the globe and minimap, and remains on world selection without calculating ownership or starting Turn 1. Type a custom seed and press Enter to apply that deterministic seed and the visible geography counts while staying in the same neutral preview. **Start Game** is the only opening action that accepts the displayed world and reveals player profiles and assignment. Browser back and forward navigation rebuilds the selected neutral world. Assignment results, player profiles, draft picks, saves, and active turns never enter the URL.
+
+Readable naming is independent of geography generation: a curated descriptor, curated landmark, and short numeric suffix become the canonical seed passed to the existing deterministic generator. Custom typed seeds remain supported. A future version could separate a display name from its canonical seed, but no second field or persistence concept exists today.
 
 ## World setup, pregame, and match flow
 
 `WorldSetup` contains the versioned URL parameters listed above, including the assignment-strategy choice. `PlanetDefinition` remains immutable geography and topology; generated territories are neutral (`ownerId: null`, zero armies). A discriminated `MatchSetup` contains stable player IDs, names, palette colors, seat order, strategy, and one of three setup phases: `neutral-preview`, `assignment-in-progress`, or `ready`. Only `ready` contains a complete `StartingPosition`. `MatchState` is nullable before play and is created only from a ready setup; it contains mutable turns, ownership, armies, selections, pending captures, deterministic combat sequence, elimination, victory, and events. Camera, dialogs, hover, and display preferences remain view state.
 
-Generating a world enters pregame with geographical/continent colors, no army markers, no starting-balance claim, and no playable match. Player names are normalized before assignment and blank or duplicate names are blocked. Colors come from six named, high-contrast choices and cannot be duplicated. The table then explicitly begins either random assignment or a player draft. A ready setup must be explicitly started before the first handoff. Gameplay commands are rejected until the application is in `playing` with a real match.
+Generating a world remains in world selection with geographical/continent colors, no army markers, no starting-balance claim, and no playable match. Editing seed or count fields does not mutate the displayed world until the user presses Enter in the seed field or clicks Generate World for a new readable seed. Start Game opens match setup, where player count, names, colors, and assignment mode are configured. Player names are normalized before assignment and blank or duplicate names are blocked. Colors come from six named, high-contrast choices and cannot be duplicated. The table then explicitly begins either random assignment or a player draft. A ready setup must be explicitly started with Begin Match before the first handoff. Gameplay commands are rejected until the application is in `playing` with a real match.
 
 Starting ownership evaluates 32 deterministic candidates derived from the world seed, generator version, stable player IDs, ownership variant, and candidate index. The default `distributed` strategy uses shuffled round-robin placement followed by bounded, count-preserving local swaps; it deliberately targets several useful ownership regions instead of growing one empire per player. Hard-invalid candidates are rejected before score comparison, and a failed bounded search reports its leading blocking conditions without changing the world seed.
 
