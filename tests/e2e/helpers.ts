@@ -3,6 +3,10 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 export type Scenario =
   | 'world-setup'
   | 'pregame'
+  | 'pregame-poor'
+  | 'pregame-invalid'
+  | 'pregame-expanded'
+  | 'pregame-rerolled'
   | 'handoff'
   | 'reinforcement'
   | 'attack-source'

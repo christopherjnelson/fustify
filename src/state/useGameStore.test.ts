@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useGameStore } from './useGameStore';
 
 const initialState = useGameStore.getState();
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   useGameStore.setState(initialState, true);
 });
 
@@ -80,6 +81,74 @@ describe('setup and match store integration', () => {
     expect(next.planet).toBe(planet);
     expect(next.matchSetup.players).toEqual(players);
     expect(next.matchSetup.startingPosition.territories).not.toEqual(previous);
+  });
+
+  it('blocks hard-invalid layouts with their specific reasons', () => {
+    const state = useGameStore.getState();
+    useGameStore.setState({
+      applicationMode: 'pregame',
+      matchSetup: {
+        ...state.matchSetup,
+        startingPosition: {
+          ...state.matchSetup.startingPosition,
+          analysis: {
+            ...state.matchSetup.startingPosition.analysis,
+            hardFailure: true,
+            hardFailureReasons: [
+              'Crimson League begins with all of Golden March.',
+            ],
+          },
+        },
+      },
+    });
+    useGameStore.getState().startMatch();
+    expect(useGameStore.getState().applicationMode).toBe('pregame');
+    expect(useGameStore.getState().playerSetupErrors).toContain(
+      'Crimson League begins with all of Golden March.',
+    );
+  });
+
+  it('requires confirmation for Poor valid layouts', () => {
+    const confirm = vi
+      .fn()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    vi.stubGlobal('window', { confirm });
+    const state = useGameStore.getState();
+    useGameStore.setState({
+      applicationMode: 'pregame',
+      matchSetup: {
+        ...state.matchSetup,
+        startingPosition: {
+          ...state.matchSetup.startingPosition,
+          analysis: {
+            ...state.matchSetup.startingPosition.analysis,
+            overallScore: 40,
+            rating: 'poor',
+            hardFailure: false,
+            hardFailureReasons: [],
+            warnings: ['Azure Pact has one sea-route endpoint.'],
+          },
+        },
+      },
+    });
+    useGameStore.getState().startMatch();
+    expect(useGameStore.getState().applicationMode).toBe('pregame');
+    useGameStore.getState().startMatch();
+    expect(useGameStore.getState().applicationMode).toBe('handoff');
+    expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
+  it('creates a rerolled rematch with the refined setup analysis', () => {
+    const before = useGameStore.getState().matchSetup;
+    useGameStore.getState().rematchNewOwnership();
+    const after = useGameStore.getState();
+    expect(after.applicationMode).toBe('pregame');
+    expect(after.matchSetup.ownershipVariant).toBe(before.ownershipVariant + 1);
+    expect(after.matchSetup.startingPosition.analysis.hardFailure).toBe(false);
+    expect(after.matchSetup.startingPosition.analysis.breakdown).toHaveProperty(
+      'connectivityDistribution',
+    );
   });
 
   it('requests focus for a territory regardless of its hemisphere', () => {

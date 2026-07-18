@@ -1,10 +1,14 @@
 import { z } from 'zod';
 import type { ApplicationMode } from '../appFlow';
 import type { MatchState } from '../game/types';
+import { generatePlanet } from '../generation/generatePlanet';
 import type { WorldSetup } from '../setup/worldSetup';
-import type { MatchSetup } from '../setup/startingPositions';
+import {
+  analyzeStartingPosition,
+  type MatchSetup,
+} from '../setup/startingPositions';
 
-export const SAVE_SCHEMA_VERSION = 1;
+export const SAVE_SCHEMA_VERSION = 2;
 
 export interface LocalMatchSave {
   schemaVersion: number;
@@ -76,6 +80,16 @@ const matchSetupSchema = z.object({
       hardFailureReasons: z.array(z.string()),
       players: z.array(balancePlayerSchema),
     }),
+  }),
+});
+const legacyMatchSetupSchema = z.object({
+  players: z.array(playerSchema).min(2).max(6),
+  ownershipVariant: z.number().int().nonnegative(),
+  startingPosition: z.object({
+    variant: z.number().int().nonnegative(),
+    candidateIndex: z.number().int().nonnegative(),
+    territories: z.record(z.string(), territoryStateSchema),
+    analysis: z.unknown().optional(),
   }),
 });
 const worldSetupSchema = z.object({
@@ -162,8 +176,11 @@ const currentSaveSchema = z.object({
   applicationMode: z.enum(['handoff', 'playing', 'game-over']),
 });
 
-function migrateVersionZero(value: Record<string, unknown>): unknown {
-  return {
+function migrateLegacySave(
+  value: Record<string, unknown>,
+  version: 0 | 1,
+): unknown {
+  const migrated: Record<string, unknown> = {
     ...value,
     schemaVersion: SAVE_SCHEMA_VERSION,
     savedAt:
@@ -171,8 +188,28 @@ function migrateVersionZero(value: Record<string, unknown>): unknown {
         ? value.savedAt
         : new Date(0).toISOString(),
     applicationMode:
-      value.applicationMode === 'game-over' ? 'game-over' : 'handoff',
+      version === 0
+        ? value.applicationMode === 'game-over'
+          ? 'game-over'
+          : 'handoff'
+        : value.applicationMode,
   };
+  const worldSetup = worldSetupSchema.safeParse(value.worldSetup);
+  const matchSetup = legacyMatchSetupSchema.safeParse(value.matchSetup);
+  if (!worldSetup.success || !matchSetup.success) return migrated;
+  const planet = generatePlanet(worldSetup.data.seed, worldSetup.data);
+  migrated.matchSetup = {
+    ...matchSetup.data,
+    startingPosition: {
+      ...matchSetup.data.startingPosition,
+      analysis: analyzeStartingPosition(
+        planet,
+        matchSetup.data.players,
+        matchSetup.data.startingPosition.territories,
+      ),
+    },
+  };
+  return migrated;
 }
 
 export function parseLocalMatchSave(serialized: string): SaveParseResult {
@@ -192,12 +229,17 @@ export function parseLocalMatchSave(serialized: string): SaveParseResult {
   if (version > SAVE_SCHEMA_VERSION) {
     return { ok: false, error: `Save version ${version} is not supported.` };
   }
-  const migrated = version === 0;
-  if (version < 0 || (version !== 0 && version !== SAVE_SCHEMA_VERSION)) {
+  const migrated = version === 0 || version === 1;
+  if (
+    version < 0 ||
+    (version !== 0 && version !== 1 && version !== SAVE_SCHEMA_VERSION)
+  ) {
     return { ok: false, error: `Save version ${version} is not supported.` };
   }
   const parsed = currentSaveSchema.safeParse(
-    migrated ? migrateVersionZero(value as Record<string, unknown>) : value,
+    migrated
+      ? migrateLegacySave(value as Record<string, unknown>, version as 0 | 1)
+      : value,
   );
   if (!parsed.success) {
     return { ok: false, error: 'The local save is malformed or incomplete.' };

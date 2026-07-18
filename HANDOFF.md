@@ -36,9 +36,9 @@ Setup URLs never contain an active match. A local save and URL setup may coexist
 
 ## Starting-position rules
 
-The candidate seed includes world seed, generator version, stable player IDs, ownership variant, and candidate index. Each valid candidate owns every territory exactly once, gives every territory at least one army, keeps territory totals within one, and keeps equal army totals. A complete bonus-4-or-greater continent is hard-invalid.
+The candidate seed includes world seed, generator version, stable player IDs, ownership variant, and candidate index. Shuffled round-robin placement plus bounded count-preserving swaps produces several local ownership regions without growing a prebuilt empire or falling back to a checkerboard. Each valid candidate owns every territory exactly once, gives every territory at least one army, keeps territory totals within one, keeps equal army totals, and mixes every continent that has at least two territories. A singleton continent emits an explicit impossibility warning instead of invalidating the world.
 
-The score penalizes territory and army spread, excess components, borders, sea-route endpoints, articulation/gateway disparity, average degree, landmass spread, isolated territories, and complete continents. Ratings are Excellent 90+, Good 75+, Uneven 55+, and Poor below 55. The scoring is deliberately heuristic.
+The serialized score contains territory parity, army parity, continent fairness, connectivity distribution, geographic spread, border exposure, sea-route access, and gateway access categories. The documented weights are 16/12/18/18/10/10/8/8 percent. Hard-failure reasons remain separate; Poor but valid layouts require confirmation. Ratings are Excellent 90+, Good 75+, Uneven 55+, and Poor below 55. The scoring is deliberately heuristic.
 
 Equal starting-army totals are 40/35/30/25/20 for 2/3/4/5/6 players. One army is assigned to every owned territory before deterministic distribution of the remainder.
 

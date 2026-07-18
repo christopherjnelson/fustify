@@ -169,27 +169,56 @@ export function PregamePanel() {
             rejected before score comparison.
           </p>
           <dl>
-            <div><dt>Territory parity</dt><dd>{analysis.breakdown.territoryParity}</dd></div>
-            <div><dt>Army parity</dt><dd>{analysis.breakdown.armyParity}</dd></div>
-            <div><dt>Continent fairness</dt><dd>{analysis.breakdown.continentFairness}</dd></div>
-            <div><dt>Ownership regions</dt><dd>{analysis.breakdown.connectivityDistribution}</dd></div>
-            <div><dt>World spread</dt><dd>{analysis.breakdown.geographicSpread}</dd></div>
-            <div><dt>Border exposure</dt><dd>{analysis.breakdown.borderExposure}</dd></div>
-            <div><dt>Sea-route access</dt><dd>{analysis.breakdown.seaRouteAccess}</dd></div>
-            <div><dt>Gateway access</dt><dd>{analysis.breakdown.gatewayAccess}</dd></div>
+            <div>
+              <dt>Territory parity</dt>
+              <dd>{analysis.breakdown.territoryParity}</dd>
+            </div>
+            <div>
+              <dt>Army parity</dt>
+              <dd>{analysis.breakdown.armyParity}</dd>
+            </div>
+            <div>
+              <dt>Continent fairness</dt>
+              <dd>{analysis.breakdown.continentFairness}</dd>
+            </div>
+            <div>
+              <dt>Ownership regions</dt>
+              <dd>{analysis.breakdown.connectivityDistribution}</dd>
+            </div>
+            <div>
+              <dt>World spread</dt>
+              <dd>{analysis.breakdown.geographicSpread}</dd>
+            </div>
+            <div>
+              <dt>Border exposure</dt>
+              <dd>{analysis.breakdown.borderExposure}</dd>
+            </div>
+            <div>
+              <dt>Sea-route access</dt>
+              <dd>{analysis.breakdown.seaRouteAccess}</dd>
+            </div>
+            <div>
+              <dt>Gateway access</dt>
+              <dd>{analysis.breakdown.gatewayAccess}</dd>
+            </div>
           </dl>
           <div className="player-balance-details">
-            {matchSetup.players.slice().sort((a, b) => a.seatIndex - b.seatIndex).map((player) => {
-              const metric = metricByPlayer.get(player.id)!;
-              return (
-                <p key={player.id}>
-                  <strong>{player.name}</strong>: {metric.connectedComponentCount} regions,
-                  largest {metric.largestComponentSize}; {Math.round(metric.maximumContinentShare * 100)}%
-                  max continent share; {metric.seaRouteEndpointCount} sea endpoints;{' '}
-                  {metric.borderTerritoryCount} border territories.
-                </p>
-              );
-            })}
+            {matchSetup.players
+              .slice()
+              .sort((a, b) => a.seatIndex - b.seatIndex)
+              .map((player) => {
+                const metric = metricByPlayer.get(player.id)!;
+                return (
+                  <p key={player.id}>
+                    <strong>{player.name}</strong>:{' '}
+                    {metric.connectedComponentCount} regions, largest{' '}
+                    {metric.largestComponentSize};{' '}
+                    {Math.round(metric.maximumContinentShare * 100)}% max
+                    continent share; {metric.seaRouteEndpointCount} sea
+                    endpoints; {metric.borderTerritoryCount} border territories.
+                  </p>
+                );
+              })}
           </div>
         </details>
       </section>

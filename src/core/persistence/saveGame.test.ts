@@ -40,6 +40,12 @@ describe('local match persistence', () => {
         match.remainingReinforcements,
       );
       expect(result.save.matchState.events).toEqual(match.events);
+      expect(result.save.matchSetup.ownershipVariant).toBe(
+        setup.ownershipVariant,
+      );
+      expect(result.save.matchSetup.startingPosition.analysis).toEqual(
+        setup.startingPosition.analysis,
+      );
     }
   });
 
@@ -75,6 +81,30 @@ describe('local match persistence', () => {
     const result = parseLocalMatchSave(JSON.stringify(old));
     expect(result.ok && result.migrated).toBe(true);
     if (result.ok) expect(result.save.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
+  });
+
+  it('migrates version-one saves by rebuilding the expanded analysis', () => {
+    const old = structuredClone(save);
+    old.schemaVersion = 1;
+    const legacyAnalysis = structuredClone(
+      old.matchSetup.startingPosition.analysis,
+    ) as unknown as Record<string, unknown>;
+    delete legacyAnalysis.breakdown;
+    delete legacyAnalysis.hardFailureReasons;
+    delete legacyAnalysis.players;
+    (
+      old.matchSetup.startingPosition as unknown as {
+        analysis: Record<string, unknown>;
+      }
+    ).analysis = legacyAnalysis;
+    const result = parseLocalMatchSave(JSON.stringify(old));
+    expect(result.ok && result.migrated).toBe(true);
+    if (result.ok) {
+      expect(result.save.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
+      expect(result.save.matchSetup.startingPosition.analysis).toEqual(
+        setup.startingPosition.analysis,
+      );
+    }
   });
 
   it('contains data only and no rendering objects', () => {

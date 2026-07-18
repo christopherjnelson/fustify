@@ -408,7 +408,9 @@ export const useGameStore = create<GameState>((set, get) => {
       }));
       const errors = validatePlayerConfigs(players);
       if (state.matchSetup.startingPosition.analysis.hardFailure) {
-        errors.push(...state.matchSetup.startingPosition.analysis.hardFailureReasons);
+        errors.push(
+          ...state.matchSetup.startingPosition.analysis.hardFailureReasons,
+        );
       }
       if (errors.length > 0) {
         set({ playerSetupErrors: errors });

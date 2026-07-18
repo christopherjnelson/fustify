@@ -14,6 +14,10 @@ import { useGameStore } from '../state/useGameStore';
 export type VisualScenario =
   | 'world-setup'
   | 'pregame'
+  | 'pregame-poor'
+  | 'pregame-invalid'
+  | 'pregame-expanded'
+  | 'pregame-rerolled'
   | 'handoff'
   | 'reinforcement'
   | 'attack-source'
@@ -203,13 +207,55 @@ function wonMatch(
 
 function applyScenario(scenario: VisualScenario) {
   window.localStorage.clear();
-  const { planet, matchSetup, match } = fixedWorld();
+  const fixed = fixedWorld();
+  const { planet } = fixed;
+  let matchSetup = fixed.matchSetup;
+  let match = fixed.match;
   let applicationMode: ApplicationMode = 'world-setup';
   let scenarioMatch = match;
   let eventLogOpen = false;
 
   if (scenario !== 'world-setup' && scenario !== 'saved-resume') {
-    applicationMode = scenario === 'pregame' ? 'pregame' : 'playing';
+    applicationMode = scenario.startsWith('pregame') ? 'pregame' : 'playing';
+  }
+  if (scenario === 'pregame-rerolled') {
+    matchSetup = createMatchSetup(planet, fixed.players, 1);
+    match = createMatch(planet, matchSetup);
+    scenarioMatch = match;
+  }
+  if (scenario === 'pregame-poor') {
+    matchSetup = {
+      ...matchSetup,
+      startingPosition: {
+        ...matchSetup.startingPosition,
+        analysis: {
+          ...matchSetup.startingPosition.analysis,
+          overallScore: 48,
+          rating: 'poor',
+          warnings: [
+            'Azure Pact has one sea-route endpoint; the table average is 3.0.',
+            'Verdant Order has three isolated territories.',
+          ],
+        },
+      },
+    };
+  }
+  if (scenario === 'pregame-invalid') {
+    matchSetup = {
+      ...matchSetup,
+      startingPosition: {
+        ...matchSetup.startingPosition,
+        analysis: {
+          ...matchSetup.startingPosition.analysis,
+          overallScore: 36,
+          rating: 'poor',
+          hardFailure: true,
+          hardFailureReasons: [
+            'Crimson League begins with all of Golden March.',
+          ],
+        },
+      },
+    };
   }
   if (scenario === 'handoff') applicationMode = 'handoff';
   if (scenario === 'reinforcement' || scenario === 'navigator') {
@@ -336,6 +382,8 @@ window.__WORLDSEED_VISUAL__ = {
     )!;
     const prepared: MatchState = {
       ...match,
+      selectedSourceTerritoryId: null,
+      selectedTargetTerritoryId: null,
       territories: {
         ...match.territories,
         [connection.fromTerritoryId]: {

@@ -61,6 +61,36 @@ test('world setup, player validation, ownership reroll, and match start flow', a
   );
 });
 
+test('pregame balance states enforce start behavior and expose details', async ({
+  page,
+}) => {
+  await openScenario(page, 'pregame-invalid');
+  await expect(page.getByText('Start blocked')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Start match' }),
+  ).toBeDisabled();
+
+  await openScenario(page, 'pregame-poor');
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('button', { name: 'Start match' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Choose your factions' }),
+  ).toBeVisible();
+
+  await openScenario(page, 'pregame-expanded');
+  await page.getByText('How is this scored?').click();
+  await expect(
+    page.getByText('Ownership regions', { exact: true }),
+  ).toBeVisible();
+  await page.locator('.pregame-panel').evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(page.getByRole('button', { name: 'Start match' })).toBeVisible();
+
+  await openScenario(page, 'pregame-rerolled');
+  await expect(page.getByText('Variant 1', { exact: true })).toBeVisible();
+});
+
 test('handoff traps focus and reveals the prepared turn', async ({ page }) => {
   await openScenario(page, 'handoff');
   const dialog = page.getByRole('dialog');
