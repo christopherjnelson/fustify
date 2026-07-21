@@ -1,0 +1,60 @@
+# Verification reports and local admin
+
+Fustify's developer-only verification pipeline is deliberately one-way:
+
+```text
+existing pnpm checks → validated JSON artifacts → read-only Vite API → /admin
+```
+
+Run `pnpm verify:report` for the practical standard profile (unit, typecheck,
+lint, build, formatting, diff consistency, quick generation, quick bots, and
+coverage). Run `pnpm verify:report:full` to add Playwright interaction and
+visual comparisons plus generation and bot stress suites. Independent checks
+continue after a failure. Extended thousands-game studies remain explicit
+`pnpm simulate:bots` commands and are never part of ordinary verification.
+
+Reports use schema version 1, validated at every write and read. The runner
+atomically replaces `.fustify/reports/latest.json` before and after each suite,
+then stores the completed or interrupted report at
+`.fustify/reports/history/<run-id>.json`. History defaults to 20 reports and can
+be changed with `FUSTIFY_REPORT_RETENTION`; generated reports are ignored by
+Git. Writes use a same-directory temporary file plus rename, so readers never
+observe partial JSON. Output is ANSI-stripped and bounded. Reports contain Git
+branch, full/short commit, subject, initial/final cleanliness, changed-file
+count, Node/platform identifiers, suite commands/results, coverage, adapted
+simulation summaries, and bounded diagnostics—never environment contents,
+remote URLs, arbitrary paths, or secrets.
+
+SIGINT and SIGTERM terminate the active child and preserve the run and suite as
+`interrupted`; nonzero commands are `failed`; exceptions are recorded rather
+than losing the partial run. Pending suites are never presented as passed. A
+running report older than 30 seconds is shown as potentially abandoned, without
+rewriting it.
+
+During `pnpm dev`, open `/admin`. The Vite server exposes only:
+
+- `GET /__fustify/admin/reports/latest`
+- `GET /__fustify/admin/reports?limit=20`
+- `GET /__fustify/admin/reports/:id`
+
+The API is development-only, GET-only, validates JSON, bounds history, accepts
+only filesystem-safe IDs, and resolves only fixed report locations. Corrupt and
+unsupported reports return safe errors. Production `/admin` explains that the
+local source is unavailable. React consumes an `AdminReportSource`, leaving a
+future authenticated remote implementation possible without coupling the UI to
+Vite or the filesystem.
+
+The page polls every 1.5 seconds only while visible and the latest run is active
+(or absent), refreshes on visibility return, prevents overlapping requests,
+preserves historical selection, and retains valid data through transient
+errors. It is read-only: there are no run, cancel, delete, upload, or shell
+controls.
+
+Bot data is adapted from the existing `BotSimulationReport`: requested and
+completed games, outcomes, wins, turn percentiles, caps, errors, invariants,
+runtime, throughput, and reproduction descriptors. The existing simulation
+contract and reducer remain authoritative.
+
+Future agents should run the appropriate report-enabled profile, keep `/admin`
+open, and include the resulting run ID in their handoff. Never claim that an
+interrupted, incomplete, pending, or skipped suite passed.

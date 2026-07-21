@@ -110,6 +110,8 @@ already serialize names, colors, or seats, so controller configuration remains
 with canonical local match setup rather than adding a competing partial profile
 format to URLs.
 
-Structured reports are suitable for a future local admin or analysis dashboard,
-but this milestone adds no dashboard, authentication, database, upload,
-tournament, networking, or remote provider.
+The local verification dashboard adapts this existing report contract rather
+than replacing it. It presents outcomes, win distribution, turn percentiles,
+caps, errors, invariant failures, throughput, and exact reproduction commands.
+See `VERIFICATION.md`. Authentication, upload, database storage, tournament,
+networking, and remote providers remain out of scope.

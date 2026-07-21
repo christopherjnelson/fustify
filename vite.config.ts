@@ -1,8 +1,9 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { fustifyAdminReportsPlugin } from './scripts/verification/viteAdminPlugin';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), fustifyAdminReportsPlugin()],
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],

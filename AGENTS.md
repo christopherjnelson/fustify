@@ -32,3 +32,12 @@ Rules changes must be checked against all three gameplay layers:
 Use `pnpm test:coverage` to inspect pure rules and persistence branches. Do not change gameplay semantics solely to increase a coverage percentage.
 
 Simulation failures must retain the reproduction block printed by the harness. Replay it with `SIMULATION_SEED`, `SIMULATION_TERRITORIES`, `SIMULATION_CONTINENTS`, `SIMULATION_PLAYERS`, `SIMULATION_VARIANT`, and `SIMULATION_POLICY` followed by `pnpm test:simulation:replay`. The simulator must continue to choose actions through the real legal-action helpers and apply them through `gameReducer`; do not introduce a parallel rules implementation.
+
+## Verification dashboard workflow
+
+Use `pnpm verify:report` for ordinary completed implementation work and
+`pnpm verify:report:full` when Playwright and stress suites are required. Keep
+the development-only `/admin` page open when useful and include the generated
+verification run ID in the handoff. Reports live under ignored
+`.fustify/reports/`; do not commit run history. Never claim that a suite passed
+when its structured report says pending, skipped, interrupted, or incomplete.

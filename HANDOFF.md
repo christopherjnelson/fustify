@@ -1,6 +1,18 @@
 # Fustify Handoff
 
+> This handoff now also includes a local verification dashboard milestone.
+> Canonical operational details are in `VERIFICATION.md`; the historical
+> controller context below remains valid.
+
 ## Current state
+
+Branch `feat/admin-verification-dashboard` starts at
+`b6c7c06c7f7d11ed8a2bc014f2cc7b2fc536ebac`. It adds schema-v1 atomic reports,
+standard/full report-enabled runners, a narrow development-only GET API, and a
+read-only reactive `/admin` viewer. It does not change gameplay, deterministic
+controllers, generation, URL behavior, or save schema v4. Future hosted data
+should implement the `AdminReportSource` boundary with authentication rather
+than exposing local filesystem behavior in production.
 
 Branch `feat/rebrand-fustify` started from `c2c9f8b` and renames the public
 product from its former Worldseed working title to Fustify. Runtime branding is

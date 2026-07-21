@@ -4,5 +4,6 @@ coverage
 test-results
 playwright-report
 artifacts
+.fustify/reports
 *.local
 .DS_Store

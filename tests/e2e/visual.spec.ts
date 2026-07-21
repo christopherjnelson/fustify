@@ -183,3 +183,36 @@ for (const scenario of scenarios) {
     });
   });
 }
+
+for (const fixture of [
+  'empty',
+  'running',
+  'passed',
+  'failed',
+  'interrupted',
+  'simulation-heavy',
+] as const) {
+  test(`visual review: admin-${fixture}`, async ({ page }, testInfo) => {
+    const source = fixture === 'simulation-heavy' ? 'passed' : fixture;
+    await page.goto(`/admin?admin-fixture=${source}`);
+    await page.addStyleTag({
+      content: ':root { font-family: Arial, sans-serif !important; }',
+    });
+    await expect(
+      page.getByRole('heading', { name: 'Verification Dashboard' }),
+    ).toBeVisible();
+    if (fixture === 'empty')
+      await expect(
+        page.getByRole('heading', { name: 'No report available' }),
+      ).toBeVisible();
+    else
+      await expect(page.getByRole('heading', { name: 'Suites' })).toBeVisible();
+    await expect(page.locator('.admin-shell')).toHaveScreenshot(
+      `admin-${fixture}-ui.png`,
+    );
+    await page.screenshot({
+      path: reviewPath(testInfo, `admin-${fixture}`),
+      fullPage: true,
+    });
+  });
+}

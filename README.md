@@ -20,6 +20,7 @@ The prototype currently provides:
 - A separate serializable match state containing live ownership, armies, phase, selections, events, elimination, and victory
 - An asynchronous controller boundary whose commands are revalidated by the authoritative reducer
 - DOM-free reproducible bot matches with invariants, caps, metrics, JSON reports, and focused traces
+- A reactive, read-only local `/admin` dashboard for structured verification reports
 - Reinforcement, repeated attacks, deterministic dice combat, mandatory post-capture movement, one connected-path fortification, and turn advancement
 - Phase-aware globe selection and numbered army markers with non-color source/target cues
 - Versioned setup URLs that reproduce the seed, territory count, continent count, player count, and assignment strategy
@@ -54,7 +55,17 @@ pnpm test:bot:stress
 pnpm lint
 pnpm build
 pnpm format:check
+pnpm verify:report
+pnpm verify:report:full
 ```
+
+The report-enabled commands incrementally write ignored, validated schema-v1
+artifacts under `.fustify/reports/`. While `pnpm dev` is running, open
+`http://localhost:5173/admin` to inspect current progress, recent runs,
+coverage, simulations, failures, and reproduction commands. The filesystem API
+exists only in the local development server and is read-only. See
+[VERIFICATION.md](./VERIFICATION.md) for profiles, retention, interruption and
+security behavior.
 
 ## Playwright visual inspection
 
