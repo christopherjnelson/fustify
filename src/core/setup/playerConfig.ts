@@ -1,4 +1,5 @@
 import { PLAYER_PALETTE } from '../generation/constants';
+import { BRAND } from '../../branding';
 
 export type PlayerControllerType = 'local-human' | 'heuristic-bot';
 
@@ -70,7 +71,7 @@ export function validatePlayerConfigs(players: LocalPlayerConfig[]): string[] {
     errors.push('Player colors must be unique.');
   }
   if (colors.some((id) => !PLAYER_COLORS.some((color) => color.id === id))) {
-    errors.push('Choose a color from the Worldseed palette.');
+    errors.push(`Choose a color from the ${BRAND.productName} palette.`);
   }
   const seats = players.map((player) => player.seatIndex).sort((a, b) => a - b);
   if (seats.some((seat, index) => seat !== index)) {

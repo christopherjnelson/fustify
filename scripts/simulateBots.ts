@@ -6,6 +6,7 @@ import {
   runHeadlessMatch,
   type ReproductionDescriptor,
 } from '../src/core/simulation/botMatch';
+import { BRAND } from '../src/branding';
 
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
@@ -59,12 +60,12 @@ if (reproductionJson) {
   await mkdir(artifactDirectory, { recursive: true });
   const outputPath = resolve(
     artifactDirectory,
-    `${report.runId.replaceAll(/[^a-zA-Z0-9._-]/g, '-')}.json`,
+    `${BRAND.reportFilenamePrefix}-${report.runId.replaceAll(/[^a-zA-Z0-9._-]/g, '-')}.json`,
   );
   await writeFile(outputPath, `${JSON.stringify(output, null, 2)}\n`, 'utf8');
   process.stdout.write(
     [
-      `Bot simulation: ${report.gamesCompleted}/${report.gamesRequested} games`,
+      `${BRAND.productName} bot simulation: ${report.gamesCompleted}/${report.gamesRequested} games`,
       `Outcomes: ${JSON.stringify(report.outcomes)}`,
       `Average turns: ${report.averageTurns.toFixed(1)}; p95 ${report.percentileTurns.p95}`,
       `Runtime: ${(report.runtimeMs / 1_000).toFixed(2)}s; ${report.gamesPerSecond.toFixed(2)} games/s`,

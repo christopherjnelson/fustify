@@ -9,6 +9,7 @@ import {
 import { commandFingerprint } from '../core/controllers/observation';
 import type { GameCommand } from '../core/controllers/types';
 import { useGameStore } from '../state/useGameStore';
+import { BRAND } from '../branding';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -160,7 +161,7 @@ export function useBotTurnRunner() {
         }
       } catch (error) {
         const fallback = deterministicFallback(legalActions);
-        console.error('Worldseed controller failure', {
+        console.error(`${BRAND.productName} controller failure`, {
           matchId: match.matchId,
           turnNumber: match.turnNumber,
           phase: match.phase,

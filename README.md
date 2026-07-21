@@ -1,8 +1,8 @@
-# Worldseed
+# Fustify
 
 **Generate a world. Conquer it.**
 
-A browser-based solo and local hot-seat playtest for a voxel-styled planetary strategy game. Worldseed separates deterministic world generation, editable player/controller configuration, and the mutable Risk-style match on the interactive globe. It is not a secure multiplayer implementation and has no backend or online persistence.
+A browser-based solo and local hot-seat playtest for a voxel-styled planetary strategy game. Fustify separates deterministic world generation, editable player/controller configuration, and the mutable Risk-style match on the interactive globe. It is not a secure multiplayer implementation and has no backend or online persistence.
 
 The prototype currently provides:
 
@@ -58,7 +58,7 @@ pnpm format:check
 
 ## Playwright visual inspection
 
-Worldseed includes a Chromium-based visual and interaction harness for repeatable inspection of the real Vite application. Playwright starts Vite automatically on deterministic port `4173` and runs three projects: desktop at 1920×1080, laptop at 1366×768, and mobile at 390×844.
+Fustify includes a Chromium-based visual and interaction harness for repeatable inspection of the real Vite application. Playwright starts Vite automatically on deterministic port `4173` and runs three projects: desktop at 1920×1080, laptop at 1366×768, and mobile at 390×844.
 
 Install the matching browser after installing dependencies:
 
@@ -92,7 +92,7 @@ The simulator validates the runtime match schema and invariants after every tran
 
 The fast matrix runs ten deterministic setup combinations across player counts 2–6 with both policies. The local stress matrix runs 135 world/setup combinations—territory counts 12, 18, and 24; continent counts 2, 3, and 4; player counts 2–6; and three ownership variants—with both policies and a 750-action bound per match. Some small generated worlds cannot satisfy the bounded balanced-connected ownership or starting-position candidate search for their first seed; simulation setup retries a documented deterministic seed suffix sequence and reports the actual successful world seed.
 
-Complete heuristic-bot matches are a separate layer. `pnpm test:bot` runs focused controller and quick match checks; `pnpm test:bot:stress` runs a moderate all-bot matrix. `pnpm simulate:bots -- --games N` runs an explicit sequential extended batch and writes a structured report under ignored `artifacts/bot-simulations/`. Exact descriptors replay with `--reproduce '<json>' --trace`. See [CONTROLLERS.md](./CONTROLLERS.md) for the command contract, heuristic, RNG boundaries, invariants, metrics, cap semantics, and report schema.
+Complete heuristic-bot matches are a separate layer. `pnpm test:bot` runs focused controller and quick match checks; `pnpm test:bot:stress` runs a moderate all-bot matrix. `pnpm simulate:bots -- --games N` runs an explicit sequential extended batch and writes a Fustify-prefixed structured report with versioned project metadata under ignored `artifacts/bot-simulations/`. Exact descriptors replay with `--reproduce '<json>' --trace`. See [CONTROLLERS.md](./CONTROLLERS.md) for the command contract, heuristic, RNG boundaries, invariants, metrics, cap semantics, and report schema.
 
 Every failure includes the actual world seed, generator version, territory and continent counts, player count, ownership variant, policy, turn, phase, last action, recent actions, and recent events. Replay a reported failure with:
 
@@ -112,21 +112,9 @@ The current focused report is 92% statements, 85.76% branches, 100% functions, a
 
 In the current deterministic matrices, the smoke suite reached 7 victories in 20 bounded runs and exercised 7,767 state transitions. The stress suite reached 124 victories in 270 bounded runs and exercised 146,287 transitions; the remaining runs stopped cleanly at their configured action limit rather than failing an invariant.
 
-## Branding and logo variants
+## Branding
 
-The board-level Worldseed logo is intentionally separate from the match HUD so the HUD remains gameplay-focused. Two transparent PNG lockups are retained for visual A/B testing:
-
-- `public/assets/worldseed-logo-a.png` — the original globe-and-network lockup
-- `public/assets/worldseed-logo-b.png` — the glitch/data-fragment lockup and current default
-
-Select a variant without rebuilding by adding a query parameter:
-
-```text
-http://localhost:5173/?logo=a
-http://localhost:5173/?logo=b
-```
-
-Missing or unsupported values fall back to variant B. Both assets are trimmed RGBA images intended to sit directly over the dark gameboard without a surrounding panel.
+Runtime product metadata is centralized in `src/branding.ts`. The board-level Fustify wordmark is intentionally separate from the match HUD so the HUD remains gameplay-focused. The former working-title PNG explorations remain in `public/assets/` as historical design assets but are no longer loaded by the application.
 
 ## Shareable world setup URLs
 
@@ -140,17 +128,16 @@ World setup is plain serializable data kept separate from both immutable `Planet
 | `continents`  | `6`                       | Whole numbers from 2–8, never more than territories |
 | `players`     | `4`                       | Whole numbers from 2–6                              |
 | `assignment`  | `random`                  | `random` or `player-draft`                          |
-| `logo`        | `b`                       | `a` or `b`                                          |
 
 Example:
 
 ```text
-http://localhost:5173/?v=1&seed=atlas-prime&territories=42&continents=6&players=4&assignment=random&logo=b
+http://localhost:5173/?v=1&seed=atlas-prime&territories=42&continents=6&players=4&assignment=random
 ```
 
-On a normal root launch with no supported setup parameters, Worldseed creates a readable slug such as `amber-meridian-482`, generates that neutral world once, and replaces the current URL with its complete setup. Refresh therefore reconstructs the same world. An explicit seed or supported shared setup URL takes precedence. Fixed seeds such as `atlas-prime` and `visual-review-atlas` remain test/demo fixtures, not the production root default. A requested local-save resume reconstructs the saved seed and is never replaced by fresh-launch naming.
+On a normal root launch with no supported setup parameters, Fustify creates a readable slug such as `amber-meridian-482`, generates that neutral world once, and replaces the current URL with its complete setup. Refresh therefore reconstructs the same world. An explicit seed or supported shared setup URL takes precedence. Fixed seeds such as `atlas-prime` and `visual-review-atlas` remain test/demo fixtures, not the production root default. A requested local-save resume reconstructs the saved seed and is never replaced by fresh-launch naming.
 
-Missing parameters in an otherwise supported setup URL use defaults. Malformed counts fall back or clamp to supported ranges and show a concise setup warning; an unsupported `v` falls back to the complete default setup. Serialization has a stable parameter order. The current `logo` value and unknown query parameters are preserved when applying or generating a setup.
+Missing parameters in an otherwise supported setup URL use defaults. Malformed counts fall back or clamp to supported ranges and show a concise setup warning; an unsupported `v` falls back to the complete default setup. Serialization has a stable parameter order. Unknown query parameters, including the historical `logo` selector, are preserved when applying or generating a setup.
 
 **Generate World** creates a new curated readable seed, updates the seed field and URL with `history.pushState`, rebuilds one neutral `PlanetDefinition`, updates the globe and minimap, and remains on world selection without calculating ownership or starting Turn 1. Type a custom seed and press Enter to apply that deterministic seed and the visible geography counts while staying in the same neutral preview. **Start Game** is the only opening action that accepts the displayed world and reveals player profiles and assignment. Browser back and forward navigation rebuilds the selected neutral world. Assignment results, player profiles, draft picks, saves, and active turns never enter the URL.
 
@@ -176,7 +163,7 @@ Starting a match opens a mandatory full-screen handoff before Turn 1. End Turn p
 
 ## Local save and resume
 
-Worldseed uses one browser-local `localStorage` slot (`worldseed.local-match`). Match start and every semantic rules transition are autosaved; a manual Save match action is also available. Camera, minimap projection geometry, hover, animation, live Three.js objects, and open utility dialogs are never saved.
+Fustify writes browser-local saves to `fustify.local-match`. Restore checks this key first, then validates and migrates the legacy `worldseed.local-match` value through the same v0–v4 pipeline. A valid legacy value is copied to the new key without deleting the original; invalid legacy data is never copied or overwritten. Match start and every semantic rules transition are autosaved; a manual Save match action is also available. Camera, minimap projection geometry, hover, animation, live Three.js objects, and open utility dialogs are never saved.
 
 Save schema version 4 stores the world setup and generator version, assignment mode, explicit setup phase, player profiles including controller type, ownership variant, optional in-progress draft owner map and pick index, optional completed starting position, nullable match state, application mode, and timestamp. The Save setup control supports neutral, drafting, and ready states; match transitions continue to autosave. Parsed storage is runtime-validated with Zod. Versions 0–2 migrate to random/ready setup, and versions 0–3 default historical seats to `local-human`. Every load or migration reconstructs the planet and rebuilds balance analysis from ownership rather than trusting serialized derived metrics. Transient bot execution, pacing, promises, highlights, and reports are never persisted.
 

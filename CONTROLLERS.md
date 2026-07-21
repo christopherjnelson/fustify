@@ -1,6 +1,6 @@
 # Controllers and bot simulation
 
-Worldseed treats a player seat and the controller operating it as separate
+Fustify treats a player seat and the controller operating it as separate
 configuration. A `LocalPlayerConfig` owns the stable player ID, display name,
 palette color, seat order, and `controllerType`. The supported public controller
 types are `local-human` and `heuristic-bot`; names and colors never imply control.
@@ -90,7 +90,8 @@ pnpm simulate:bots -- --games 500 --territories 18 --continents 3 --players 3
 pnpm simulate:bots -- --reproduce '<descriptor-json>' --trace
 ```
 
-The CLI writes JSON beneath ignored `artifacts/bot-simulations/`. Reports include
+The CLI writes Fustify-prefixed JSON files beneath ignored
+`artifacts/bot-simulations/`. Reports include versioned Fustify project metadata,
 run ID, timestamp, Git commit when available, configuration, completed games,
 outcomes, win rates, average and percentile turns, invariant failures,
 reproduction descriptors, runtime, throughput, and controller version. Normal

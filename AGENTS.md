@@ -1,4 +1,4 @@
-# Worldseed agent guidance
+# Fustify agent guidance
 
 ## Required visual workflow
 

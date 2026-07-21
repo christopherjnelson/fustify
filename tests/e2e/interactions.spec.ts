@@ -1,6 +1,19 @@
 import { expect, test } from '@playwright/test';
 import { openScenario, stateSnapshot } from './helpers';
 
+test('shows the Fustify application brand and browser title', async ({
+  page,
+}) => {
+  await page.goto('/?v=1&seed=brand-check&territories=18&continents=3');
+  await expect(page).toHaveTitle('Fustify — Procedural Globe Strategy');
+  await expect(page.locator('main')).toHaveAccessibleName(
+    'Fustify — Procedural Globe Strategy',
+  );
+  await expect(page.getByLabel('Fustify', { exact: true })).toContainText(
+    'Fustify',
+  );
+});
+
 test('fresh root launch creates one readable URL-stable neutral world', async ({
   page,
 }) => {
@@ -823,6 +836,31 @@ for (const scenario of [
     expect((await stateSnapshot(page)).phase).toBe(expectedPhase);
   });
 }
+
+test('restores a validated save from the legacy Worldseed storage key', async ({
+  page,
+}) => {
+  await openScenario(page, 'reinforcement');
+  const expectedPhase = (await stateSnapshot(page)).phase;
+  await page.evaluate(() => {
+    window.__WORLDSEED_VISUAL__!.save();
+    const saved = window.localStorage.getItem('fustify.local-match');
+    if (saved === null) throw new Error('Expected a Fustify local save.');
+    window.localStorage.setItem('worldseed.local-match', saved);
+    window.localStorage.removeItem('fustify.local-match');
+  });
+  await page.reload();
+  await page.waitForFunction(() => window.__WORLDSEED_VISUAL__ !== undefined);
+  await page.getByRole('button', { name: 'Resume saved session' }).click();
+  await page.getByRole('button', { name: /Begin turn/i }).click();
+  expect((await stateSnapshot(page)).phase).toBe(expectedPhase);
+  expect(
+    await page.evaluate(() => ({
+      current: window.localStorage.getItem('fustify.local-match') !== null,
+      legacy: window.localStorage.getItem('worldseed.local-match') !== null,
+    })),
+  ).toEqual({ current: true, legacy: true });
+});
 
 test('turn completion, next-player handoff, and both rematch modes retain intended setup', async ({
   page,

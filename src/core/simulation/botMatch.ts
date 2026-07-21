@@ -19,6 +19,7 @@ import {
   inspectMatchInvariants,
   type SimulationViolation,
 } from './matchInvariants';
+import { BRAND } from '../../branding';
 
 export type HeadlessOutcome =
   'victory' | 'stalemate' | 'turn-cap' | 'command-cap' | 'engine-error';
@@ -542,6 +543,11 @@ export async function runHeadlessMatch(
 }
 
 export interface BotSimulationReport {
+  project: {
+    reportSchemaVersion: 1;
+    productName: string;
+    packageSlug: string;
+  };
   runId: string;
   timestamp: string;
   controllerVersion: string;
@@ -610,6 +616,11 @@ export async function runBotSimulation(
       );
   });
   return {
+    project: {
+      reportSchemaVersion: 1,
+      productName: BRAND.productName,
+      packageSlug: BRAND.packageSlug,
+    },
     runId: `${seedPrefix}-${games}`,
     timestamp: new Date().toISOString(),
     controllerVersion: HEURISTIC_CONTROLLER_VERSION,

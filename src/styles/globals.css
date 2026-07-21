@@ -960,12 +960,26 @@ button:disabled {
   width: min(380px, calc(100vw - 500px));
   pointer-events: none;
   filter: drop-shadow(0 7px 14px rgba(0, 0, 0, 0.5));
+  display: grid;
+  justify-items: end;
+  color: #f4f7ff;
+  text-transform: uppercase;
 }
 
-.board-brand img {
-  display: block;
-  width: 100%;
-  height: auto;
+.board-brand-name {
+  font-size: clamp(1.9rem, 3vw, 3.25rem);
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  line-height: 0.9;
+  text-shadow: 0 0 18px rgba(73, 210, 255, 0.4);
+}
+
+.board-brand-tagline {
+  margin-top: 0.55rem;
+  color: #9ee8ff;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
 }
 
 .minimap-panel {

@@ -1,12 +1,14 @@
-# Codex Handoff
+# Fustify Handoff
 
 ## Current state
 
-Branch `feat/heuristic-controllers` started from `0a379c4` and now supports
-controller-independent play. Every seat retains stable identity, name, color,
-and turn order while independently selecting `local-human` or
-`heuristic-bot`. Existing local hot-seat defaults remain all-human; mixed and
-all-bot tables are supported.
+Branch `feat/rebrand-fustify` started from `c2c9f8b` and renames the public
+product from its former Worldseed working title to Fustify. Runtime branding is
+centralized in `src/branding.ts`; package, browser, accessible UI,
+documentation, persistence, and simulation-report metadata use the new name.
+Gameplay, generation, URL semantics, controller behavior, and save schema stay
+unchanged. Every seat retains stable identity, name, color, and turn order while
+independently selecting `local-human` or `heuristic-bot`.
 
 The deterministic `balanced-v1` bot plays through the same legal helpers and
 `gameReducer` as humans. Browser orchestration is asynchronous, executes one
@@ -78,6 +80,12 @@ Setup URLs continue describing geography and assignment only. They did not
 previously serialize player profiles, so controller configuration was not added
 as a partial competing profile format. Existing explicit URLs remain valid.
 
+New saves use `fustify.local-match`. Restore checks it first and falls back to
+the historical `worldseed.local-match` key. A legacy value is copied only after
+successful v0–v4 validation/migration, and the old value is retained. The
+development-only `__WORLDSEED_VISUAL__` bridge and world-seed source identifiers
+remain intentionally unchanged as internal compatibility names.
+
 ## Headless simulation
 
 Outcomes are `victory`, `stalemate`, `turn-cap`, `command-cap`, and
@@ -111,17 +119,20 @@ throughput. No dashboard, database, upload, or authentication was added.
 
 ## Verification completed
 
-- Unit: 158 passed, 3 intentionally gated/skipped across 16 files.
+- Unit: 162 passed, 3 intentionally gated/skipped across 17 files.
 - Coverage: 92.18% statements, 86.13% branches, 100% functions, 93.22% lines.
-- Playwright interaction: 96/96 across 1920×1080, 1366×768, and 390×844.
-- Playwright visual update: 105/105; final visual comparison: 105/105.
-- Manual visual review: all full-page captures reviewed as contact sheets, with
-  controller-specific full-size inspection at all three viewports.
+- Playwright interaction: 102/102 across 1920×1080, 1366×768, and 390×844.
+- Playwright visual comparison: 105/105; no baseline updates were required.
+- Manual visual review: all 105 full-page captures reviewed as desktop, laptop,
+  and mobile contact sheets; the wordmark remains unclipped and clear of panels,
+  modals, the minimap, and globe controls.
 - Existing quick simulation: 20 deterministic bounded runs passed.
 - Existing stress simulation: 270 deterministic bounded runs passed in
   285.65 seconds.
 - Bot quick suite: 9 passed, 1 stress test gated.
 - Bot stress: 30 all-bot matches plus focused tests passed in 19.56 seconds.
+- Focused deterministic replay: victory for player 1 after 29 turns and 271
+  commands, with zero invariant violations.
 - Extended final-code run: 250/250 victories, zero stalemates/caps/engine
   errors/invariant failures in 72.48 seconds (3.45 games/s); player 1 won 55.2%,
   player 2 44.8%; mean 25.688 turns, median 15, p95 87, p99 140.

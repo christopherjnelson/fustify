@@ -8,6 +8,7 @@ import { Minimap } from '../components/Minimap';
 import { ControlLegend } from '../components/ControlLegend';
 import { useGameStore } from '../state/useGameStore';
 import { useBotTurnRunner } from './useBotTurnRunner';
+import { BRAND } from '../branding';
 
 export function App() {
   useBotTurnRunner();
@@ -17,11 +18,11 @@ export function App() {
     window.addEventListener('popstate', loadSetupFromUrl);
     return () => window.removeEventListener('popstate', loadSetupFromUrl);
   }, [loadSetupFromUrl]);
-  const logoVariant =
-    new URLSearchParams(window.location.search).get('logo') === 'a' ? 'a' : 'b';
-
   return (
-    <main className={`app-shell mode-${mode}`}>
+    <main
+      className={`app-shell mode-${mode}`}
+      aria-label={`${BRAND.productName} — ${BRAND.shortDescription}`}
+    >
       <GlobeScene />
       <Minimap />
       <ControlLegend />
@@ -29,11 +30,9 @@ export function App() {
       {mode === 'pregame' && <PregamePanel />}
       {(mode === 'playing' || mode === 'game-over') && <TerritoryHud />}
       {mode === 'handoff' && <HandoffScreen />}
-      <div className="board-brand">
-        <img
-          src={`/assets/worldseed-logo-${logoVariant}.png`}
-          alt={`Worldseed logo variant ${logoVariant.toUpperCase()} — Generate a world. Conquer it.`}
-        />
+      <div className="board-brand" aria-label={BRAND.productName}>
+        <span className="board-brand-name">{BRAND.productName}</span>
+        <span className="board-brand-tagline">{BRAND.tagline}</span>
       </div>
     </main>
   );

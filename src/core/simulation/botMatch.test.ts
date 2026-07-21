@@ -61,6 +61,11 @@ describe('headless heuristic matches', () => {
         'bot-quick',
       );
       expect(report.gamesCompleted).toBe(3);
+      expect(report.project).toEqual({
+        reportSchemaVersion: 1,
+        productName: 'Fustify',
+        packageSlug: 'fustify',
+      });
       expect(report.outcomes['engine-error']).toBe(0);
       expect(report.results.every((result) => !('finalState' in result))).toBe(
         true,
