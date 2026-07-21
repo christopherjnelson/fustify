@@ -35,6 +35,7 @@ export interface HeadlessMatchOptions {
   maxCommands?: number;
   maxTurnsWithoutCapture?: number;
   trace?: boolean;
+  seatRotation?: number;
 }
 
 export interface ReproductionDescriptor {
@@ -50,6 +51,7 @@ export interface ReproductionDescriptor {
   maxTurns: number;
   maxCommands: number;
   maxTurnsWithoutCapture: number;
+  seatRotation?: number;
   failingTurn?: number;
   failingCommandIndex?: number;
 }
@@ -179,6 +181,7 @@ function reproduction(options: HeadlessMatchOptions): ReproductionDescriptor {
     maxCommands: options.maxCommands ?? DEFAULT_MAX_COMMANDS,
     maxTurnsWithoutCapture:
       options.maxTurnsWithoutCapture ?? DEFAULT_STALE_TURNS,
+    seatRotation: options.seatRotation,
   };
 }
 
@@ -230,12 +233,17 @@ export async function runHeadlessMatch(
 ): Promise<HeadlessMatchResult> {
   const startedAt = performance.now();
   const descriptor = reproduction(options);
-  const players = createDefaultPlayerConfigs(options.playerCount).map(
+  const configuredPlayers = createDefaultPlayerConfigs(options.playerCount).map(
     (player) => ({
       ...player,
       controllerType: 'heuristic-bot' as const,
     }),
   );
+  const rotation = (options.seatRotation ?? 0) % configuredPlayers.length;
+  const players = [
+    ...configuredPlayers.slice(rotation),
+    ...configuredPlayers.slice(0, rotation),
+  ];
   const emptyMetrics: MatchMetrics = {
     attacksAttempted: 0,
     territoriesCaptured: 0,

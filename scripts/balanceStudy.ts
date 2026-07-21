@@ -1,0 +1,330 @@
+import { execFileSync } from 'node:child_process';
+import { readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import {
+  BALANCE_STUDY_SCHEMA_VERSION,
+  type BalanceStudyReport,
+} from '../src/admin/balanceStudyContract';
+import {
+  runHeadlessMatch,
+  type ReproductionDescriptor,
+} from '../src/core/simulation/botMatch';
+import {
+  aggregateStudy,
+  BALANCE_PRESETS,
+  balanceStudyConfigSchema,
+  createStudyMatrix,
+  stableHash,
+  type BalancePreset,
+  type BalanceStudyConfig,
+  type CompletedStudyMatch,
+} from '../src/core/simulation/balanceStudy';
+import {
+  finalizeStudy,
+  readCheckpoint,
+  readStudy,
+  studyPaths,
+  writeStudyProgress,
+  type StudyCheckpoint,
+} from './balanceStudyStore';
+
+function value(name: string) {
+  const index = process.argv.indexOf(`--${name}`);
+  return index < 0 ? undefined : process.argv[index + 1];
+}
+function has(name: string) {
+  return process.argv.includes(`--${name}`);
+}
+function git(args: string[], fallback: string) {
+  try {
+    return execFileSync('git', args, { encoding: 'utf8' }).trim();
+  } catch {
+    return fallback;
+  }
+}
+function repository() {
+  return {
+    branch: git(['branch', '--show-current'], 'unknown'),
+    commit: git(['rev-parse', 'HEAD'], '0000000'),
+    worktreeCleanAtStart: git(['status', '--porcelain'], 'dirty') === '',
+  };
+}
+function estimateMs(total: number) {
+  return (total / 3) * 1_000;
+}
+function safeRunId(preset: string) {
+  return `balance-${new Date().toISOString().replaceAll(/[:.]/g, '-')}-${preset}`;
+}
+function elapsed(ms: number) {
+  const seconds = Math.round(ms / 1000);
+  return seconds < 60
+    ? `${seconds}s`
+    : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+async function loadConfig(): Promise<{
+  config: BalanceStudyConfig;
+  preset: string;
+}> {
+  const configPath = value('config');
+  if (configPath)
+    return {
+      config: balanceStudyConfigSchema.parse(
+        JSON.parse(await readFile(resolve(configPath), 'utf8')),
+      ),
+      preset: 'custom',
+    };
+  const preset = (value('preset') ?? 'quick') as BalancePreset;
+  if (!(preset in BALANCE_PRESETS))
+    throw new Error(
+      `Unknown preset ${preset}. Choose quick, standard, thorough, or exhaustive.`,
+    );
+  return { config: structuredClone(BALANCE_PRESETS[preset]), preset };
+}
+
+function planText(config: BalanceStudyConfig, preset: string) {
+  const matrix = createStudyMatrix(config);
+  const estimate = estimateMs(matrix.length);
+  return [
+    `Balance study plan (${preset})`,
+    `Configurations: ${config.configurations.length}`,
+    `Matches per configuration: ${config.matchesPerConfiguration}`,
+    `Total matches: ${matrix.length}`,
+    `Estimated runtime: about ${elapsed(estimate)} at the baseline 3 games/s (estimate only)`,
+    `Expected report path: ${studyPaths().history}/<run-id>.json`,
+    `Concurrency: 1 worker (deterministic sequential aggregation; --workers 1)`,
+    `Seeds: ${matrix[0]?.worldSeed ?? '—'} … ${matrix.at(-1)?.matchSeed ?? '—'}`,
+    `Checkpoint frequency: every ${config.checkpointEvery} matches`,
+    `Estimated disk use: about ${Math.ceil((matrix.length * 900) / 1024)} KiB while checkpointing`,
+  ].join('\n');
+}
+
+function compact(report: BalanceStudyReport) {
+  return {
+    runId: report.id,
+    commit: report.repository.commit,
+    preset: report.preset,
+    configuration: report.configLabel,
+    matchesCompleted: report.aggregate.matchesCompleted,
+    status: report.status,
+    outcomes: report.aggregate.outcomes,
+    seatWinRates: report.aggregate.seatSummaries.map(
+      ({ seat, samples, winRate, confidenceInterval95 }) => ({
+        seat,
+        samples,
+        winRate,
+        confidenceInterval95,
+      }),
+    ),
+    matchLength: report.aggregate.turns,
+    findings: {
+      warnings: report.findings.filter(
+        (item) => item.classification === 'warning',
+      ).length,
+      failures: report.findings.filter(
+        (item) => item.classification === 'failure',
+      ).length,
+    },
+    reproductions: report.reproductions,
+    reportPath: resolve(studyPaths().history, `${report.id}.json`),
+  };
+}
+
+async function inspectRun(id: string) {
+  const report = await readStudy(id);
+  const format = value('format') ?? 'summary';
+  if (format === 'json')
+    process.stdout.write(`${JSON.stringify(compact(report), null, 2)}\n`);
+  else if (format === 'csv') {
+    const header =
+      'configuration,group,players,territories,continents,completed,victories,stalemates,turn_caps,command_caps,engine_errors,mean_turns,p95_turns,games_per_second';
+    const rows = report.configurations.map((item) =>
+      [
+        item.id,
+        item.group,
+        item.playerCount,
+        item.territoryCount,
+        item.continentCount,
+        item.matchesCompleted,
+        item.outcomes.victory ?? 0,
+        item.outcomes.stalemate ?? 0,
+        item.outcomes['turn-cap'] ?? 0,
+        item.outcomes['command-cap'] ?? 0,
+        item.outcomes['engine-error'] ?? 0,
+        item.meanTurns,
+        item.p95Turns,
+        item.gamesPerSecond,
+      ].join(','),
+    );
+    process.stdout.write(`${[header, ...rows].join('\n')}\n`);
+  } else process.stdout.write(`${JSON.stringify(compact(report), null, 2)}\n`);
+  const exportPath = value('export');
+  if (exportPath)
+    await writeFile(
+      resolve(exportPath),
+      `${JSON.stringify(compact(report), null, 2)}\n`,
+      'utf8',
+    );
+}
+
+async function reproduce(raw: string) {
+  const descriptor = JSON.parse(raw) as ReproductionDescriptor;
+  const result = await runHeadlessMatch({
+    ...descriptor,
+    trace: has('verbose'),
+  });
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (result.outcome === 'engine-error') process.exitCode = 1;
+}
+
+async function execute(
+  config: BalanceStudyConfig,
+  preset: string,
+  resume?: StudyCheckpoint,
+) {
+  if (Number(value('workers') ?? '1') !== 1)
+    throw new Error(
+      'This version supports --workers 1 only; sequential throughput is retained for predictable desktop load and deterministic ordering.',
+    );
+  const matrix = createStudyMatrix(config);
+  const configHash = stableHash(config);
+  const matrixHash = stableHash(matrix);
+  const repo = repository();
+  const runId = resume?.runId ?? safeRunId(preset);
+  if (
+    resume &&
+    (resume.configHash !== configHash || resume.matrixHash !== matrixHash)
+  )
+    throw new Error('Checkpoint configuration or matrix is incompatible.');
+  const mismatch = !!resume && resume.commit !== repo.commit;
+  if (mismatch && !has('force'))
+    throw new Error(
+      `Checkpoint commit ${resume!.commit} differs from current ${repo.commit}. Re-run with --force to resume explicitly.`,
+    );
+  const startedAt = resume?.startedAt ?? new Date().toISOString();
+  const completed: CompletedStudyMatch[] = resume?.completed ?? [];
+  let runtimeMs = resume?.runtimeMs ?? 0;
+  let interrupted = false;
+  const interrupt = () => {
+    interrupted = true;
+  };
+  process.once('SIGINT', interrupt);
+  process.once('SIGTERM', interrupt);
+  const buildReport = (
+    status: BalanceStudyReport['status'],
+  ): BalanceStudyReport => {
+    const summary = aggregateStudy(
+      matrix,
+      completed,
+      runtimeMs,
+      config.warningThresholds,
+    );
+    const now = new Date().toISOString();
+    return {
+      schemaVersion: BALANCE_STUDY_SCHEMA_VERSION,
+      id: runId,
+      preset,
+      configLabel: config.label,
+      configHash,
+      matrixHash,
+      status,
+      startedAt,
+      updatedAt: now,
+      ...(status === 'completed' || status === 'failed'
+        ? { completedAt: now }
+        : {}),
+      processId: process.pid,
+      repository: { ...repo, resumeCommitMismatch: mismatch || undefined },
+      plan: {
+        configurations: config.configurations.length,
+        matchesPerConfiguration: config.matchesPerConfiguration,
+        totalMatches: matrix.length,
+        workers: 1,
+        checkpointEvery: config.checkpointEvery,
+        seedPrefix: config.seedPrefix,
+        estimatedRuntimeMs: estimateMs(matrix.length),
+        estimatedDiskBytes: matrix.length * 900,
+      },
+      ...summary,
+      checkpoint: {
+        completedMatchIndices: completed.map((item) => item.input.index),
+        lastWrittenAt: now,
+        resumable: status === 'running' || status === 'interrupted',
+      },
+    };
+  };
+  const checkpoint = (): StudyCheckpoint => ({
+    schemaVersion: 1,
+    runId,
+    preset: resume?.preset ?? preset,
+    config,
+    configHash,
+    matrixHash,
+    commit: resume?.commit ?? repo.commit,
+    startedAt,
+    runtimeMs,
+    completed,
+  });
+  await writeStudyProgress(buildReport('running'), checkpoint());
+  process.stdout.write(`Run ID: ${runId}\n${planText(config, preset)}\n`);
+  const completedIndices = new Set(completed.map((item) => item.input.index));
+  for (const input of matrix) {
+    if (completedIndices.has(input.index)) continue;
+    if (interrupted) break;
+    const started = performance.now();
+    const result = await runHeadlessMatch(input);
+    runtimeMs += performance.now() - started;
+    const { finalState, trace, ...stored } = result;
+    void finalState;
+    void trace;
+    completed.push({ input, result: stored });
+    if (
+      completed.length % config.checkpointEvery === 0 ||
+      completed.length === matrix.length
+    ) {
+      await writeStudyProgress(buildReport('running'), checkpoint());
+      const aggregate = buildReport('running').aggregate;
+      process.stdout.write(
+        `[${runId}] ${completed.length}/${matrix.length} (${((completed.length / matrix.length) * 100).toFixed(1)}%) · ${aggregate.gamesPerSecond.toFixed(2)} games/s · victories ${aggregate.outcomes.victory} · caps ${aggregate.outcomes.turnCap + aggregate.outcomes.commandCap} · errors ${aggregate.outcomes.engineError} · checkpoint saved\n`,
+      );
+    }
+  }
+  const hardFailure = completed.some(
+    ({ result }) =>
+      result.outcome === 'engine-error' ||
+      result.invariantViolations.length > 0,
+  );
+  const status = interrupted
+    ? 'interrupted'
+    : hardFailure
+      ? 'failed'
+      : 'completed';
+  const report = buildReport(status);
+  if (status === 'interrupted') await writeStudyProgress(report, checkpoint());
+  else await finalizeStudy(report);
+  process.stdout.write(
+    `${status === 'interrupted' ? 'Interrupted safely; resume' : 'Study finished'}: ${runId} · ${completed.length}/${matrix.length} matches · report ${studyPaths().latest}\n`,
+  );
+  if (hardFailure) process.exitCode = 1;
+}
+
+try {
+  const reproduceValue = value('reproduce');
+  const inspectValue = value('inspect');
+  const resumeValue = value('resume');
+  if (reproduceValue) await reproduce(reproduceValue);
+  else if (inspectValue) await inspectRun(inspectValue);
+  else if (resumeValue) {
+    const checkpoint = await readCheckpoint(resumeValue);
+    await execute(checkpoint.config, checkpoint.preset, checkpoint);
+  } else {
+    const { config, preset } = await loadConfig();
+    if (has('dry-run')) process.stdout.write(`${planText(config, preset)}\n`);
+    else await execute(config, preset);
+  }
+} catch (error) {
+  process.stderr.write(
+    `Balance study error: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  process.exitCode = 1;
+}

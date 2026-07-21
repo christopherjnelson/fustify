@@ -79,7 +79,7 @@ test('failed and interrupted reports expose factual details', async ({
   await expect(page.getByRole('status')).toHaveText('Failed');
   await page.getByText('Failure details').click();
   await expect(page.getByLabel('Suites').getByText(/TS2322/)).toBeVisible();
-  await expect(page.getByLabel('Reproduction command')).toContainText(
+  await expect(page.locator('.failure-card textarea')).toContainText(
     'simulate:bots',
   );
   await page.goto('/admin?admin-fixture=interrupted');
@@ -139,4 +139,60 @@ test('normal game and seed URL remain unaffected', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Choose your world' }),
   ).toBeVisible();
+});
+
+test('balance study running state updates, filters configurations, and exposes CLI helpers', async ({
+  page,
+}) => {
+  await page.goto('/admin?admin-fixture=study-reactive');
+  await expect(
+    page.getByRole('heading', { name: 'Balance Studies' }),
+  ).toBeVisible();
+  await expect(page.locator('[data-study-status]')).toHaveText('Running');
+  await page.getByText('CLI quick start and copyable commands').click();
+  await expect(
+    page.getByLabel(/Copy pnpm study:balance --preset thorough --dry-run/),
+  ).toHaveValue(/--dry-run/);
+  await page.getByLabel('Configuration player count').selectOption('4');
+  await expect(
+    page
+      .getByRole('table', { name: 'Configuration breakdown' })
+      .getByRole('article'),
+  ).toHaveCount(1);
+  await expect(page.locator('[data-study-status]')).toHaveText('Completed', {
+    timeout: 5_000,
+  });
+});
+
+test('interrupted and failed studies show resume and copyable reproduction details', async ({
+  page,
+}) => {
+  await page.goto('/admin?admin-fixture=interrupted');
+  await expect(
+    page.getByText(/pnpm study:balance --resume balance-fixture-interrupted/),
+  ).toBeVisible();
+  await page.goto('/admin?admin-fixture=failed');
+  await expect(page.getByLabel('Study reproduction command')).toContainText(
+    'study:balance --reproduce',
+  );
+});
+
+test('recent balance study selection is read-only and mobile-safe', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/admin?admin-fixture=running');
+  await page.getByRole('button', { name: /balance-fixture-failed/i }).click();
+  await expect(
+    page.getByRole('heading', { name: 'balance-fixture-failed' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /start|cancel|execute/i }),
+  ).toHaveCount(0);
+  if (testInfo.project.name === 'mobile-390') {
+    const dimensions = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollWidth,
+      client: document.documentElement.clientWidth,
+    }));
+    expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.client);
+  }
 });

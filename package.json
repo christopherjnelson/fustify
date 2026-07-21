@@ -17,6 +17,7 @@
     "test:bot": "vitest run --disableConsoleIntercept src/core/controllers src/core/simulation/botMatch.test.ts",
     "test:bot:stress": "BOT_SIMULATION_STRESS=1 vitest run --disableConsoleIntercept src/core/simulation/botMatch.test.ts",
     "simulate:bots": "tsx scripts/simulateBots.ts",
+    "study:balance": "node --import tsx scripts/balanceStudy.ts",
     "test:e2e": "playwright test tests/e2e/interactions.spec.ts tests/e2e/admin.spec.ts",
     "test:visual": "playwright test tests/e2e/visual.spec.ts",
     "test:visual:update": "playwright test tests/e2e/visual.spec.ts --update-snapshots",

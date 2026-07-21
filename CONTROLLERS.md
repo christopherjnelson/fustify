@@ -115,3 +115,8 @@ than replacing it. It presents outcomes, win distribution, turn percentiles,
 caps, errors, invariant failures, throughput, and exact reproduction commands.
 See `VERIFICATION.md`. Authentication, upload, database storage, tournament,
 networking, and remote providers remain out of scope.
+
+The dedicated balance-study orchestrator expands the same headless runner over
+deterministic world, match, assignment, and rotated-seat matrices. It writes
+schema-v1 atomic reports and resumable checkpoints for the local `/admin`
+viewer; it is not a competing simulation engine. See `BALANCE_STUDIES.md`.

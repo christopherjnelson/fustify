@@ -216,3 +216,29 @@ for (const fixture of [
     });
   });
 }
+
+for (const fixture of [
+  'study-running',
+  'study-warning',
+  'study-failed',
+  'study-interrupted',
+] as const) {
+  test(`visual review: admin-${fixture}`, async ({ page }, testInfo) => {
+    const source = fixture.replace('study-', '');
+    await page.goto(`/admin?admin-fixture=${source}`);
+    await page.addStyleTag({
+      content: ':root { font-family: Arial, sans-serif !important; }',
+    });
+    await expect(
+      page.getByRole('heading', { name: 'Balance Studies' }),
+    ).toBeVisible();
+    await expect(page.locator('.study-overview')).toBeVisible();
+    await expect(page.locator('.study-section')).toHaveScreenshot(
+      `admin-${fixture}-ui.png`,
+    );
+    await page.screenshot({
+      path: reviewPath(testInfo, `admin-${fixture}`),
+      fullPage: true,
+    });
+  });
+}

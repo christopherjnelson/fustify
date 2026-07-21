@@ -57,6 +57,7 @@ pnpm build
 pnpm format:check
 pnpm verify:report
 pnpm verify:report:full
+pnpm study:balance --preset quick
 ```
 
 The report-enabled commands incrementally write ignored, validated schema-v1
@@ -66,6 +67,13 @@ coverage, simulations, failures, and reproduction commands. The filesystem API
 exists only in the local development server and is read-only. See
 [VERIFICATION.md](./VERIFICATION.md) for profiles, retention, interruption and
 security behavior.
+
+For unattended multi-configuration bot research, preview with
+`pnpm study:balance --preset thorough --dry-run`, run it from a second terminal,
+and monitor Balance Studies on `/admin`. See
+[BALANCE_STUDIES.md](./BALANCE_STUDIES.md) for checkpoint, resume, compact
+summary, export, and interpretation details. Large studies are not normal
+verification gates.
 
 ## Playwright visual inspection
 

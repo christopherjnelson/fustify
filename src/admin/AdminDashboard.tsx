@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AdminReportSource } from './reportSource';
 import type { VerificationRun } from './reportContract';
+import type { BalanceStudyReport } from './balanceStudyContract';
 
 function duration(ms?: number) {
   if (ms === undefined) return '—';
@@ -23,6 +24,258 @@ function label(value: string) {
     .replace(/(^| )\w/g, (text) => text.toUpperCase());
 }
 
+function BalanceStudies({
+  study,
+  recent,
+  onSelect,
+  checkedAt,
+}: {
+  study: BalanceStudyReport | null;
+  recent: BalanceStudyReport[];
+  onSelect: (id: string) => void;
+  checkedAt: Date | null;
+}) {
+  const [playerFilter, setPlayerFilter] = useState('all');
+  const configurations =
+    study?.configurations.filter(
+      (item) =>
+        playerFilter === 'all' || item.playerCount === Number(playerFilter),
+    ) ?? [];
+  const warnings =
+    study?.findings.filter((item) => item.classification === 'warning')
+      .length ?? 0;
+  const failures =
+    study?.findings.filter((item) => item.classification === 'failure')
+      .length ?? 0;
+  const stale =
+    study?.status === 'running' &&
+    checkedAt !== null &&
+    checkedAt.getTime() - Date.parse(study.updatedAt) > 30_000;
+  return (
+    <section className="study-section" aria-labelledby="balance-studies">
+      <div className="study-title">
+        <div>
+          <p className="admin-eyebrow">Unattended research</p>
+          <h2 id="balance-studies">Balance Studies</h2>
+        </div>
+        <span>Read-only · commands run from the repository root</span>
+      </div>
+      <details className="study-help">
+        <summary>CLI quick start and copyable commands</summary>
+        <div className="command-grid">
+          {[
+            'pnpm study:balance --preset quick',
+            'pnpm study:balance --preset standard',
+            'pnpm study:balance --preset thorough',
+            'pnpm study:balance --preset thorough --dry-run',
+            'pnpm study:balance --resume <run-id>',
+            "pnpm study:balance --reproduce '<descriptor>' --verbose",
+          ].map((command) => (
+            <input
+              key={command}
+              readOnly
+              value={command}
+              aria-label={`Copy ${command}`}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          ))}
+        </div>
+      </details>
+      {!study ? (
+        <div className="admin-empty">
+          <h3>No balance studies yet</h3>
+          <p>
+            Run <code>pnpm study:balance --preset quick</code> to create one.
+          </p>
+        </div>
+      ) : (
+        <>
+          <article className={`study-overview status-${study.status}`}>
+            <div>
+              <p className="status-label" data-study-status>
+                {stale ? 'Abandoned / resumable' : label(study.status)}
+              </p>
+              <h3>{study.id}</h3>
+              <p>
+                {study.preset} · {study.aggregate.matchesCompleted}/
+                {study.plan.totalMatches} matches (
+                {(
+                  (study.aggregate.matchesCompleted /
+                    Math.max(1, study.plan.totalMatches)) *
+                  100
+                ).toFixed(1)}
+                %)
+              </p>
+            </div>
+            <dl>
+              <div>
+                <dt>Commit</dt>
+                <dd>
+                  <code>{study.repository.commit.slice(0, 12)}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Throughput</dt>
+                <dd>{study.aggregate.gamesPerSecond.toFixed(2)} games/s</dd>
+              </div>
+              <div>
+                <dt>Elapsed</dt>
+                <dd>{duration(study.aggregate.runtimeMs)}</dd>
+              </div>
+              <div>
+                <dt>Warnings / failures</dt>
+                <dd>
+                  {warnings} / {failures}
+                </dd>
+              </div>
+              <div>
+                <dt>Checkpoint</dt>
+                <dd>{timestamp(study.checkpoint.lastWrittenAt)}</dd>
+              </div>
+              <div>
+                <dt>Resume</dt>
+                <dd>
+                  {study.checkpoint.resumable
+                    ? `pnpm study:balance --resume ${study.id}`
+                    : 'Complete'}
+                </dd>
+              </div>
+            </dl>
+          </article>
+          <div className="study-stat-grid">
+            <article>
+              <h3>Outcomes</h3>
+              <p>
+                {Object.entries(study.aggregate.outcomes)
+                  .map(([key, value]) => `${label(key)} ${value}`)
+                  .join(' · ')}
+              </p>
+            </article>
+            <article>
+              <h3>Match length</h3>
+              <p>
+                Mean {study.aggregate.turns.mean.toFixed(1)} · Median{' '}
+                {study.aggregate.turns.median} · p90 {study.aggregate.turns.p90}{' '}
+                · p95 {study.aggregate.turns.p95} · p99{' '}
+                {study.aggregate.turns.p99} · Max{' '}
+                {study.aggregate.turns.maximum}
+              </p>
+            </article>
+          </div>
+          <h3>Seat balance</h3>
+          <div className="seat-table" role="table" aria-label="Seat balance">
+            <div role="row">
+              <strong>Seat</strong>
+              <strong>Wins</strong>
+              <strong>Rate</strong>
+              <strong>95% Wilson interval</strong>
+              <strong>Equal baseline Δ</strong>
+            </div>
+            {study.aggregate.seatSummaries.map((seat) => (
+              <div role="row" key={seat.seat}>
+                <span>{seat.seat}</span>
+                <span>
+                  {seat.wins}/{seat.samples}
+                </span>
+                <span>{(seat.winRate * 100).toFixed(1)}%</span>
+                <span>
+                  {(seat.confidenceInterval95[0] * 100).toFixed(1)}–
+                  {(seat.confidenceInterval95[1] * 100).toFixed(1)}%
+                </span>
+                <span>
+                  {seat.differenceFromBaseline >= 0 ? '+' : ''}
+                  {(seat.differenceFromBaseline * 100).toFixed(1)} pts
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="method-note">
+            Observed associations with statistical uncertainty; these figures do
+            not establish causation.
+          </p>
+          <div className="study-filter">
+            <label>
+              Configuration player count{' '}
+              <select
+                value={playerFilter}
+                onChange={(event) => setPlayerFilter(event.target.value)}
+              >
+                <option value="all">All</option>
+                {[2, 3, 4, 5, 6].map((count) => (
+                  <option value={count} key={count}>
+                    {count}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div
+            className="configuration-table"
+            role="table"
+            aria-label="Configuration breakdown"
+          >
+            {configurations.map((item) => (
+              <article key={item.id}>
+                <h4>{item.id}</h4>
+                <p>
+                  {item.playerCount} players · {item.territoryCount} territories
+                  · {item.continentCount} continents · {item.worldSize}
+                </p>
+                <span>
+                  {item.matchesCompleted}/{item.matchesRequested} complete ·
+                  mean {item.meanTurns.toFixed(1)} turns · p95 {item.p95Turns}
+                </span>
+              </article>
+            ))}
+          </div>
+          {!!study.findings.length && (
+            <div className="findings">
+              <h3>Findings</h3>
+              {study.findings.map((item, index) => (
+                <article
+                  className={`finding-${item.classification}`}
+                  key={`${item.code}-${index}`}
+                >
+                  <strong>
+                    {label(item.classification)} · {label(item.code)}
+                  </strong>
+                  <p>{item.message}</p>
+                  {item.reproduction && (
+                    <textarea
+                      readOnly
+                      aria-label="Study reproduction command"
+                      value={item.reproduction}
+                      onFocus={(event) => event.currentTarget.select()}
+                    />
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      <h3>Recent studies</h3>
+      <div className="recent-studies">
+        {recent.map((item) => (
+          <button type="button" key={item.id} onClick={() => onSelect(item.id)}>
+            <strong>{item.id}</strong>
+            <span>
+              {label(item.status)} · {item.preset} ·{' '}
+              {item.aggregate.matchesCompleted} matches ·{' '}
+              {
+                item.findings.filter(
+                  (finding) => finding.classification !== 'informational',
+                ).length
+              }{' '}
+              findings
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function AdminDashboard({
   source,
   dataAvailable = true,
@@ -37,17 +290,24 @@ export function AdminDashboard({
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const [loading, setLoading] = useState(dataAvailable);
+  const [study, setStudy] = useState<BalanceStudyReport | null>(null);
+  const [recentStudies, setRecentStudies] = useState<BalanceStudyReport[]>([]);
   const fetching = useRef(false);
   const refresh = useCallback(async () => {
     if (fetching.current) return;
     fetching.current = true;
     try {
-      const [nextLatest, nextRecent] = await Promise.all([
-        source.getLatestRun(),
-        source.getRecentRuns(),
-      ]);
+      const [nextLatest, nextRecent, nextStudy, nextStudies] =
+        await Promise.all([
+          source.getLatestRun(),
+          source.getRecentRuns(),
+          source.getLatestStudy(),
+          source.getRecentStudies(),
+        ]);
       setLatest(nextLatest);
       setRecent(nextRecent);
+      setStudy(nextStudy);
+      setRecentStudies(nextStudies);
       if (viewingLatest) setSelected(nextLatest);
       setLastFetch(new Date());
       setError(null);
@@ -66,7 +326,9 @@ export function AdminDashboard({
     const timer = window.setInterval(() => {
       if (
         document.visibilityState === 'visible' &&
-        (latest?.status === 'running' || !latest)
+        (latest?.status === 'running' ||
+          study?.status === 'running' ||
+          (!latest && !study))
       )
         void refresh();
     }, 1500);
@@ -78,7 +340,7 @@ export function AdminDashboard({
       clearInterval(timer);
       document.removeEventListener('visibilitychange', visible);
     };
-  }, [dataAvailable, latest, refresh]);
+  }, [dataAvailable, latest, study, refresh]);
   const run = selected;
   const stale =
     run?.status === 'running' &&
@@ -130,6 +392,21 @@ export function AdminDashboard({
           Refresh failed: {error}. The last valid report remains displayed.
         </div>
       )}
+      <BalanceStudies
+        study={study}
+        recent={recentStudies}
+        onSelect={(id) =>
+          void source
+            .getStudy(id)
+            .then(setStudy)
+            .catch((reason) =>
+              setError(
+                reason instanceof Error ? reason.message : String(reason),
+              ),
+            )
+        }
+        checkedAt={lastFetch}
+      />
       {loading && !run && (
         <p className="admin-empty" aria-live="polite">
           Loading verification reports…
