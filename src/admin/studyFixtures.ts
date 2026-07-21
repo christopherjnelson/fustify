@@ -1,5 +1,53 @@
 import type { BalanceStudyReport } from './balanceStudyContract';
 
+function playerCountSummary(
+  playerCount: 4 | 5 | 6,
+  matches: number,
+  victories: number,
+) {
+  const wins = Array.from(
+    { length: playerCount },
+    (_, index) =>
+      Math.floor(victories / playerCount) +
+      (index < victories % playerCount ? 1 : 0),
+  );
+  return {
+    playerCount,
+    purpose: 'product-balance' as const,
+    matches,
+    victories,
+    unresolved: matches - victories,
+    stalemates: Math.floor((matches - victories) / 2),
+    turnCaps: matches - victories - Math.floor((matches - victories) / 2),
+    seats: wins.map((seatWins, index) => ({
+      seat: index + 1,
+      samples: matches,
+      wins: seatWins,
+      winRate: seatWins / matches,
+      equalSeatBaseline: 1 / playerCount,
+      differenceFromBaseline: seatWins / matches - 1 / playerCount,
+      confidenceInterval95: [
+        Math.max(0, seatWins / matches - 0.04),
+        Math.min(1, seatWins / matches + 0.04),
+      ] as [number, number],
+      meanStartingTerritories: 42 / playerCount,
+      victories,
+      unresolved: matches - victories,
+      outcomeAdjustedBaseline: victories / playerCount / matches,
+      differenceFromOutcomeAdjustedBaseline:
+        seatWins / matches - victories / playerCount / matches,
+      decidedVictoryShare: seatWins / victories,
+      equalDecidedVictoryBaseline: 1 / playerCount,
+      differenceFromDecidedVictoryBaseline:
+        seatWins / victories - 1 / playerCount,
+      decidedVictoryConfidenceInterval95: [
+        Math.max(0, seatWins / victories - 0.04),
+        Math.min(1, seatWins / victories + 0.04),
+      ] as [number, number],
+    })),
+  };
+}
+
 const base: BalanceStudyReport = {
   schemaVersion: 1,
   id: 'balance-fixture-completed',
@@ -72,7 +120,11 @@ const base: BalanceStudyReport = {
         meanStartingTerritories: 9,
       },
     ],
-    playerCountSeatSummaries: [],
+    playerCountSeatSummaries: [
+      playerCountSummary(4, 1_000, 960),
+      playerCountSummary(5, 1_000, 880),
+      playerCountSummary(6, 1_000, 838),
+    ],
     turns: {
       mean: 28.4,
       minimum: 5,
@@ -90,6 +142,31 @@ const base: BalanceStudyReport = {
     continentControlTurnsBySeat: { '1': 81, '2': 72 },
     runtimeMs: 120000,
     gamesPerSecond: 0.33,
+    diagnostic: {
+      rotationDesign:
+        'Six logical-player/turn rotations crossed with six assignment-order rotations.',
+      pairRotationCount: 36,
+      logicalPlayerWins: {
+        'player-01': 7,
+        'player-02': 6,
+        'player-03': 6,
+        'player-04': 7,
+        'player-05': 6,
+        'player-06': 6,
+      },
+      assignmentPositionWins: {
+        'assignment-1': 6,
+        'assignment-2': 6,
+        'assignment-3': 7,
+        'assignment-4': 6,
+        'assignment-5': 7,
+        'assignment-6': 6,
+      },
+      logicalPlayerSummaries: [],
+      assignmentPositionSummaries: [],
+      factorAssessment: 'No clear factor exceeds the diagnostic threshold.',
+      suspiciousReproductions: [],
+    },
   },
   configurations: [
     {

@@ -6,6 +6,7 @@ import {
   createStudyMatrix,
   percentile,
   stableHash,
+  SIX_SEAT_DIAGNOSTIC_PRESETS,
   wilson95,
   type CompletedStudyMatch,
 } from './balanceStudy';
@@ -101,6 +102,21 @@ describe('balance study configuration and aggregation', () => {
     expect(first[0]?.worldSeed).toBe(first[1]?.worldSeed);
     expect(first[0]?.seatRotation).not.toBe(first[1]?.seatRotation);
   });
+  it('builds deterministic six-seat logical-player and assignment rotations', () => {
+    const first = createStudyMatrix(SIX_SEAT_DIAGNOSTIC_PRESETS.smoke);
+    expect(first).toEqual(createStudyMatrix(SIX_SEAT_DIAGNOSTIC_PRESETS.smoke));
+    expect(first).toHaveLength(12);
+    expect(new Set(first.map((item) => item.worldSeed))).toHaveLength(1);
+    expect(first.slice(0, 6).map((item) => item.seatRotation)).toEqual([
+      0, 1, 2, 3, 4, 5,
+    ]);
+    expect(first.slice(0, 6).map((item) => item.assignmentRotation)).toEqual([
+      0, 0, 0, 0, 0, 0,
+    ]);
+    expect(first.slice(6, 12).map((item) => item.assignmentRotation)).toEqual([
+      1, 1, 1, 1, 1, 1,
+    ]);
+  });
   it('uses nearest-rank percentiles and Wilson uncertainty', () => {
     expect(percentile([1, 2, 3, 4, 100], 0.9)).toBe(100);
     const interval = wilson95(55, 100);
@@ -133,6 +149,70 @@ describe('balance study configuration and aggregation', () => {
     expect(result.aggregate.playerCountSeatSummaries?.[0]?.playerCount).toBe(4);
   });
 
+  it('separates all-match win rate from decided-victory share', () => {
+    const matrix = createStudyMatrix({
+      ...BALANCE_PRESETS.quick,
+      configurations: [BALANCE_PRESETS.quick.configurations[0]!],
+      matchesPerConfiguration: 4,
+    });
+    const rows = [
+      completed(matrix[0]!, 'player-01'),
+      completed(matrix[1]!, 'player-02'),
+      completed(matrix[2]!, 'player-01', 'stalemate'),
+      completed(matrix[3]!, 'player-01', 'turn-cap'),
+    ];
+    const result = aggregateStudy(
+      matrix,
+      rows,
+      400,
+      BALANCE_PRESETS.quick.warningThresholds,
+    );
+    const summary = result.aggregate.playerCountSeatSummaries![0]!;
+    expect(summary.matches).toBe(4);
+    expect(summary.victories).toBe(2);
+    expect(summary.unresolved).toBe(2);
+    expect(summary.seats[0]).toMatchObject({
+      outcomeAdjustedBaseline: 0.125,
+      equalDecidedVictoryBaseline: 0.25,
+    });
+    expect(summary.seats.reduce((sum, seat) => sum + seat.winRate, 0)).toBe(
+      0.5,
+    );
+    expect(
+      summary.seats.reduce(
+        (sum, seat) => sum + (seat.decidedVictoryShare ?? 0),
+        0,
+      ),
+    ).toBe(1);
+  });
+
+  it.each([
+    [4, 0.25],
+    [5, 0.2],
+    [6, 1 / 6],
+  ])(
+    'uses the nominal decided-victory baseline for %i seats',
+    (count, baseline) => {
+      const matrix = createStudyMatrix({
+        ...BALANCE_PRESETS.quick,
+        configurations: [
+          { ...BALANCE_PRESETS.quick.configurations[0]!, playerCount: count },
+        ],
+        matchesPerConfiguration: 1,
+      });
+      const result = aggregateStudy(
+        matrix,
+        [completed(matrix[0]!)],
+        100,
+        BALANCE_PRESETS.quick.warningThresholds,
+      );
+      expect(
+        result.aggregate.playerCountSeatSummaries![0]!.seats[0]!
+          .equalDecidedVictoryBaseline,
+      ).toBeCloseTo(baseline);
+    },
+  );
+
   it('warns for configuration pacing only after the minimum sample size', () => {
     const matrix = createStudyMatrix({
       ...BALANCE_PRESETS.quick,
@@ -151,7 +231,7 @@ describe('balance study configuration and aggregation', () => {
     expect(result.findings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'configuration-cap-rate',
+          code: 'configuration-turn-cap-rate',
           configurationId: matrix[0]!.configurationId,
         }),
       ]),
@@ -163,7 +243,39 @@ describe('balance study configuration and aggregation', () => {
       BALANCE_PRESETS.quick.warningThresholds,
     );
     expect(
-      lowSample.findings.some((item) => item.code === 'configuration-cap-rate'),
+      lowSample.findings.some(
+        (item) => item.code === 'configuration-turn-cap-rate',
+      ),
+    ).toBe(false);
+  });
+
+  it('classifies a rotated logical-player correlation without calling it an engine failure', () => {
+    const matrix = createStudyMatrix({
+      ...SIX_SEAT_DIAGNOSTIC_PRESETS.standard,
+      matchesPerConfiguration: 36,
+    });
+    const result = aggregateStudy(
+      matrix,
+      matrix.map((input) => completed(input, 'player-06')),
+      3_600,
+      SIX_SEAT_DIAGNOSTIC_PRESETS.standard.warningThresholds,
+    );
+    expect(result.aggregate.diagnostic?.logicalPlayerWins['player-06']).toBe(
+      36,
+    );
+    expect(result.aggregate.diagnostic?.factorAssessment).toContain(
+      'logical player ID',
+    );
+    expect(result.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          classification: 'warning',
+          code: 'possible-player-id-correlation',
+        }),
+      ]),
+    );
+    expect(
+      result.findings.some((item) => item.classification === 'failure'),
     ).toBe(false);
   });
 });

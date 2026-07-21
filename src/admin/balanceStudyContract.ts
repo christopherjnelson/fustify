@@ -29,6 +29,16 @@ export const seatSummarySchema = z.object({
     z.number().min(0).max(1),
   ]),
   meanStartingTerritories: z.number().nonnegative(),
+  victories: z.number().int().nonnegative().optional(),
+  unresolved: z.number().int().nonnegative().optional(),
+  outcomeAdjustedBaseline: z.number().min(0).max(1).optional(),
+  differenceFromOutcomeAdjustedBaseline: z.number().min(-1).max(1).optional(),
+  decidedVictoryShare: z.number().min(0).max(1).optional(),
+  equalDecidedVictoryBaseline: z.number().min(0).max(1).optional(),
+  differenceFromDecidedVictoryBaseline: z.number().min(-1).max(1).optional(),
+  decidedVictoryConfidenceInterval95: z
+    .tuple([z.number().min(0).max(1), z.number().min(0).max(1)])
+    .optional(),
 });
 
 export const studyAggregateSchema = z.object({
@@ -49,6 +59,11 @@ export const studyAggregateSchema = z.object({
       z.object({
         playerCount: z.number().int().min(2).max(6),
         purpose: z.enum(['product-balance', 'engine-coverage']),
+        matches: z.number().int().nonnegative().optional(),
+        victories: z.number().int().nonnegative().optional(),
+        unresolved: z.number().int().nonnegative().optional(),
+        stalemates: z.number().int().nonnegative().optional(),
+        turnCaps: z.number().int().nonnegative().optional(),
         seats: z.array(seatSummarySchema).max(6),
       }),
     )
@@ -73,6 +88,45 @@ export const studyAggregateSchema = z.object({
   ),
   runtimeMs: z.number().nonnegative(),
   gamesPerSecond: z.number().nonnegative(),
+  diagnostic: z
+    .object({
+      rotationDesign: z.string().max(1_000),
+      pairRotationCount: z.number().int().nonnegative(),
+      logicalPlayerWins: z.record(z.string(), z.number().int().nonnegative()),
+      assignmentPositionWins: z.record(
+        z.string(),
+        z.number().int().nonnegative(),
+      ),
+      logicalPlayerSummaries: z
+        .array(
+          z.object({
+            key: z.string(),
+            wins: z.number().int().nonnegative(),
+            decidedVictoryShare: z.number().min(0).max(1),
+            confidenceInterval95: z.tuple([
+              z.number().min(0).max(1),
+              z.number().min(0).max(1),
+            ]),
+          }),
+        )
+        .optional(),
+      assignmentPositionSummaries: z
+        .array(
+          z.object({
+            key: z.string(),
+            wins: z.number().int().nonnegative(),
+            decidedVictoryShare: z.number().min(0).max(1),
+            confidenceInterval95: z.tuple([
+              z.number().min(0).max(1),
+              z.number().min(0).max(1),
+            ]),
+          }),
+        )
+        .optional(),
+      factorAssessment: z.string().max(1_000),
+      suspiciousReproductions: z.array(z.string().max(5_000)).max(100),
+    })
+    .optional(),
 });
 
 export const configurationAggregateSchema = z.object({
@@ -137,6 +191,8 @@ export const balanceStudyReportSchema = z.object({
         lowVictoryRate: z.number(),
       })
       .optional(),
+    rotationDesign: z.string().max(1_000).optional(),
+    pairRotationCount: z.number().int().nonnegative().optional(),
   }),
   aggregate: studyAggregateSchema,
   configurations: z.array(configurationAggregateSchema).max(5_000),

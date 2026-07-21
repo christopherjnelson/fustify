@@ -69,6 +69,9 @@ function BalanceStudies({
             'pnpm study:balance --preset thorough',
             'pnpm study:balance --preset thorough --dry-run',
             'pnpm study:balance --preset engine-coverage',
+            'pnpm study:balance --diagnose six-seat --scale smoke --dry-run',
+            'pnpm study:balance --diagnose six-seat --scale standard',
+            'pnpm study:balance --diagnose six-seat --scale thorough',
             'pnpm study:balance --resume <run-id>',
             "pnpm study:balance --reproduce '<descriptor>' --verbose",
           ].map((command) => (
@@ -180,11 +183,44 @@ function BalanceStudies({
           </div>
           <h3>Seat balance by player count</h3>
           {study.aggregate.playerCountSeatSummaries?.map((summary) => (
-            <div key={`${summary.purpose}-${summary.playerCount}`}>
+            <article
+              className="player-count-study"
+              key={`${summary.purpose}-${summary.playerCount}`}
+            >
               <h4>
-                {summary.playerCount} players · {label(summary.purpose)} · equal
-                baseline {(100 / summary.playerCount).toFixed(2)}%
+                {summary.playerCount} seats ·{' '}
+                {summary.playerCount === 4
+                  ? 'Recommended'
+                  : summary.playerCount === 5
+                    ? 'Expanded match'
+                    : summary.playerCount === 6
+                      ? 'Expanded/long match'
+                      : label(summary.purpose)}
               </h4>
+              {summary.matches !== undefined && (
+                <p className="player-count-outcomes">
+                  Matches {summary.matches} · Victories {summary.victories} ·
+                  Unresolved matches {summary.unresolved} · Victory rate{' '}
+                  {(
+                    ((summary.victories ?? 0) / Math.max(1, summary.matches)) *
+                    100
+                  ).toFixed(1)}
+                  % · Stalemate rate{' '}
+                  {(
+                    ((summary.stalemates ?? 0) / Math.max(1, summary.matches)) *
+                    100
+                  ).toFixed(1)}
+                  % · Turn-cap rate{' '}
+                  {(
+                    ((summary.turnCaps ?? 0) / Math.max(1, summary.matches)) *
+                    100
+                  ).toFixed(1)}
+                  %
+                </p>
+              )}
+              {summary.playerCount >= 5 && (
+                <p>Five- and six-seat matches may run substantially longer.</p>
+              )}
               <div
                 className="seat-table"
                 role="table"
@@ -193,9 +229,10 @@ function BalanceStudies({
                 <div role="row">
                   <strong>Seat</strong>
                   <strong>Wins</strong>
-                  <strong>Rate</strong>
-                  <strong>95% Wilson interval</strong>
-                  <strong>Baseline Δ</strong>
+                  <strong>Win rate across all matches</strong>
+                  <strong>Outcome-adjusted baseline</strong>
+                  <strong>Share of decided victories</strong>
+                  <strong>Equal share among winners</strong>
                 </div>
                 {summary.seats.map((seat) => (
                   <div role="row" key={seat.seat}>
@@ -205,18 +242,67 @@ function BalanceStudies({
                     </span>
                     <span>{(seat.winRate * 100).toFixed(1)}%</span>
                     <span>
+                      {(
+                        (seat.outcomeAdjustedBaseline ??
+                          seat.equalSeatBaseline) * 100
+                      ).toFixed(2)}
+                      % · Δ{' '}
+                      {(
+                        (seat.differenceFromOutcomeAdjustedBaseline ??
+                          seat.differenceFromBaseline) * 100
+                      ).toFixed(1)}{' '}
+                      pts · 95% CI{' '}
                       {(seat.confidenceInterval95[0] * 100).toFixed(1)}–
                       {(seat.confidenceInterval95[1] * 100).toFixed(1)}%
                     </span>
                     <span>
-                      {seat.differenceFromBaseline >= 0 ? '+' : ''}
-                      {(seat.differenceFromBaseline * 100).toFixed(1)} pts
+                      {(
+                        (seat.decidedVictoryShare ?? seat.winRate) * 100
+                      ).toFixed(1)}
+                      % · 95% CI{' '}
+                      {(
+                        (seat.decidedVictoryConfidenceInterval95?.[0] ??
+                          seat.confidenceInterval95[0]) * 100
+                      ).toFixed(1)}
+                      –
+                      {(
+                        (seat.decidedVictoryConfidenceInterval95?.[1] ??
+                          seat.confidenceInterval95[1]) * 100
+                      ).toFixed(1)}
+                      %
+                    </span>
+                    <span>
+                      {(
+                        (seat.equalDecidedVictoryBaseline ??
+                          seat.equalSeatBaseline) * 100
+                      ).toFixed(2)}
+                      % · Δ{' '}
+                      {(
+                        (seat.differenceFromDecidedVictoryBaseline ??
+                          seat.differenceFromBaseline) * 100
+                      ).toFixed(1)}{' '}
+                      pts
                     </span>
                   </div>
                 ))}
               </div>
-            </div>
+            </article>
           ))}
+          {study.aggregate.diagnostic && (
+            <article className="diagnostic-summary">
+              <h3>Six-seat diagnostic</h3>
+              <p>{study.aggregate.diagnostic.rotationDesign}</p>
+              <p>{study.aggregate.diagnostic.factorAssessment}</p>
+              <p>
+                Logical-player wins{' '}
+                {JSON.stringify(study.aggregate.diagnostic.logicalPlayerWins)} ·
+                Assignment-position wins{' '}
+                {JSON.stringify(
+                  study.aggregate.diagnostic.assignmentPositionWins,
+                )}
+              </p>
+            </article>
+          )}
           <details>
             <summary>Cross-player-count aggregate (limited)</summary>
             <div className="seat-table" role="table" aria-label="Seat balance">

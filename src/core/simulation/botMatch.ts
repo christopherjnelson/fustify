@@ -36,6 +36,7 @@ export interface HeadlessMatchOptions {
   maxTurnsWithoutCapture?: number;
   trace?: boolean;
   seatRotation?: number;
+  assignmentRotation?: number;
 }
 
 export interface ReproductionDescriptor {
@@ -52,6 +53,7 @@ export interface ReproductionDescriptor {
   maxCommands: number;
   maxTurnsWithoutCapture: number;
   seatRotation?: number;
+  assignmentRotation?: number;
   failingTurn?: number;
   failingCommandIndex?: number;
 }
@@ -182,6 +184,7 @@ function reproduction(options: HeadlessMatchOptions): ReproductionDescriptor {
     maxTurnsWithoutCapture:
       options.maxTurnsWithoutCapture ?? DEFAULT_STALE_TURNS,
     seatRotation: options.seatRotation,
+    assignmentRotation: options.assignmentRotation,
   };
 }
 
@@ -268,11 +271,18 @@ export async function runHeadlessMatch(
   let state: MatchState;
   try {
     planet = generatePlanet(options.worldSeed, options);
-    const setup = createMatchSetup(
+    const assignmentRotation =
+      (options.assignmentRotation ?? 0) % players.length;
+    const assignmentPlayers = [
+      ...players.slice(assignmentRotation),
+      ...players.slice(0, assignmentRotation),
+    ];
+    const assignedSetup = createMatchSetup(
       planet,
-      players,
+      assignmentPlayers,
       options.ownershipVariant ?? 0,
     );
+    const setup = { ...assignedSetup, players };
     state = createMatch(planet, setup, { matchSeed: options.matchSeed });
     deepFreeze(planet);
   } catch (error) {

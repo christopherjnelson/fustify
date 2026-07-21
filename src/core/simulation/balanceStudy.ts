@@ -22,6 +22,8 @@ export const balanceStudyConfigSchema = z
     seedPrefix: z.string().min(1).max(200),
     matchesPerConfiguration: z.number().int().positive().max(100_000),
     rotations: z.number().int().min(1).max(6).default(1),
+    assignmentRotations: z.number().int().min(1).max(6).default(1),
+    diagnostic: z.boolean().default(false),
     ownershipVariants: z.number().int().min(1).max(64).default(2),
     maxTurns: z.number().int().positive().max(100_000).default(1_200),
     maxCommands: z.number().int().positive().max(2_000_000).default(30_000),
@@ -116,6 +118,20 @@ export const BALANCE_PRESETS = {
   'engine-coverage': preset(10, engine),
 } as const;
 
+export const SIX_SEAT_DIAGNOSTIC_PRESETS = {
+  smoke: preset(12, [product[2]!]),
+  standard: preset(600, [product[2]!]),
+  thorough: preset(1_800, [product[2]!]),
+} as const;
+Object.values(SIX_SEAT_DIAGNOSTIC_PRESETS).forEach((config, index) => {
+  config.label = 'Six-seat paired rotation diagnostic';
+  config.seedPrefix = `fustify-six-seat-diagnostic-v1-${['smoke', 'standard', 'thorough'][index]}`;
+  config.rotations = 6;
+  config.assignmentRotations = 6;
+  config.diagnostic = true;
+  config.checkpointEvery = index === 0 ? 6 : 25;
+});
+
 export type BalancePreset = keyof typeof BALANCE_PRESETS;
 
 export interface StudyMatchInput {
@@ -130,6 +146,7 @@ export interface StudyMatchInput {
   matchSeed: string;
   ownershipVariant: number;
   seatRotation: number;
+  assignmentRotation: number;
   maxTurns: number;
   maxCommands: number;
   maxTurnsWithoutCapture: number;
@@ -153,9 +170,18 @@ export function createStudyMatrix(configValue: unknown): StudyMatchInput[] {
       localIndex < config.matchesPerConfiguration;
       localIndex += 1
     ) {
-      const pair = Math.floor(localIndex / Math.max(1, entry.playerCount));
+      const rotationSpan = config.diagnostic
+        ? Math.min(config.rotations, entry.playerCount) *
+          Math.min(config.assignmentRotations, entry.playerCount)
+        : Math.max(1, entry.playerCount);
+      const pair = Math.floor(localIndex / rotationSpan);
       const seatRotation =
         localIndex % Math.min(config.rotations, entry.playerCount);
+      const assignmentRotation = config.diagnostic
+        ? Math.floor(
+            localIndex / Math.min(config.rotations, entry.playerCount),
+          ) % Math.min(config.assignmentRotations, entry.playerCount)
+        : 0;
       const ownershipVariant = pair % config.ownershipVariants;
       const shared = `${config.seedPrefix}-${configurationId}-pair-${pair}`;
       matrix.push({
@@ -166,6 +192,7 @@ export function createStudyMatrix(configValue: unknown): StudyMatchInput[] {
         matchSeed: `${shared}-match`,
         ownershipVariant,
         seatRotation,
+        assignmentRotation,
         maxTurns: config.maxTurns,
         maxCommands: config.maxCommands,
         maxTurnsWithoutCapture: config.maxTurnsWithoutCapture,
@@ -311,10 +338,24 @@ export function aggregateStudy(
             ({ input }) => input.purpose === purpose,
           );
           if (!purposeRows.length) return [];
+          const victories = purposeRows.filter(
+            ({ result }) => result.outcome === 'victory',
+          ).length;
+          const stalemates = purposeRows.filter(
+            ({ result }) => result.outcome === 'stalemate',
+          ).length;
+          const turnCaps = purposeRows.filter(
+            ({ result }) => result.outcome === 'turn-cap',
+          ).length;
           return [
             {
               playerCount,
               purpose,
+              matches: purposeRows.length,
+              victories,
+              unresolved: purposeRows.length - victories,
+              stalemates,
+              turnCaps,
               seats: Array.from({ length: playerCount }, (_, index) => {
                 const seat = index + 1;
                 let wins = 0;
@@ -332,6 +373,9 @@ export function aggregateStudy(
                 const samples = purposeRows.length;
                 const winRate = wins / samples;
                 const baseline = 1 / playerCount;
+                const outcomeAdjustedBaseline =
+                  victories / playerCount / Math.max(1, samples);
+                const decidedVictoryShare = wins / Math.max(1, victories);
                 return {
                   seat,
                   samples,
@@ -341,6 +385,16 @@ export function aggregateStudy(
                   differenceFromBaseline: winRate - baseline,
                   confidenceInterval95: wilson95(wins, samples),
                   meanStartingTerritories: territories / samples,
+                  victories,
+                  unresolved: samples - victories,
+                  outcomeAdjustedBaseline,
+                  differenceFromOutcomeAdjustedBaseline:
+                    winRate - outcomeAdjustedBaseline,
+                  decidedVictoryShare,
+                  equalDecidedVictoryBaseline: baseline,
+                  differenceFromDecidedVictoryBaseline:
+                    decidedVictoryShare - baseline,
+                  decidedVictoryConfidenceInterval95: wilson95(wins, victories),
                 };
               }),
             },
@@ -348,6 +402,67 @@ export function aggregateStudy(
         },
       );
     });
+  const diagnosticRows = completed.filter(
+    ({ input }) => input.playerCount === 6,
+  );
+  const logicalPlayerWins: Record<string, number> = {};
+  const assignmentPositionWins: Record<string, number> = {};
+  if (diagnosticRows.length)
+    for (let index = 1; index <= 6; index += 1) {
+      logicalPlayerWins[playerId(index)] = 0;
+      assignmentPositionWins[`assignment-${index}`] = 0;
+    }
+  diagnosticRows.forEach(({ input, result }) => {
+    if (!result.winnerPlayerId) return;
+    logicalPlayerWins[result.winnerPlayerId] =
+      (logicalPlayerWins[result.winnerPlayerId] ?? 0) + 1;
+    const logicalIndex = Number(result.winnerPlayerId.slice(-2)) - 1;
+    const turnIndex =
+      (logicalIndex - input.seatRotation + input.playerCount) %
+      input.playerCount;
+    const assignmentPosition =
+      ((turnIndex - input.assignmentRotation + input.playerCount) %
+        input.playerCount) +
+      1;
+    const key = `assignment-${assignmentPosition}`;
+    assignmentPositionWins[key] = (assignmentPositionWins[key] ?? 0) + 1;
+  });
+  const spread = (values: number[]) =>
+    values.length ? Math.max(...values) - Math.min(...values) : 0;
+  const diagnosticVictories = diagnosticRows.filter(
+    ({ result }) => result.outcome === 'victory',
+  ).length;
+  const factorThreshold = Math.max(2, diagnosticVictories * 0.08);
+  const seatSpread = spread(seats.slice(0, 6).map(({ wins }) => wins));
+  const playerSpread = spread(Object.values(logicalPlayerWins));
+  const assignmentSpread = spread(Object.values(assignmentPositionWins));
+  const factorAssessment =
+    diagnosticRows.length < 30
+      ? 'Smoke sample is too small for a factor conclusion.'
+      : seatSpread >= factorThreshold
+        ? 'Outcomes most strongly follow turn position; association only, not causal proof.'
+        : playerSpread >= factorThreshold
+          ? 'Outcomes most strongly follow logical player ID; investigate deterministic controller streams.'
+          : assignmentSpread >= factorThreshold
+            ? 'Outcomes most strongly follow assignment position; investigate starting assignment.'
+            : 'No clear factor exceeds the diagnostic threshold.';
+  const suspiciousReproductions =
+    diagnosticRows.length >= thresholds.minimumSamples &&
+    factorAssessment !== 'No clear factor exceeds the diagnostic threshold.'
+      ? diagnosticRows
+          .filter(({ result }) => result.outcome === 'victory')
+          .slice(0, 6)
+          .map(({ result }) => reproductionCommand(result.reproduction))
+      : [];
+  const factorSummaries = (wins: Record<string, number>) =>
+    Object.entries(wins)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, count]) => ({
+        key,
+        wins: count,
+        decidedVictoryShare: count / Math.max(1, diagnosticVictories),
+        confidenceInterval95: wilson95(count, diagnosticVictories),
+      }));
   const aggregate: StudyAggregate = {
     matchesRequested: matrix.length,
     matchesStarted: completed.length,
@@ -373,6 +488,28 @@ export function aggregateStudy(
     continentControlTurnsBySeat,
     runtimeMs,
     gamesPerSecond: completed.length / Math.max(0.001, runtimeMs / 1000),
+    ...(matrix.some((item) => item.assignmentRotation !== 0)
+      ? {
+          diagnostic: {
+            rotationDesign:
+              'Canonical six-seat fixtures cross six logical-player/turn rotations with six assignment-order rotations while holding world and match seeds within each 36-match block.',
+            pairRotationCount: new Set(
+              matrix.map(
+                (item) =>
+                  `${item.worldSeed}:${item.seatRotation}:${item.assignmentRotation}`,
+              ),
+            ).size,
+            logicalPlayerWins,
+            assignmentPositionWins,
+            logicalPlayerSummaries: factorSummaries(logicalPlayerWins),
+            assignmentPositionSummaries: factorSummaries(
+              assignmentPositionWins,
+            ),
+            factorAssessment,
+            suspiciousReproductions,
+          },
+        }
+      : {}),
   };
   const configurations = [
     ...new Set(matrix.map((item) => item.configurationId)),
@@ -431,19 +568,34 @@ export function aggregateStudy(
       code: 'engine-integrity',
       message: `${outcomes.engineError} engine errors and ${invariantFailures} invariant failures observed.`,
     });
-  seatSummaries
-    .filter(
-      (seat) =>
-        seat.samples >= thresholds.minimumSamples &&
-        Math.abs(seat.differenceFromBaseline) >= thresholds.seatDifference,
-    )
-    .forEach((seat) =>
-      findings.push({
-        classification: 'warning',
-        code: 'seat-imbalance',
-        message: `Seat ${seat.seat} observed ${(seat.winRate * 100).toFixed(1)}% wins (${seat.samples} samples; 95% Wilson interval ${(seat.confidenceInterval95[0] * 100).toFixed(1)}–${(seat.confidenceInterval95[1] * 100).toFixed(1)}%). This is an association, not evidence of causation.`,
-      }),
-    );
+  playerCountSeatSummaries.forEach((summary) => {
+    summary.seats.forEach((seat) => {
+      if (seat.samples < thresholds.minimumSamples) return;
+      if (
+        Math.abs(seat.differenceFromOutcomeAdjustedBaseline) >=
+        thresholds.seatDifference
+      )
+        findings.push({
+          classification: 'warning',
+          code: 'unconditional-win-rate-imbalance',
+          message: `${summary.playerCount}-seat seat ${seat.seat} won ${(seat.winRate * 100).toFixed(1)}% of all matches versus the ${(seat.outcomeAdjustedBaseline * 100).toFixed(1)}% outcome-adjusted baseline (${seat.samples} matches).`,
+        });
+      if (
+        seat.victories >= thresholds.minimumSamples &&
+        Math.abs(seat.differenceFromDecidedVictoryBaseline) >=
+          thresholds.seatDifference &&
+        (seat.decidedVictoryConfidenceInterval95[1] <
+          seat.equalDecidedVictoryBaseline ||
+          seat.decidedVictoryConfidenceInterval95[0] >
+            seat.equalDecidedVictoryBaseline)
+      )
+        findings.push({
+          classification: 'warning',
+          code: 'decided-victory-seat-imbalance',
+          message: `${summary.playerCount}-seat seat ${seat.seat} held ${(seat.decidedVictoryShare * 100).toFixed(1)}% of decided victories versus ${(seat.equalDecidedVictoryBaseline * 100).toFixed(2)}% equal share (${seat.victories} victories; association only, not causal proof).`,
+        });
+    });
+  });
   const capRate =
     (outcomes.turnCap + outcomes.commandCap) / Math.max(1, completed.length);
   if (capRate >= thresholds.capRate)
@@ -459,6 +611,33 @@ export function aggregateStudy(
       code: 'stalemate-rate',
       message: `${(stalemateRate * 100).toFixed(1)}% of completed matches ended in stalemate.`,
     });
+  const unresolvedRate =
+    (outcomes.stalemate + outcomes.turnCap + outcomes.commandCap) /
+    Math.max(1, completed.length);
+  if (
+    completed.length >= thresholds.minimumSamples &&
+    unresolvedRate >= 1 - thresholds.lowVictoryRate
+  )
+    findings.push({
+      classification: 'warning',
+      code: 'overall-unresolved-rate',
+      message: `${(unresolvedRate * 100).toFixed(1)}% of completed matches had no winner.`,
+    });
+  if (aggregate.diagnostic && completed.length >= thresholds.minimumSamples) {
+    const assessment = aggregate.diagnostic.factorAssessment;
+    if (assessment.includes('player ID'))
+      findings.push({
+        classification: 'warning',
+        code: 'possible-player-id-correlation',
+        message: assessment,
+      });
+    if (assessment.includes('assignment position'))
+      findings.push({
+        classification: 'warning',
+        code: 'possible-assignment-position-correlation',
+        message: assessment,
+      });
+  }
   configurations.forEach((configuration) => {
     if (configuration.matchesCompleted < thresholds.minimumSamples) return;
     const turnCaps = configuration.outcomes['turn-cap'] ?? 0;
@@ -473,10 +652,15 @@ export function aggregateStudy(
         configurationId: configuration.id,
         message,
       });
-    if ((turnCaps + commandCaps) / samples >= thresholds.capRate)
+    if (turnCaps / samples >= thresholds.capRate)
       add(
-        'configuration-cap-rate',
-        `${configuration.id}: ${(((turnCaps + commandCaps) / samples) * 100).toFixed(1)}% reached a configured cap (${samples} matches).`,
+        'configuration-turn-cap-rate',
+        `${configuration.id}: ${((turnCaps / samples) * 100).toFixed(1)}% reached the turn cap (${samples} matches).`,
+      );
+    if (commandCaps / samples >= thresholds.capRate)
+      add(
+        'configuration-command-cap-rate',
+        `${configuration.id}: ${((commandCaps / samples) * 100).toFixed(1)}% reached the command cap (${samples} matches).`,
       );
     if (stalemates / samples >= thresholds.stalemateRate)
       add(

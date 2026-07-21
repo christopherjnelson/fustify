@@ -14,6 +14,7 @@ import {
   BALANCE_PRESETS,
   balanceStudyConfigSchema,
   createStudyMatrix,
+  SIX_SEAT_DIAGNOSTIC_PRESETS,
   stableHash,
   type BalancePreset,
   type BalanceStudyConfig,
@@ -39,7 +40,15 @@ function has(name: string) {
 function git(args: string[], fallback: string) {
   try {
     return execFileSync('git', args, { encoding: 'utf8' }).trim();
-  } catch {
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'stdout' in error &&
+      typeof error.stdout === 'string' &&
+      error.stdout.trim()
+    )
+      return error.stdout.trim();
     return fallback;
   }
 }
@@ -131,6 +140,24 @@ async function loadConfig(): Promise<{
       ),
       preset: 'custom',
     };
+  const diagnostic = value('diagnose');
+  if (diagnostic) {
+    if (diagnostic !== 'six-seat')
+      throw new Error('Unknown diagnostic. Choose six-seat.');
+    const scale = value('scale') ?? 'smoke';
+    if (!(scale in SIX_SEAT_DIAGNOSTIC_PRESETS))
+      throw new Error(
+        'Unknown diagnostic scale. Choose smoke, standard, or thorough.',
+      );
+    return {
+      config: structuredClone(
+        SIX_SEAT_DIAGNOSTIC_PRESETS[
+          scale as keyof typeof SIX_SEAT_DIAGNOSTIC_PRESETS
+        ],
+      ),
+      preset: `six-seat-diagnostic-${scale}`,
+    };
+  }
   const preset = (value('preset') ?? 'quick') as BalancePreset;
   if (!(preset in BALANCE_PRESETS))
     throw new Error(
@@ -151,6 +178,12 @@ function planText(
     `Configurations: ${config.configurations.length}`,
     `Matches per configuration: ${config.matchesPerConfiguration}`,
     `Total matches: ${matrix.length}`,
+    ...(config.diagnostic
+      ? [
+          `Pair/rotation count: ${new Set(matrix.map((item) => item.worldSeed)).size} canonical seed pairs / ${matrix.length} rotated matches`,
+          'Rotation design: 6 logical-player/turn rotations × 6 assignment-order rotations per complete canonical fixture',
+        ]
+      : []),
     `Estimated runtime: ${elapsed(runtimeEstimate.range[0])}–${elapsed(runtimeEstimate.range[1])} (midpoint ${elapsed(runtimeEstimate.midpoint)})`,
     `Estimate source: ${runtimeEstimate.quality} · ${runtimeEstimate.source}`,
     `Expected report path: ${studyPaths().history}/<run-id>.json`,
@@ -178,6 +211,8 @@ function compact(report: BalanceStudyReport) {
         confidenceInterval95,
       }),
     ),
+    playerCountSeatMetrics: report.aggregate.playerCountSeatSummaries,
+    diagnostic: report.aggregate.diagnostic,
     matchLength: report.aggregate.turns,
     findings: {
       warnings: report.findings.filter(
@@ -321,6 +356,18 @@ async function execute(
         estimateQuality: runtimeEstimate.quality,
         warningThresholds: config.warningThresholds,
         estimatedDiskBytes: matrix.length * 900,
+        ...(config.diagnostic
+          ? {
+              rotationDesign:
+                '6 logical-player/turn rotations × 6 assignment-order rotations per complete canonical fixture',
+              pairRotationCount: new Set(
+                matrix.map(
+                  (item) =>
+                    `${item.worldSeed}:${item.seatRotation}:${item.assignmentRotation}`,
+                ),
+              ).size,
+            }
+          : {}),
       },
       ...summary,
       checkpoint: {

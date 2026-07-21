@@ -2359,10 +2359,22 @@ h2 {
 }
 .seat-table [role='row'] {
   display: grid;
-  grid-template-columns: 0.5fr 0.8fr 0.7fr 1.3fr 1fr;
+  grid-template-columns: 0.4fr 0.7fr 1fr 1.4fr 1.4fr 1.2fr;
   gap: 10px;
   padding: 10px;
   border-bottom: 1px solid #223b4d;
+}
+.player-count-study,
+.diagnostic-summary {
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid #2d4659;
+  border-radius: 8px;
+  background: #0e202d;
+}
+.player-count-outcomes {
+  color: #b7cbd8;
+  line-height: 1.6;
 }
 .seat-table [role='row']:last-child {
   border-bottom: 0;
@@ -2518,16 +2530,22 @@ h2 {
     content: 'Wins';
   }
   .seat-table span:nth-child(3)::before {
-    content: 'Rate';
+    content: 'Win rate across all matches';
   }
   .seat-table span:nth-child(4)::before {
-    content: '95% Wilson interval';
+    content: 'Outcome-adjusted baseline';
   }
   .seat-table span:nth-child(5) {
     grid-column: 1 / -1;
   }
   .seat-table span:nth-child(5)::before {
-    content: 'Equal baseline difference';
+    content: 'Share of decided victories';
+  }
+  .seat-table span:nth-child(6) {
+    grid-column: 1 / -1;
+  }
+  .seat-table span:nth-child(6)::before {
+    content: 'Equal share among winners';
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -11,6 +11,7 @@ The prototype currently provides:
 - A deterministic, smoothed land/ocean mask with multiple landmasses and islands
 - Exactly 42 playable land territories grouped into 6 connected gameplay continents
 - Four recommended editable seats (one Local Human and three Heuristic Bots), expandable to six; custom two- and three-seat tables remain supported
+- Five- and six-seat tables are supported expanded matches and generally run substantially longer; every seat independently supports Human or Bot
 - A randomly named neutral world on fresh launch, before any player ownership exists
 - Curated readable names that are also canonical deterministic world seeds
 - Random distributed assignment or a complete local round-robin territory draft
@@ -124,6 +125,13 @@ SIMULATION_VARIANT=0 \
 SIMULATION_POLICY=aggressive \
 pnpm test:simulation:replay
 ```
+
+The read-only `/admin` Balance Studies dashboard distinguishes all-match win
+rate from decided-victory share and includes a paired six-seat diagnostic. See
+[BALANCE_STUDIES.md](./BALANCE_STUDIES.md) for dry-run, standard, thorough,
+resume, compact JSON export, and single-match reproduction commands. The
+standard world remains 42 territories and 6 continents; smaller worlds are
+advanced/testing options.
 
 `pnpm test:coverage` writes text, HTML, and JSON-summary reports for the pure game and save-validation modules. The HTML report is generated under `coverage/`. Coverage is used to identify rule branches—not as a 100% target. Remaining low-value branches are mainly malformed/unknown command variants and defensive lookup failures; browser-local storage exceptions, free-form globe dragging, and subjective play balance still require integration or manual playtesting.
 

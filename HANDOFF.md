@@ -6,6 +6,13 @@
 
 ## Current state
 
+Branch `feat/seat-balance-diagnostics` starts at
+`b32589e6e761897e2d5486a00815537e4048878d`. It corrects unresolved-outcome
+seat reporting, makes 4/5/6-seat results primary in `/admin`, and adds a
+six-seat paired rotation diagnostic without changing rules or bot heuristics.
+Future agents should ask users to run standard/thorough diagnostics locally and
+share the compact JSON; only smoke belongs in implementation verification.
+
 Branch `feat/recommended-match-defaults` starts at
 `920ccf4ea47166074280555c6dcb6a689c31b1f2`. This milestone aligns fresh setup
 with 42 territories, 6 continents, and four seats (one human, three bots), adds

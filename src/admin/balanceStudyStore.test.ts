@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { balanceStudyFixtures } from './studyFixtures';
+import { parseBalanceStudyReport } from './balanceStudyContract';
 import {
   BALANCE_PRESETS,
   createStudyMatrix,
@@ -57,5 +58,13 @@ describe('balance study report and checkpoint store', () => {
   it('rejects traversal-like run IDs', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'fustify-study-safe-'));
     await expect(readStudy('../escape', root)).rejects.toThrow('Invalid');
+  });
+  it('keeps historical schema-v1 reports without new seat metrics readable', () => {
+    const legacy = structuredClone(balanceStudyFixtures.completed);
+    delete legacy.aggregate.diagnostic;
+    delete legacy.aggregate.playerCountSeatSummaries;
+    delete legacy.plan.rotationDesign;
+    delete legacy.plan.pairRotationCount;
+    expect(parseBalanceStudyReport(legacy).id).toBe(legacy.id);
   });
 });

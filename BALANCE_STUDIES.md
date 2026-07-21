@@ -19,6 +19,25 @@ pnpm study:balance --preset thorough --dry-run
 pnpm study:balance --preset thorough
 ```
 
+For the focused six-seat investigation, dry-run first and then choose an
+explicit scale. Smoke is 12 matches for implementation checks; standard is 600
+paired/rotated matches for normal local diagnosis; thorough is 1,800 matches
+for an explicit unattended run.
+
+```bash
+pnpm study:balance --diagnose six-seat --scale smoke --dry-run
+pnpm study:balance --diagnose six-seat --scale standard --dry-run
+pnpm study:balance --diagnose six-seat --scale standard
+pnpm study:balance --diagnose six-seat --scale thorough
+```
+
+Each complete 36-match canonical fixture holds the 42-territory/6-continent
+world and match/controller seeds fixed while crossing six logical-player/turn
+rotations with six assignment-order rotations. Ownership variants advance
+between fixture blocks. This paired design helps distinguish turn position,
+logical player ID/controller stream, and assignment position from geography;
+it still reports associations rather than causal proof.
+
 `Ctrl+C` and `SIGTERM` finish the current match, atomically checkpoint it, and mark the study `interrupted`. Resume without repeating completed match indices:
 
 ```bash
@@ -71,16 +90,20 @@ The runner deliberately uses one worker. Sequential execution keeps aggregation 
 
 Artifacts are ignored by Git under `.fustify/reports/studies/`: `latest.json`, `history/<run-id>.json`, and `checkpoints/<run-id>.json`. Reports use dedicated schema version 1. Writes use same-directory temporary files and atomic rename. Completed history retains the newest 20 reports; active checkpoints are never removed by retention.
 
-Hard failures include engine errors and invariant failures. At 30 or more
-matches per configuration, cap rates of at least 5%, stalemate rates of at
-least 5%, normal-victory rates below 80%, and p95 reaching the configured turn
-cap warn. Seat differences of at least 8 percentage points also warn. Findings
-are associations, not claims of causation.
+Hard failures include only engine errors and invariant failures. Warnings
+separately classify overall unresolved rate, configuration turn/cap rate,
+configuration stalemate rate, unconditional all-match win-rate imbalance,
+decided-victory seat imbalance, possible player-ID correlation, and possible
+assignment-position correlation. They require the configured minimum sample
+size and remain findings, not engine failures.
 
-Primary seat summaries are separated by player count and purpose, with equal
-baselines of 25%, 20%, and 16.67% for 4, 5, and 6 seats. They report sample
-count, baseline difference, and a two-sided 95% Wilson interval. The mixed
-aggregate remains available but is explicitly labeled limited.
+Primary seat summaries are separated by player count and purpose. **Win rate
+across all matches** is seat wins divided by every match and compares with the
+outcome-adjusted baseline `victories / seats / matches`. **Share of decided
+victories** is seat wins divided only by victories and compares with equal
+winner shares of 25%, 20%, and 16.67% for 4, 5, and 6 seats. Both show counts,
+baseline differences, and 95% Wilson intervals. Additive optional fields keep
+historical schema-v1 reports readable; legacy rows retain their original label.
 
 The earlier 6,000-match v1 broad study remains valid engine evidence (5,722
 victories, 85 stalemates, 193 turn caps, and no command caps, engine errors, or
@@ -93,3 +116,14 @@ pnpm study:balance --preset thorough
 ```
 
 Successful full traces are not retained. Engine failures preserve reproduction descriptors, and verbose reproduction produces a focused single-match trace on demand.
+
+The intended workflow is to start `pnpm dev`, open the clean `/admin` URL,
+dry-run the diagnostic, run it locally without an agent processing the matches,
+then share only:
+
+```bash
+pnpm study:balance --inspect <run-id> --format summary
+pnpm study:balance --inspect <run-id> --format json --export ./six-seat-summary.json
+pnpm study:balance --resume <run-id>
+pnpm study:balance --reproduce '<descriptor>' --verbose
+```

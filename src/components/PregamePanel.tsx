@@ -75,8 +75,9 @@ export function PregamePanel() {
 
       <p className="setup-guidance">
         Recommended: four seats on the 42-territory, 6-continent world. Each
-        seat can independently be Human or Bot; add up to six seats. Smaller
-        tables and custom worlds remain supported.
+        seat can independently be Human or Bot. Five and six seats are supported
+        expanded matches and generally run longer. Smaller worlds remain
+        advanced/testing options.
       </p>
 
       <label className="player-count-control">

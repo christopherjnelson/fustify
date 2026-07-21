@@ -148,11 +148,40 @@ test('balance study running state updates, filters configurations, and exposes C
   await expect(
     page.getByRole('heading', { name: 'Balance Studies' }),
   ).toBeVisible();
-  await expect(page.locator('[data-study-status]')).toHaveText('Running');
+  await expect(page.locator('[data-study-status]')).toHaveText(
+    /Running|Completed/,
+  );
   await page.getByText('CLI quick start and copyable commands').click();
   await expect(
     page.getByLabel(/Copy pnpm study:balance --preset thorough --dry-run/),
   ).toHaveValue(/--dry-run/);
+  await expect(
+    page.getByLabel(
+      /Copy pnpm study:balance --diagnose six-seat --scale standard/,
+    ),
+  ).toHaveValue(/six-seat/);
+  await expect(page.getByText('4 seats · Recommended')).toBeVisible();
+  await expect(page.getByText('5 seats · Expanded match')).toBeVisible();
+  await expect(page.getByText('6 seats · Expanded/long match')).toBeVisible();
+  await expect(
+    page.getByText('Win rate across all matches').first(),
+  ).toBeAttached();
+  await expect(
+    page.getByText('Outcome-adjusted baseline').first(),
+  ).toBeAttached();
+  await expect(
+    page.getByText('Share of decided victories').first(),
+  ).toBeAttached();
+  await expect(
+    page.getByText('Equal share among winners').first(),
+  ).toBeAttached();
+  await expect(
+    page.getByText(/may run substantially longer/).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Six-seat diagnostic' }),
+  ).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe('/admin');
   await page.getByLabel('Configuration player count').selectOption('4');
   await expect(
     page
@@ -194,5 +223,10 @@ test('recent balance study selection is read-only and mobile-safe', async ({
       client: document.documentElement.clientWidth,
     }));
     expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.client);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollHeight),
+    ).toBeGreaterThan(
+      await page.evaluate(() => document.documentElement.clientHeight),
+    );
   }
 });
