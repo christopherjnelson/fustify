@@ -27,6 +27,7 @@ export type VisualScenario =
   | 'pregame-random-ready'
   | 'human-vs-bot-setup'
   | 'multiple-bot-setup'
+  | 'pregame-six-seats'
   | 'draft-started'
   | 'draft-in-progress'
   | 'draft-complete'
@@ -237,7 +238,9 @@ function applyScenario(scenario: VisualScenario) {
   const scenarioSetup =
     scenario === 'minimap-seam'
       ? { ...FIXED_SETUP, seed: 'minimap-fixture-0' }
-      : FIXED_SETUP;
+      : scenario === 'pregame-six-seats'
+        ? { ...FIXED_SETUP, playerCount: 6 }
+        : FIXED_SETUP;
   const fixed = fixedWorld(scenarioSetup);
   const { planet } = fixed;
   let matchSetup: MatchSetup = fixed.matchSetup;
@@ -284,12 +287,16 @@ function applyScenario(scenario: VisualScenario) {
         ? 'pregame'
         : 'playing';
   }
-  if (scenario === 'human-vs-bot-setup' || scenario === 'multiple-bot-setup') {
+  if (
+    scenario === 'human-vs-bot-setup' ||
+    scenario === 'multiple-bot-setup' ||
+    scenario === 'pregame-six-seats'
+  ) {
     applicationMode = 'pregame';
     const botPlayers = fixed.players.map((player, index) => ({
       ...player,
       controllerType:
-        scenario === 'multiple-bot-setup'
+        scenario === 'multiple-bot-setup' || scenario === 'pregame-six-seats'
           ? index === 0
             ? ('local-human' as const)
             : ('heuristic-bot' as const)

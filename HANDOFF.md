@@ -6,6 +6,12 @@
 
 ## Current state
 
+Branch `feat/recommended-match-defaults` starts at
+`920ccf4ea47166074280555c6dcb6a689c31b1f2`. This milestone aligns fresh setup
+with 42 territories, 6 continents, and four seats (one human, three bots), adds
+bot-default seats five and six, and versions product-balance versus
+engine-coverage presets without changing rules or save schema v4.
+
 Branch `feat/admin-verification-dashboard` starts at
 `b6c7c06c7f7d11ed8a2bc014f2cc7b2fc536ebac`. It adds schema-v1 atomic reports,
 standard/full report-enabled runners, a narrow development-only GET API, and a

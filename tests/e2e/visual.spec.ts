@@ -37,6 +37,11 @@ const scenarios: Array<{
     heading: /Preview and assign territories/i,
   },
   {
+    name: 'pregame-six-seats',
+    region: '.pregame-panel',
+    heading: /Preview and assign territories/i,
+  },
+  {
     name: 'draft-started',
     region: '.pregame-panel',
     heading: /chooses now/i,

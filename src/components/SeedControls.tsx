@@ -75,6 +75,10 @@ export function SeedControls() {
           />
         </label>
       </div>
+      <p className="setup-guidance">
+        Recommended world: 42 territories and 6 continents. These controls
+        remain available for smaller and custom worlds.
+      </p>
       {(warning || error) && (
         <p
           className={error ? 'setup-message error' : 'setup-message'}

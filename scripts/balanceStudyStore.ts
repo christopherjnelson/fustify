@@ -100,6 +100,38 @@ export async function readStudy(id: string, directory = STUDY_ROOT) {
   }
   throw new Error(`Study ${id} was not found.`);
 }
+
+export async function readCompletedStudies(directory = STUDY_ROOT) {
+  const paths = studyPaths(directory);
+  try {
+    const files = (await readdir(paths.history)).filter((name) =>
+      name.endsWith('.json'),
+    );
+    const reports = await Promise.all(
+      files.map(async (name) => {
+        try {
+          return parseBalanceStudyReport(
+            JSON.parse(await readFile(resolve(paths.history, name), 'utf8')),
+          );
+        } catch {
+          return null;
+        }
+      }),
+    );
+    return reports.filter(
+      (report): report is BalanceStudyReport =>
+        report !== null &&
+        report.status === 'completed' &&
+        report.aggregate.matchesCompleted > 0 &&
+        report.aggregate.runtimeMs > 0 &&
+        report.aggregate.outcomes.engineError === 0 &&
+        report.aggregate.invariantFailures === 0,
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+}
 export async function readCheckpoint(
   id: string,
   directory = STUDY_ROOT,

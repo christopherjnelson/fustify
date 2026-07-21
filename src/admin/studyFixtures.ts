@@ -4,6 +4,8 @@ const base: BalanceStudyReport = {
   schemaVersion: 1,
   id: 'balance-fixture-completed',
   preset: 'quick',
+  presetVersion: 2,
+  purpose: 'mixed',
   configLabel: 'Representative multi-configuration study',
   configHash: 'a'.repeat(64),
   matrixHash: 'b'.repeat(64),
@@ -25,6 +27,16 @@ const base: BalanceStudyReport = {
     seedPrefix: 'fixture',
     estimatedRuntimeMs: 15000,
     estimatedDiskBytes: 36000,
+    estimateSource: '3 valid completed configuration timing samples',
+    estimateQuality: 'historical-similar',
+    estimatedRuntimeRangeMs: [12000, 20000],
+    warningThresholds: {
+      seatDifference: 0.08,
+      capRate: 0.05,
+      stalemateRate: 0.05,
+      minimumSamples: 30,
+      lowVictoryRate: 0.8,
+    },
   },
   aggregate: {
     matchesRequested: 40,
@@ -60,6 +72,7 @@ const base: BalanceStudyReport = {
         meanStartingTerritories: 9,
       },
     ],
+    playerCountSeatSummaries: [],
     turns: {
       mean: 28.4,
       minimum: 5,
@@ -82,6 +95,7 @@ const base: BalanceStudyReport = {
     {
       id: 'small-2p-12t-2c-0',
       group: 'small',
+      purpose: 'engine-coverage',
       playerCount: 2,
       territoryCount: 12,
       continentCount: 2,
@@ -97,6 +111,7 @@ const base: BalanceStudyReport = {
     {
       id: 'standard-4p-32t-5c-1',
       group: 'standard',
+      purpose: 'product-balance',
       playerCount: 4,
       territoryCount: 32,
       continentCount: 5,
@@ -116,6 +131,13 @@ const base: BalanceStudyReport = {
       code: 'seat-imbalance',
       message:
         'Seat 1 observed 62.5% wins (40 samples; 95% Wilson interval 47.0–76.0%). This is an association, not evidence of causation.',
+    },
+    {
+      classification: 'warning',
+      code: 'configuration-cap-rate',
+      configurationId: 'standard-4p-32t-5c-1',
+      message:
+        'standard-4p-32t-5c-1: 5.0% reached the configured turn cap (40 matches).',
     },
     {
       classification: 'informational',

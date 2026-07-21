@@ -44,7 +44,7 @@ export function createDefaultPlayerConfigs(
     name: DEFAULT_NAMES[seatIndex] ?? `Player ${seatIndex + 1}`,
     colorId: PLAYER_COLORS[seatIndex]!.id,
     seatIndex,
-    controllerType: 'local-human',
+    controllerType: seatIndex === 0 ? 'local-human' : 'heuristic-bot',
   }));
 }
 

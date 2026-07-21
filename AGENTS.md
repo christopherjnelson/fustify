@@ -41,3 +41,11 @@ the development-only `/admin` page open when useful and include the generated
 verification run ID in the handoff. Reports live under ignored
 `.fustify/reports/`; do not commit run history. Never claim that a suite passed
 when its structured report says pending, skipped, interrupted, or incomplete.
+
+## Balance-study purpose
+
+Keep product-balance conclusions focused on 42-territory, 6-continent worlds
+with 4–6 seats. Retain small/two-player/unusual configurations as explicitly
+labeled engine coverage. Never reinterpret legacy study reports under newer
+preset definitions; preserve preset-version metadata and per-player-count seat
+baselines.

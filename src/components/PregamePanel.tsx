@@ -73,6 +73,12 @@ export function PregamePanel() {
         only when you begin an assignment strategy.
       </p>
 
+      <p className="setup-guidance">
+        Recommended: four seats on the 42-territory, 6-continent world. Each
+        seat can independently be Human or Bot; add up to six seats. Smaller
+        tables and custom worlds remain supported.
+      </p>
+
       <label className="player-count-control">
         <span>Players</span>
         <input
@@ -87,6 +93,19 @@ export function PregamePanel() {
           }
         />
       </label>
+
+      <button
+        type="button"
+        className="secondary add-seat-button"
+        onClick={() => setPlayerCount(setup.playerCount + 1)}
+        disabled={
+          setup.playerCount >= MAX_PLAYER_COUNT ||
+          matchSetup.setupPhase !== 'neutral-preview' ||
+          operation !== null
+        }
+      >
+        Add Seat
+      </button>
 
       <div className="player-config-list">
         {orderedPlayers.map((player) => {

@@ -5,6 +5,11 @@ configuration. A `LocalPlayerConfig` owns the stable player ID, display name,
 palette color, seat order, and `controllerType`. The supported public controller
 types are `local-human` and `heuristic-bot`; names and colors never imply control.
 
+Fresh production setup creates four seats: seat 1 is `local-human`, seats 2–4
+are `heuristic-bot`, and added seats 5–6 default to `heuristic-bot`. Explicit
+URLs and restored v0–v4 saves keep their counts and persisted controllers;
+historical players without controller data still migrate to `local-human`.
+
 ## Authoritative command boundary
 
 ```text

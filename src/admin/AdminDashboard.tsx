@@ -68,6 +68,7 @@ function BalanceStudies({
             'pnpm study:balance --preset standard',
             'pnpm study:balance --preset thorough',
             'pnpm study:balance --preset thorough --dry-run',
+            'pnpm study:balance --preset engine-coverage',
             'pnpm study:balance --resume <run-id>',
             "pnpm study:balance --reproduce '<descriptor>' --verbose",
           ].map((command) => (
@@ -97,8 +98,15 @@ function BalanceStudies({
               </p>
               <h3>{study.id}</h3>
               <p>
-                {study.preset} · {study.aggregate.matchesCompleted}/
-                {study.plan.totalMatches} matches (
+                {study.purpose
+                  ? label(study.purpose)
+                  : 'Legacy / unspecified purpose'}{' '}
+                · {study.preset}
+                {study.presetVersion
+                  ? ` v${study.presetVersion}`
+                  : ' (legacy preset)'}{' '}
+                · {study.aggregate.matchesCompleted}/{study.plan.totalMatches}{' '}
+                matches (
                 {(
                   (study.aggregate.matchesCompleted /
                     Math.max(1, study.plan.totalMatches)) *
@@ -121,6 +129,14 @@ function BalanceStudies({
               <div>
                 <dt>Elapsed</dt>
                 <dd>{duration(study.aggregate.runtimeMs)}</dd>
+              </div>
+              <div>
+                <dt>Estimate basis</dt>
+                <dd>
+                  {study.plan.estimateQuality
+                    ? label(study.plan.estimateQuality)
+                    : 'Legacy fixed estimate'}
+                </dd>
               </div>
               <div>
                 <dt>Warnings / failures</dt>
@@ -162,33 +178,75 @@ function BalanceStudies({
               </p>
             </article>
           </div>
-          <h3>Seat balance</h3>
-          <div className="seat-table" role="table" aria-label="Seat balance">
-            <div role="row">
-              <strong>Seat</strong>
-              <strong>Wins</strong>
-              <strong>Rate</strong>
-              <strong>95% Wilson interval</strong>
-              <strong>Equal baseline Δ</strong>
-            </div>
-            {study.aggregate.seatSummaries.map((seat) => (
-              <div role="row" key={seat.seat}>
-                <span>{seat.seat}</span>
-                <span>
-                  {seat.wins}/{seat.samples}
-                </span>
-                <span>{(seat.winRate * 100).toFixed(1)}%</span>
-                <span>
-                  {(seat.confidenceInterval95[0] * 100).toFixed(1)}–
-                  {(seat.confidenceInterval95[1] * 100).toFixed(1)}%
-                </span>
-                <span>
-                  {seat.differenceFromBaseline >= 0 ? '+' : ''}
-                  {(seat.differenceFromBaseline * 100).toFixed(1)} pts
-                </span>
+          <h3>Seat balance by player count</h3>
+          {study.aggregate.playerCountSeatSummaries?.map((summary) => (
+            <div key={`${summary.purpose}-${summary.playerCount}`}>
+              <h4>
+                {summary.playerCount} players · {label(summary.purpose)} · equal
+                baseline {(100 / summary.playerCount).toFixed(2)}%
+              </h4>
+              <div
+                className="seat-table"
+                role="table"
+                aria-label={`${summary.playerCount}-player seat balance`}
+              >
+                <div role="row">
+                  <strong>Seat</strong>
+                  <strong>Wins</strong>
+                  <strong>Rate</strong>
+                  <strong>95% Wilson interval</strong>
+                  <strong>Baseline Δ</strong>
+                </div>
+                {summary.seats.map((seat) => (
+                  <div role="row" key={seat.seat}>
+                    <span>{seat.seat}</span>
+                    <span>
+                      {seat.wins}/{seat.samples}
+                    </span>
+                    <span>{(seat.winRate * 100).toFixed(1)}%</span>
+                    <span>
+                      {(seat.confidenceInterval95[0] * 100).toFixed(1)}–
+                      {(seat.confidenceInterval95[1] * 100).toFixed(1)}%
+                    </span>
+                    <span>
+                      {seat.differenceFromBaseline >= 0 ? '+' : ''}
+                      {(seat.differenceFromBaseline * 100).toFixed(1)} pts
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
+          <details>
+            <summary>Cross-player-count aggregate (limited)</summary>
+            <div className="seat-table" role="table" aria-label="Seat balance">
+              <div role="row">
+                <strong>Seat</strong>
+                <strong>Wins</strong>
+                <strong>Rate</strong>
+                <strong>95% Wilson interval</strong>
+                <strong>Equal baseline Δ</strong>
+              </div>
+              {study.aggregate.seatSummaries.map((seat) => (
+                <div role="row" key={seat.seat}>
+                  <span>{seat.seat}</span>
+                  <span>
+                    {seat.wins}/{seat.samples}
+                  </span>
+                  <span>{(seat.winRate * 100).toFixed(1)}%</span>
+                  <span>
+                    {(seat.confidenceInterval95[0] * 100).toFixed(1)}–
+                    {(seat.confidenceInterval95[1] * 100).toFixed(1)}%
+                  </span>
+                  <span>
+                    {seat.differenceFromBaseline >= 0 ? '+' : ''}
+                    {(seat.differenceFromBaseline * 100).toFixed(1)} pts vs{' '}
+                    {(seat.equalSeatBaseline * 100).toFixed(2)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </details>
           <p className="method-note">
             Observed associations with statistical uncertainty; these figures do
             not establish causation.
@@ -219,7 +277,8 @@ function BalanceStudies({
                 <h4>{item.id}</h4>
                 <p>
                   {item.playerCount} players · {item.territoryCount} territories
-                  · {item.continentCount} continents · {item.worldSize}
+                  · {item.continentCount} continents · {item.worldSize} ·{' '}
+                  {item.purpose ? label(item.purpose) : 'Legacy purpose'}
                 </p>
                 <span>
                   {item.matchesCompleted}/{item.matchesRequested} complete ·
@@ -240,6 +299,9 @@ function BalanceStudies({
                     {label(item.classification)} · {label(item.code)}
                   </strong>
                   <p>{item.message}</p>
+                  {item.configurationId && (
+                    <small>Configuration: {item.configurationId}</small>
+                  )}
                   {item.reproduction && (
                     <textarea
                       readOnly
@@ -251,6 +313,17 @@ function BalanceStudies({
                 </article>
               ))}
             </div>
+          )}
+          {study.plan.warningThresholds && (
+            <p className="method-note">
+              Configuration warnings require{' '}
+              {study.plan.warningThresholds.minimumSamples} samples; cap and
+              stalemate rates warn at{' '}
+              {(study.plan.warningThresholds.capRate * 100).toFixed(0)}%, and
+              normal victories below{' '}
+              {(study.plan.warningThresholds.lowVictoryRate * 100).toFixed(0)}%
+              warn.
+            </p>
           )}
         </>
       )}

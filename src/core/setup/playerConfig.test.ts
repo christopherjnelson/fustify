@@ -13,9 +13,14 @@ describe('local player configuration', () => {
       0, 1, 2, 3, 4, 5,
     ]);
     expect(validatePlayerConfigs(players)).toEqual([]);
-    expect(
-      players.every((player) => player.controllerType === 'local-human'),
-    ).toBe(true);
+    expect(players.map((player) => player.controllerType)).toEqual([
+      'local-human',
+      'heuristic-bot',
+      'heuristic-bot',
+      'heuristic-bot',
+      'heuristic-bot',
+      'heuristic-bot',
+    ]);
   });
 
   it('keeps stable IDs when a name changes', () => {

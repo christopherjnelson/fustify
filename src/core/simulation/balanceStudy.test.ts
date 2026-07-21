@@ -74,7 +74,7 @@ describe('balance study configuration and aggregation', () => {
   it('runtime-validates presets and rejects invalid combinations', () => {
     expect(
       balanceStudyConfigSchema.parse(BALANCE_PRESETS.quick).configurations,
-    ).toHaveLength(4);
+    ).toHaveLength(5);
     expect(() =>
       balanceStudyConfigSchema.parse({
         ...BALANCE_PRESETS.quick,
@@ -94,7 +94,7 @@ describe('balance study configuration and aggregation', () => {
     const second = createStudyMatrix(BALANCE_PRESETS.quick);
     expect(first).toEqual(second);
     expect(stableHash(first)).toBe(stableHash(second));
-    expect(first).toHaveLength(16);
+    expect(first).toHaveLength(20);
     expect(new Set(first.map((item) => item.playerCount)).size).toBeGreaterThan(
       1,
     );
@@ -118,15 +118,52 @@ describe('balance study configuration and aggregation', () => {
       seatDifference: 0.01,
       capRate: 0.5,
       stalemateRate: 0.5,
+      minimumSamples: 30,
+      lowVictoryRate: 0.8,
     });
     expect(result.aggregate.matchesCompleted).toBe(2);
     expect(result.aggregate.outcomes.victory).toBe(2);
     expect(result.aggregate.seatSummaries.map((seat) => seat.wins)).toEqual([
-      1, 1,
+      1, 0, 0, 1,
     ]);
     expect(result.configurations[0]?.matchesCompleted).toBe(2);
     expect(
       result.findings.some((item) => item.classification === 'failure'),
+    ).toBe(false);
+    expect(result.aggregate.playerCountSeatSummaries?.[0]?.playerCount).toBe(4);
+  });
+
+  it('warns for configuration pacing only after the minimum sample size', () => {
+    const matrix = createStudyMatrix({
+      ...BALANCE_PRESETS.quick,
+      configurations: [BALANCE_PRESETS.quick.configurations[0]!],
+      matchesPerConfiguration: 30,
+    });
+    const rows = matrix.map((input) =>
+      completed(input, 'player-01', 'turn-cap'),
+    );
+    const result = aggregateStudy(
+      matrix,
+      rows,
+      3_000,
+      BALANCE_PRESETS.quick.warningThresholds,
+    );
+    expect(result.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'configuration-cap-rate',
+          configurationId: matrix[0]!.configurationId,
+        }),
+      ]),
+    );
+    const lowSample = aggregateStudy(
+      matrix,
+      rows.slice(0, 2),
+      200,
+      BALANCE_PRESETS.quick.warningThresholds,
+    );
+    expect(
+      lowSample.findings.some((item) => item.code === 'configuration-cap-rate'),
     ).toBe(false);
   });
 });

@@ -22,6 +22,7 @@ import {
 import {
   finalizeStudy,
   readCheckpoint,
+  readCompletedStudies,
   readStudy,
   studyPaths,
   writeStudyProgress,
@@ -49,8 +50,64 @@ function repository() {
     worktreeCleanAtStart: git(['status', '--porcelain'], 'dirty') === '',
   };
 }
-function estimateMs(total: number) {
-  return (total / 3) * 1_000;
+export function estimateRuntime(
+  config: BalanceStudyConfig,
+  history: BalanceStudyReport[] = [],
+) {
+  const matrix = createStudyMatrix(config);
+  const exactRates = matrix.flatMap((item) =>
+    history.flatMap((report) =>
+      report.configurations
+        .filter(
+          (candidate) =>
+            candidate.playerCount === item.playerCount &&
+            candidate.territoryCount === item.territoryCount &&
+            candidate.continentCount === item.continentCount &&
+            candidate.matchesCompleted > 0 &&
+            candidate.gamesPerSecond > 0,
+        )
+        .map((candidate) => candidate.gamesPerSecond),
+    ),
+  );
+  const similarRates = matrix.flatMap((item) =>
+    history.flatMap((report) =>
+      report.configurations
+        .filter(
+          (candidate) =>
+            candidate.playerCount === item.playerCount &&
+            Math.abs(candidate.territoryCount - item.territoryCount) <= 12 &&
+            candidate.matchesCompleted > 0 &&
+            candidate.gamesPerSecond > 0,
+        )
+        .map((candidate) => candidate.gamesPerSecond),
+    ),
+  );
+  const rates = exactRates.length ? exactRates : similarRates;
+  if (rates.length) {
+    const rate = rates.reduce((sum, value) => sum + value, 0) / rates.length;
+    const midpoint = (matrix.length / rate) * 1_000;
+    return {
+      midpoint,
+      range: [midpoint * 0.8, midpoint * 1.3] as [number, number],
+      source: `${rates.length} valid completed configuration timing samples`,
+      quality: (exactRates.length
+        ? 'historical-exact'
+        : 'historical-similar') as 'historical-exact' | 'historical-similar',
+    };
+  }
+  const weightedSeconds = matrix.reduce(
+    (sum, item) =>
+      sum + 1.05 * (item.territoryCount / 42) * (item.playerCount / 4),
+    0,
+  );
+  const midpoint = weightedSeconds * 1_000;
+  return {
+    midpoint,
+    range: [midpoint * 0.65, midpoint * 1.65] as [number, number],
+    source:
+      'Conservative world-size and player-count fallback (no valid local history)',
+    quality: 'conservative-fallback' as const,
+  };
 }
 function safeRunId(preset: string) {
   return `balance-${new Date().toISOString().replaceAll(/[:.]/g, '-')}-${preset}`;
@@ -77,20 +134,25 @@ async function loadConfig(): Promise<{
   const preset = (value('preset') ?? 'quick') as BalancePreset;
   if (!(preset in BALANCE_PRESETS))
     throw new Error(
-      `Unknown preset ${preset}. Choose quick, standard, thorough, or exhaustive.`,
+      `Unknown preset ${preset}. Choose quick, standard, thorough, exhaustive, or engine-coverage.`,
     );
   return { config: structuredClone(BALANCE_PRESETS[preset]), preset };
 }
 
-function planText(config: BalanceStudyConfig, preset: string) {
+function planText(
+  config: BalanceStudyConfig,
+  preset: string,
+  history: BalanceStudyReport[] = [],
+) {
   const matrix = createStudyMatrix(config);
-  const estimate = estimateMs(matrix.length);
+  const runtimeEstimate = estimateRuntime(config, history);
   return [
     `Balance study plan (${preset})`,
     `Configurations: ${config.configurations.length}`,
     `Matches per configuration: ${config.matchesPerConfiguration}`,
     `Total matches: ${matrix.length}`,
-    `Estimated runtime: about ${elapsed(estimate)} at the baseline 3 games/s (estimate only)`,
+    `Estimated runtime: ${elapsed(runtimeEstimate.range[0])}–${elapsed(runtimeEstimate.range[1])} (midpoint ${elapsed(runtimeEstimate.midpoint)})`,
+    `Estimate source: ${runtimeEstimate.quality} · ${runtimeEstimate.source}`,
     `Expected report path: ${studyPaths().history}/<run-id>.json`,
     `Concurrency: 1 worker (deterministic sequential aggregation; --workers 1)`,
     `Seeds: ${matrix[0]?.worldSeed ?? '—'} … ${matrix.at(-1)?.matchSeed ?? '—'}`,
@@ -187,6 +249,7 @@ async function execute(
       'This version supports --workers 1 only; sequential throughput is retained for predictable desktop load and deterministic ordering.',
     );
   const matrix = createStudyMatrix(config);
+  const runtimeEstimate = estimateRuntime(config, await readCompletedStudies());
   const configHash = stableHash(config);
   const matrixHash = stableHash(matrix);
   const repo = repository();
@@ -224,6 +287,16 @@ async function execute(
       schemaVersion: BALANCE_STUDY_SCHEMA_VERSION,
       id: runId,
       preset,
+      presetVersion: config.presetVersion,
+      purpose: config.configurations.every(
+        (item) => item.purpose === 'product-balance',
+      )
+        ? 'product-balance'
+        : config.configurations.every(
+              (item) => item.purpose === 'engine-coverage',
+            )
+          ? 'engine-coverage'
+          : 'mixed',
       configLabel: config.label,
       configHash,
       matrixHash,
@@ -242,7 +315,11 @@ async function execute(
         workers: 1,
         checkpointEvery: config.checkpointEvery,
         seedPrefix: config.seedPrefix,
-        estimatedRuntimeMs: estimateMs(matrix.length),
+        estimatedRuntimeMs: runtimeEstimate.midpoint,
+        estimatedRuntimeRangeMs: runtimeEstimate.range,
+        estimateSource: runtimeEstimate.source,
+        estimateQuality: runtimeEstimate.quality,
+        warningThresholds: config.warningThresholds,
         estimatedDiskBytes: matrix.length * 900,
       },
       ...summary,
@@ -266,7 +343,9 @@ async function execute(
     completed,
   });
   await writeStudyProgress(buildReport('running'), checkpoint());
-  process.stdout.write(`Run ID: ${runId}\n${planText(config, preset)}\n`);
+  process.stdout.write(
+    `Run ID: ${runId}\n${planText(config, preset, await readCompletedStudies())}\n`,
+  );
   const completedIndices = new Set(completed.map((item) => item.input.index));
   for (const input of matrix) {
     if (completedIndices.has(input.index)) continue;
@@ -319,7 +398,10 @@ try {
     await execute(checkpoint.config, checkpoint.preset, checkpoint);
   } else {
     const { config, preset } = await loadConfig();
-    if (has('dry-run')) process.stdout.write(`${planText(config, preset)}\n`);
+    if (has('dry-run'))
+      process.stdout.write(
+        `${planText(config, preset, await readCompletedStudies())}\n`,
+      );
     else await execute(config, preset);
   }
 } catch (error) {

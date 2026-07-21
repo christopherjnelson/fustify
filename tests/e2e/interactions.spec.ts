@@ -111,6 +111,40 @@ test('player setup supports human, bot, and multiple bot seats accessibly', asyn
   ).toHaveCount(3);
 });
 
+test('recommended setup starts with four seats and adds bot seats through six', async ({
+  page,
+}) => {
+  await page.goto('/?v=1&seed=recommended-setup&territories=42&continents=6');
+  await page.getByRole('button', { name: 'Start Game' }).click();
+  await expect(page.getByLabel('Player count')).toHaveValue('4');
+  await expect(page.locator('.player-config')).toHaveCount(4);
+  await expect(page.getByLabel(/Crimson League controller/i)).toHaveValue(
+    'local-human',
+  );
+  await expect(
+    page.locator('select[aria-label$=" controller"] option:checked', {
+      hasText: 'Heuristic Bot',
+    }),
+  ).toHaveCount(3);
+  await expect(page.getByText(/Recommended: four seats/)).toBeVisible();
+  const addSeat = page.getByRole('button', { name: 'Add Seat' });
+  await addSeat.click();
+  await expect(page.locator('.player-config')).toHaveCount(5);
+  await expect(page.getByLabel(/Violet Assembly controller/i)).toHaveValue(
+    'heuristic-bot',
+  );
+  await addSeat.click();
+  await expect(page.locator('.player-config')).toHaveCount(6);
+  await expect(page.getByLabel(/Rose Coalition controller/i)).toHaveValue(
+    'heuristic-bot',
+  );
+  await expect(addSeat).toBeDisabled();
+  await page
+    .getByLabel(/Rose Coalition controller/i)
+    .selectOption('local-human');
+  await expect(page.getByLabel('Player count')).toHaveValue('6');
+});
+
 test('bot status locks gameplay selection and human controls return afterward', async ({
   page,
 }) => {

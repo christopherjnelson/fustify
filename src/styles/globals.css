@@ -211,6 +211,18 @@ select:focus-visible {
   background: #111d2a;
 }
 
+.setup-guidance {
+  margin: 0 0 12px;
+  color: #a8bdce;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.add-seat-button {
+  width: 100%;
+  margin: -4px 0 12px;
+}
+
 .player-config {
   display: grid;
   grid-template-columns: 28px minmax(120px, 1fr) 104px 118px 24px;

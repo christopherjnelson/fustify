@@ -7,6 +7,7 @@ export type Scenario =
   | 'pregame-random-ready'
   | 'human-vs-bot-setup'
   | 'multiple-bot-setup'
+  | 'pregame-six-seats'
   | 'draft-started'
   | 'draft-in-progress'
   | 'draft-complete'

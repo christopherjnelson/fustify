@@ -44,6 +44,15 @@ export const studyAggregateSchema = z.object({
   }),
   invariantFailures: z.number().int().nonnegative(),
   seatSummaries: z.array(seatSummarySchema).max(6),
+  playerCountSeatSummaries: z
+    .array(
+      z.object({
+        playerCount: z.number().int().min(2).max(6),
+        purpose: z.enum(['product-balance', 'engine-coverage']),
+        seats: z.array(seatSummarySchema).max(6),
+      }),
+    )
+    .optional(),
   turns: z.object({
     mean: z.number().nonnegative(),
     minimum: z.number().nonnegative(),
@@ -69,6 +78,7 @@ export const studyAggregateSchema = z.object({
 export const configurationAggregateSchema = z.object({
   id: z.string().max(200),
   group: z.string().max(100),
+  purpose: z.enum(['product-balance', 'engine-coverage']).optional(),
   playerCount: z.number().int().min(2).max(6),
   territoryCount: z.number().int().min(12).max(48),
   continentCount: z.number().int().min(2).max(8),
@@ -86,6 +96,8 @@ export const balanceStudyReportSchema = z.object({
   schemaVersion: z.literal(BALANCE_STUDY_SCHEMA_VERSION),
   id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/),
   preset: z.string().max(100),
+  presetVersion: z.number().int().positive().optional(),
+  purpose: z.enum(['product-balance', 'engine-coverage', 'mixed']).optional(),
   configLabel: z.string().max(200),
   configHash: z.string().regex(/^[a-f0-9]{64}$/),
   matrixHash: z.string().regex(/^[a-f0-9]{64}$/),
@@ -109,6 +121,22 @@ export const balanceStudyReportSchema = z.object({
     seedPrefix: z.string().max(200),
     estimatedRuntimeMs: z.number().nonnegative(),
     estimatedDiskBytes: z.number().nonnegative(),
+    estimateSource: z.string().max(200).optional(),
+    estimateQuality: z
+      .enum(['historical-exact', 'historical-similar', 'conservative-fallback'])
+      .optional(),
+    estimatedRuntimeRangeMs: z
+      .tuple([z.number().nonnegative(), z.number().nonnegative()])
+      .optional(),
+    warningThresholds: z
+      .object({
+        seatDifference: z.number(),
+        capRate: z.number(),
+        stalemateRate: z.number(),
+        minimumSamples: z.number().int(),
+        lowVictoryRate: z.number(),
+      })
+      .optional(),
   }),
   aggregate: studyAggregateSchema,
   configurations: z.array(configurationAggregateSchema).max(5_000),

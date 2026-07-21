@@ -9,6 +9,7 @@ import type {
 
 const dimensionSchema = z.object({
   group: z.string().min(1).max(100),
+  purpose: z.enum(['product-balance', 'engine-coverage']),
   playerCount: z.number().int().min(2).max(6),
   territoryCount: z.number().int().min(12).max(48),
   continentCount: z.number().int().min(2).max(8),
@@ -17,6 +18,7 @@ const dimensionSchema = z.object({
 export const balanceStudyConfigSchema = z
   .object({
     label: z.string().min(1).max(200),
+    presetVersion: z.number().int().positive().default(2),
     seedPrefix: z.string().min(1).max(200),
     matchesPerConfiguration: z.number().int().positive().max(100_000),
     rotations: z.number().int().min(1).max(6).default(1),
@@ -35,8 +37,16 @@ export const balanceStudyConfigSchema = z
         seatDifference: z.number().min(0).max(1).default(0.08),
         capRate: z.number().min(0).max(1).default(0.05),
         stalemateRate: z.number().min(0).max(1).default(0.05),
+        minimumSamples: z.number().int().positive().default(30),
+        lowVictoryRate: z.number().min(0).max(1).default(0.8),
       })
-      .default({ seatDifference: 0.08, capRate: 0.05, stalemateRate: 0.05 }),
+      .default({
+        seatDifference: 0.08,
+        capRate: 0.05,
+        stalemateRate: 0.05,
+        minimumSamples: 30,
+        lowVictoryRate: 0.8,
+      }),
     configurations: z.array(dimensionSchema).min(1).max(5_000),
   })
   .superRefine((config, context) => {
@@ -58,24 +68,38 @@ export const balanceStudyConfigSchema = z
 
 export type BalanceStudyConfig = z.infer<typeof balanceStudyConfigSchema>;
 
-const representative = [
-  { group: 'small', playerCount: 2, territoryCount: 12, continentCount: 2 },
-  { group: 'small', playerCount: 3, territoryCount: 18, continentCount: 3 },
-  { group: 'standard', playerCount: 2, territoryCount: 24, continentCount: 4 },
-  { group: 'standard', playerCount: 4, territoryCount: 32, continentCount: 5 },
-  { group: 'large', playerCount: 3, territoryCount: 42, continentCount: 6 },
-  { group: 'large', playerCount: 5, territoryCount: 48, continentCount: 8 },
-] as const;
+const product = [4, 5, 6].map((playerCount) => ({
+  group: 'recommended',
+  purpose: 'product-balance' as const,
+  playerCount,
+  territoryCount: 42,
+  continentCount: 6,
+}));
+const engine = [
+  {
+    group: 'edge-small',
+    purpose: 'engine-coverage' as const,
+    playerCount: 2,
+    territoryCount: 12,
+    continentCount: 2,
+  },
+  {
+    group: 'edge-density',
+    purpose: 'engine-coverage' as const,
+    playerCount: 3,
+    territoryCount: 18,
+    continentCount: 4,
+  },
+];
 
 function preset(
   matches: number,
-  configurations: ReadonlyArray<
-    (typeof representative)[number]
-  > = representative,
+  configurations: ReadonlyArray<z.infer<typeof dimensionSchema>> = product,
 ): BalanceStudyConfig {
   return balanceStudyConfigSchema.parse({
-    label: 'Multi-configuration deterministic balance study',
-    seedPrefix: 'fustify-balance-v1',
+    label: 'Standard-play deterministic balance study',
+    presetVersion: 2,
+    seedPrefix: 'fustify-balance-v2',
     matchesPerConfiguration: matches,
     rotations: 2,
     ownershipVariants: 2,
@@ -85,10 +109,11 @@ function preset(
 }
 
 export const BALANCE_PRESETS = {
-  quick: preset(4, representative.slice(0, 4)),
-  standard: preset(100),
-  thorough: preset(1_000),
-  exhaustive: preset(10_000),
+  quick: preset(4, [...product, ...engine]),
+  standard: preset(100, [...product, ...engine]),
+  thorough: preset(1_000, product),
+  exhaustive: preset(10_000, product),
+  'engine-coverage': preset(10, engine),
 } as const;
 
 export type BalancePreset = keyof typeof BALANCE_PRESETS;
@@ -97,6 +122,7 @@ export interface StudyMatchInput {
   index: number;
   configurationId: string;
   group: string;
+  purpose: 'product-balance' | 'engine-coverage';
   playerCount: number;
   territoryCount: number;
   continentCount: number;
@@ -271,6 +297,57 @@ export function aggregateStudy(
         meanStartingTerritories: seat.territories / seat.samples,
       };
     });
+  const playerCountSeatSummaries = [
+    ...new Set(completed.map(({ input }) => input.playerCount)),
+  ]
+    .sort((a, b) => a - b)
+    .flatMap((playerCount) => {
+      const rows = completed.filter(
+        ({ input }) => input.playerCount === playerCount,
+      );
+      return (['product-balance', 'engine-coverage'] as const).flatMap(
+        (purpose) => {
+          const purposeRows = rows.filter(
+            ({ input }) => input.purpose === purpose,
+          );
+          if (!purposeRows.length) return [];
+          return [
+            {
+              playerCount,
+              purpose,
+              seats: Array.from({ length: playerCount }, (_, index) => {
+                const seat = index + 1;
+                let wins = 0;
+                let territories = 0;
+                purposeRows.forEach(({ input, result }) => {
+                  const playerNumber =
+                    ((index + input.seatRotation) % playerCount) + 1;
+                  if (result.winnerPlayerId === playerId(playerNumber))
+                    wins += 1;
+                  territories +=
+                    result.metrics.territoryCheckpoints[0]?.territoriesByPlayer[
+                      playerId(playerNumber)
+                    ] ?? 0;
+                });
+                const samples = purposeRows.length;
+                const winRate = wins / samples;
+                const baseline = 1 / playerCount;
+                return {
+                  seat,
+                  samples,
+                  wins,
+                  winRate,
+                  equalSeatBaseline: baseline,
+                  differenceFromBaseline: winRate - baseline,
+                  confidenceInterval95: wilson95(wins, samples),
+                  meanStartingTerritories: territories / samples,
+                };
+              }),
+            },
+          ];
+        },
+      );
+    });
   const aggregate: StudyAggregate = {
     matchesRequested: matrix.length,
     matchesStarted: completed.length,
@@ -278,6 +355,7 @@ export function aggregateStudy(
     outcomes,
     invariantFailures,
     seatSummaries,
+    playerCountSeatSummaries,
     turns: {
       mean: turns.reduce((a, b) => a + b, 0) / Math.max(1, turns.length),
       minimum: turns.length ? Math.min(...turns) : 0,
@@ -325,6 +403,7 @@ export function aggregateStudy(
     return {
       id,
       group: first.group,
+      purpose: first.purpose,
       playerCount: first.playerCount,
       territoryCount: first.territoryCount,
       continentCount: first.continentCount,
@@ -355,6 +434,7 @@ export function aggregateStudy(
   seatSummaries
     .filter(
       (seat) =>
+        seat.samples >= thresholds.minimumSamples &&
         Math.abs(seat.differenceFromBaseline) >= thresholds.seatDifference,
     )
     .forEach((seat) =>
@@ -379,10 +459,61 @@ export function aggregateStudy(
       code: 'stalemate-rate',
       message: `${(stalemateRate * 100).toFixed(1)}% of completed matches ended in stalemate.`,
     });
+  configurations.forEach((configuration) => {
+    if (configuration.matchesCompleted < thresholds.minimumSamples) return;
+    const turnCaps = configuration.outcomes['turn-cap'] ?? 0;
+    const commandCaps = configuration.outcomes['command-cap'] ?? 0;
+    const stalemates = configuration.outcomes.stalemate ?? 0;
+    const victories = configuration.outcomes.victory ?? 0;
+    const samples = configuration.matchesCompleted;
+    const add = (code: string, message: string) =>
+      findings.push({
+        classification: 'warning',
+        code,
+        configurationId: configuration.id,
+        message,
+      });
+    if ((turnCaps + commandCaps) / samples >= thresholds.capRate)
+      add(
+        'configuration-cap-rate',
+        `${configuration.id}: ${(((turnCaps + commandCaps) / samples) * 100).toFixed(1)}% reached a configured cap (${samples} matches).`,
+      );
+    if (stalemates / samples >= thresholds.stalemateRate)
+      add(
+        'configuration-stalemate-rate',
+        `${configuration.id}: ${((stalemates / samples) * 100).toFixed(1)}% ended in stalemate (${samples} matches).`,
+      );
+    if (victories / samples < thresholds.lowVictoryRate)
+      add(
+        'configuration-low-victory-rate',
+        `${configuration.id}: ${((victories / samples) * 100).toFixed(1)}% ended in normal victory (${samples} matches).`,
+      );
+    if (
+      configuration.p95Turns >=
+      matrix.find((item) => item.configurationId === configuration.id)!.maxTurns
+    )
+      add(
+        'configuration-length-cap',
+        `${configuration.id}: p95 match length reached the configured turn cap.`,
+      );
+    Object.entries(configuration.seatWinRates).forEach(([seat, winRate]) => {
+      const baseline = 1 / configuration.playerCount;
+      const wins = Math.round(winRate * samples);
+      const interval = wilson95(wins, samples);
+      if (
+        Math.abs(winRate - baseline) >= thresholds.seatDifference &&
+        (interval[1] < baseline || interval[0] > baseline)
+      )
+        add(
+          'configuration-seat-dominance',
+          `${configuration.id}: ${seat} won ${(winRate * 100).toFixed(1)}% versus the ${(baseline * 100).toFixed(2)}% equal-seat baseline (${samples} matches; 95% Wilson interval ${(interval[0] * 100).toFixed(1)}–${(interval[1] * 100).toFixed(1)}%). This is an association, not evidence of causation.`,
+        );
+    });
+  });
   findings.push({
     classification: 'informational',
     code: 'method',
-    message: `Seat uncertainty uses a 95% Wilson score interval; equal-seat baselines are averaged over observed player counts. Controller ${HEURISTIC_CONTROLLER_VERSION}.`,
+    message: `Seat uncertainty uses a 95% Wilson score interval. Configuration warnings require ${thresholds.minimumSamples} samples; cap/stalemate thresholds are ${(thresholds.capRate * 100).toFixed(0)}%/${(thresholds.stalemateRate * 100).toFixed(0)}%, low-victory is below ${(thresholds.lowVictoryRate * 100).toFixed(0)}%. Controller ${HEURISTIC_CONTROLLER_VERSION}.`,
   });
   return { aggregate, configurations, findings, reproductions };
 }
