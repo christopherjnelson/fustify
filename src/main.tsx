@@ -1,38 +1,45 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { App } from './app/App';
 import './styles/globals.css';
-import { AdminDashboard } from './admin/AdminDashboard';
-import {
-  fixtureAdminReportSource,
-  localAdminReportSource,
-} from './admin/reportSource';
+import { isAdminRoute } from './browser/routes';
 
-const isAdmin =
-  window.location.pathname === '/admin' ||
-  window.location.pathname === '/admin/';
-const fixtureName = new URLSearchParams(window.location.search).get(
-  'admin-fixture',
-);
-const adminSource =
-  import.meta.env.DEV && fixtureName
-    ? fixtureAdminReportSource(fixtureName)
-    : localAdminReportSource;
+const isAdmin = isAdminRoute(window.location.pathname);
+document.documentElement.classList.add(isAdmin ? 'admin-route' : 'game-route');
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    {isAdmin ? (
-      <AdminDashboard
-        source={adminSource}
-        dataAvailable={import.meta.env.DEV}
-      />
-    ) : (
+async function bootstrap() {
+  const root = createRoot(document.getElementById('root')!);
+  if (isAdmin) {
+    const [{ AdminDashboard }, reportSources] = await Promise.all([
+      import('./admin/AdminDashboard'),
+      import('./admin/reportSource'),
+    ]);
+    const fixtureName = new URLSearchParams(window.location.search).get(
+      'admin-fixture',
+    );
+    const source =
+      import.meta.env.DEV && fixtureName
+        ? reportSources.fixtureAdminReportSource(fixtureName)
+        : reportSources.localAdminReportSource;
+    root.render(
+      <StrictMode>
+        <AdminDashboard source={source} dataAvailable={import.meta.env.DEV} />
+      </StrictMode>,
+    );
+    return;
+  }
+
+  const { App } = await import('./app/App');
+  root.render(
+    <StrictMode>
       <App />
-    )}
-  </StrictMode>,
-);
+    </StrictMode>,
+  );
+}
+
+void bootstrap();
 
 if (
+  !isAdmin &&
   import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get('visual-review') === '1'
 ) {

@@ -12,6 +12,58 @@ test('direct /admin navigation shows an understandable empty state', async ({
   ).toBeVisible();
 });
 
+test('admin route stays clean across direct navigation and refresh', async ({
+  page,
+}) => {
+  await page.goto('/admin');
+  await expect(page).toHaveURL(/\/admin$/);
+  await page.reload();
+  await expect(page).toHaveURL(/\/admin$/);
+});
+
+test('admin scrolls while the game retains its fixed viewport', async ({
+  page,
+}) => {
+  await page.goto('/admin?admin-fixture=failed');
+  const adminLayout = await page.evaluate(() => ({
+    route: document.documentElement.className,
+    overflowY: getComputedStyle(document.documentElement).overflowY,
+    scrollHeight: document.documentElement.scrollHeight,
+    clientHeight: document.documentElement.clientHeight,
+  }));
+  expect(adminLayout.route).toContain('admin-route');
+  expect(adminLayout.overflowY).toBe('auto');
+  expect(adminLayout.scrollHeight).toBeGreaterThan(adminLayout.clientHeight);
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(0);
+
+  await page.goto('/?v=1&seed=viewport-check&territories=18&continents=3');
+  await expect(page.locator('html')).toHaveClass('game-route');
+  expect(
+    await page.evaluate(
+      () => getComputedStyle(document.documentElement).overflowY,
+    ),
+  ).toBe('hidden');
+});
+
+test('game and admin navigation keep their route-specific URL behavior', async ({
+  page,
+}) => {
+  await page.goto('/?v=1&seed=route-boundary&territories=18&continents=3');
+  await expect(page.getByLabel('Planet seed')).toHaveValue('route-boundary');
+  await expect(page).toHaveURL(/seed=route-boundary/);
+
+  await page.goto('/admin');
+  await expect(page).toHaveURL(/\/admin$/);
+  await page.goBack();
+  await expect(page.getByLabel('Planet seed')).toHaveValue('route-boundary');
+  await expect(page).toHaveURL(/seed=route-boundary/);
+  await page.goForward();
+  await expect(page).toHaveURL(/\/admin$/);
+});
+
 test('running report updates reactively to passed', async ({ page }) => {
   await page.goto('/admin?admin-fixture=reactive');
   await expect(page.getByRole('status')).toHaveText('Running');

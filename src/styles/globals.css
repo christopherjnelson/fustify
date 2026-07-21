@@ -29,7 +29,21 @@ body,
   width: 100%;
   height: 100%;
   margin: 0;
+}
+
+html.game-route,
+html.game-route body,
+html.game-route #root {
   overflow: hidden;
+}
+
+html.admin-route,
+html.admin-route body,
+html.admin-route #root {
+  height: auto;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 button,
