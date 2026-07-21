@@ -1,10 +1,13 @@
 import { PLAYER_PALETTE } from '../generation/constants';
 
+export type PlayerControllerType = 'local-human' | 'heuristic-bot';
+
 export interface LocalPlayerConfig {
   id: string;
   name: string;
   colorId: string;
   seatIndex: number;
+  controllerType: PlayerControllerType;
 }
 
 export interface PlayerColor {
@@ -40,6 +43,7 @@ export function createDefaultPlayerConfigs(
     name: DEFAULT_NAMES[seatIndex] ?? `Player ${seatIndex + 1}`,
     colorId: PLAYER_COLORS[seatIndex]!.id,
     seatIndex,
+    controllerType: 'local-human',
   }));
 }
 
@@ -74,6 +78,15 @@ export function validatePlayerConfigs(players: LocalPlayerConfig[]): string[] {
   }
   if (new Set(players.map((player) => player.id)).size !== players.length) {
     errors.push('Player IDs must be unique.');
+  }
+  if (
+    players.some(
+      (player) =>
+        player.controllerType !== 'local-human' &&
+        player.controllerType !== 'heuristic-bot',
+    )
+  ) {
+    errors.push('Choose a supported controller for every player.');
   }
   return errors;
 }

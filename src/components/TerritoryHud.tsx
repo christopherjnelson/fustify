@@ -44,6 +44,7 @@ export function TerritoryHud() {
   const viewMode = useGameStore((state) => state.viewMode);
   const eventLogOpen = useGameStore((state) => state.eventLogOpen);
   const error = useGameStore((state) => state.lastActionError);
+  const botExecution = useGameStore((state) => state.botExecution);
   const dispatch = useGameStore((state) => state.dispatchGameAction);
   const resetMatch = useGameStore((state) => state.resetMatch);
   const rematchNewOwnership = useGameStore(
@@ -96,6 +97,7 @@ export function TerritoryHud() {
   const activePlayer = configuredPlayers.find(
     (player) => player.id === match.activePlayerId,
   )!;
+  const botControlled = activePlayer.controllerType === 'heuristic-bot';
   const sourceId = match.selectedSourceTerritoryId;
   const targetId = match.selectedTargetTerritoryId;
   const source = sourceId ? territoryById.get(sourceId) : undefined;
@@ -156,7 +158,8 @@ export function TerritoryHud() {
           </span>
           <div>
             <span>
-              Turn {match.turnNumber} · {PHASE_LABELS[match.phase]}
+              Turn {match.turnNumber} · {PHASE_LABELS[match.phase]} ·{' '}
+              {botControlled ? 'Heuristic Bot' : 'Local Human'}
             </span>
             <strong>{activePlayer.name}</strong>
           </div>
@@ -187,7 +190,25 @@ export function TerritoryHud() {
           </div>
         )}
 
-        {match.phase === 'reinforce' && (
+        {botControlled && match.phase !== 'game-over' && (
+          <section
+            className="phase-card bot-status-card"
+            aria-live="polite"
+            data-testid="bot-turn-status"
+            data-bot-state={botExecution.phase}
+          >
+            <span className="eyebrow">Bot turn · {botExecution.phase}</span>
+            <h2>{activePlayer.name} is acting</h2>
+            <p>
+              {botExecution.error ??
+                botExecution.summary ??
+                'Choosing the next legal action.'}
+            </p>
+            <small>Gameplay controls are locked until control returns.</small>
+          </section>
+        )}
+
+        {!botControlled && match.phase === 'reinforce' && (
           <section className="phase-card">
             <div className="phase-heading">
               <div>
@@ -247,7 +268,7 @@ export function TerritoryHud() {
           </section>
         )}
 
-        {match.phase === 'attack' && (
+        {!botControlled && match.phase === 'attack' && (
           <section className="phase-card">
             <span className="eyebrow">Attack phase</span>
             <p className="phase-instruction">
@@ -306,7 +327,7 @@ export function TerritoryHud() {
           </section>
         )}
 
-        {match.phase === 'capture' && pending && (
+        {!botControlled && match.phase === 'capture' && pending && (
           <section className="phase-card capture-card">
             <span className="eyebrow">Territory captured</span>
             <h2>Move armies in</h2>
@@ -342,7 +363,7 @@ export function TerritoryHud() {
           </section>
         )}
 
-        {match.phase === 'fortify' && (
+        {!botControlled && match.phase === 'fortify' && (
           <section className="phase-card">
             <span className="eyebrow">Fortify once or skip</span>
             <p className="phase-instruction">
@@ -393,7 +414,7 @@ export function TerritoryHud() {
           </section>
         )}
 
-        {match.phase === 'turn-end' && (
+        {!botControlled && match.phase === 'turn-end' && (
           <section className="phase-card end-turn-card">
             <span className="eyebrow">Actions complete</span>
             <h2>Ready for the next player?</h2>

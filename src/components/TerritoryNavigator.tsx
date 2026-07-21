@@ -74,9 +74,11 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
       ),
     [effectiveFilter, items, match.activePlayerId, match.phase, query],
   );
-  const selectionUnavailable = !['reinforce', 'attack', 'fortify'].includes(
-    match.phase,
-  );
+  const botControlled =
+    configuredPlayers.find((player) => player.id === match.activePlayerId)
+      ?.controllerType === 'heuristic-bot';
+  const selectionUnavailable =
+    botControlled || !['reinforce', 'attack', 'fortify'].includes(match.phase);
 
   useEffect(() => {
     if (!open || !dialogRef.current) return;

@@ -152,13 +152,35 @@ export function PregamePanel() {
                   ))}
                 </select>
               </label>
+              <label>
+                <span className="sr-only">
+                  {player.name || `Player ${player.seatIndex + 1}`} controller
+                </span>
+                <select
+                  value={player.controllerType}
+                  disabled={
+                    matchSetup.setupPhase !== 'neutral-preview' ||
+                    operation !== null
+                  }
+                  onChange={(event) =>
+                    updatePlayer(player.id, {
+                      controllerType: event.target.value as
+                        'local-human' | 'heuristic-bot',
+                    })
+                  }
+                  aria-label={`${player.name || `Player ${player.seatIndex + 1}`} controller`}
+                >
+                  <option value="local-human">Local Human</option>
+                  <option value="heuristic-bot">Heuristic Bot</option>
+                </select>
+              </label>
               <span className="player-preview" aria-hidden="true">
                 ◆
               </span>
               <small>
                 {metric
-                  ? `${metric.territoryCount} territories · ${metric.armyCount} armies · ${metric.connectedComponentCount} region${metric.connectedComponentCount === 1 ? '' : 's'}`
-                  : `Seat ${player.seatIndex + 1} · no territories assigned`}
+                  ? `${player.controllerType === 'heuristic-bot' ? 'Heuristic Bot' : 'Local Human'} · ${metric.territoryCount} territories · ${metric.armyCount} armies · ${metric.connectedComponentCount} region${metric.connectedComponentCount === 1 ? '' : 's'}`
+                  : `${player.controllerType === 'heuristic-bot' ? 'Heuristic Bot' : 'Local Human'} · Seat ${player.seatIndex + 1} · no territories assigned`}
               </small>
             </section>
           );

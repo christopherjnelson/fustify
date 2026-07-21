@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useGameStore } from './useGameStore';
+import { commandFingerprint } from '../core/controllers/observation';
+import { getLegalGameCommands } from '../core/controllers/legalCommands';
 
 const initialState = useGameStore.getState();
 
@@ -161,6 +163,55 @@ describe('setup and match store integration', () => {
     useGameStore.getState().beginTurn();
     expect(useGameStore.getState().applicationMode).toBe('playing');
     expect(useGameStore.getState().match?.remainingReinforcements).toBe(before);
+  });
+
+  it('locks human commands on bot seats and rejects stale bot work', async () => {
+    useGameStore.getState().updatePlayer('player-01', {
+      controllerType: 'heuristic-bot',
+    });
+    const started = await startRandomMatch();
+    const match = started.match!;
+    started.beginTurn();
+    expect(useGameStore.getState().applicationMode).toBe('handoff');
+    expect(started.beginBotTurn(match.matchId, match.activePlayerId)).toBe(
+      true,
+    );
+    const playing = useGameStore.getState();
+    const fingerprint = commandFingerprint(playing.match!);
+    const command = getLegalGameCommands(playing.planet, playing.match!)[0]!;
+    playing.dispatchGameAction(command);
+    expect(useGameStore.getState().lastActionError?.code).toBe(
+      'CONTROLLER_LOCKED',
+    );
+    playing.resetMatch();
+    const reset = useGameStore.getState();
+    expect(
+      reset.beginBotTurn(reset.match!.matchId, reset.match!.activePlayerId),
+    ).toBe(true);
+    expect(
+      useGameStore
+        .getState()
+        .dispatchControllerAction(
+          command,
+          fingerprint,
+          playing.controllerEpoch,
+        ),
+    ).toBe(false);
+    const restarted = useGameStore.getState();
+    const restartedFingerprint = commandFingerprint(restarted.match!);
+    const restartedCommand = getLegalGameCommands(
+      restarted.planet,
+      restarted.match!,
+    )[0]!;
+    expect(
+      useGameStore
+        .getState()
+        .dispatchControllerAction(
+          restartedCommand,
+          restartedFingerprint,
+          restarted.controllerEpoch,
+        ),
+    ).toBe(true);
   });
 
   it('rerolls random ownership without regenerating geography', async () => {

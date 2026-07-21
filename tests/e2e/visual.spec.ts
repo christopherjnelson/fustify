@@ -27,6 +27,16 @@ const scenarios: Array<{
     heading: /Preview and assign territories/i,
   },
   {
+    name: 'human-vs-bot-setup',
+    region: '.pregame-panel',
+    heading: /Preview and assign territories/i,
+  },
+  {
+    name: 'multiple-bot-setup',
+    region: '.pregame-panel',
+    heading: /Preview and assign territories/i,
+  },
+  {
     name: 'draft-started',
     region: '.pregame-panel',
     heading: /chooses now/i,
@@ -73,6 +83,10 @@ const scenarios: Array<{
   },
   { name: 'handoff', region: '.handoff-card', heading: /Pass the device/i },
   { name: 'reinforcement', region: '.hud', heading: /Crimson League/i },
+  { name: 'bot-turn', region: '.hud', heading: /is acting/i },
+  { name: 'bot-reinforcement', region: '.hud', heading: /is acting/i },
+  { name: 'human-after-bot', region: '.hud', heading: /Crimson League/i },
+  { name: 'bot-victory', region: '.hud', heading: /Match won/i },
   { name: 'attack-source', region: '.hud', heading: /Crimson League/i },
   { name: 'attack-target', region: '.hud', heading: /Crimson League/i },
   { name: 'combat-result', region: '.hud', heading: /Crimson League/i },

@@ -2,7 +2,7 @@
 
 **Generate a world. Conquer it.**
 
-A browser-based local hot-seat playtest for a voxel-styled planetary strategy game. Worldseed separates deterministic world generation, editable pregame configuration, and the mutable Risk-style match on the interactive globe. It is not a secure multiplayer implementation and has no backend or online persistence.
+A browser-based solo and local hot-seat playtest for a voxel-styled planetary strategy game. Worldseed separates deterministic world generation, editable player/controller configuration, and the mutable Risk-style match on the interactive globe. It is not a secure multiplayer implementation and has no backend or online persistence.
 
 The prototype currently provides:
 
@@ -10,7 +10,7 @@ The prototype currently provides:
 - A responsive, read-only equirectangular minimap derived from the same canonical globe geometry and ownership state
 - A deterministic, smoothed land/ocean mask with multiple landmasses and islands
 - Exactly 42 playable land territories grouped into 6 connected gameplay continents
-- Two to six editable local players using a curated accessible color palette
+- Two to six editable player seats, each controlled by a Local Human or deterministic Heuristic Bot
 - A randomly named neutral world on fresh launch, before any player ownership exists
 - Curated readable names that are also canonical deterministic world seeds
 - Random distributed assignment or a complete local round-robin territory draft
@@ -18,6 +18,8 @@ The prototype currently provides:
 - Explicit neutral-preview, assignment-in-progress, ready, handoff, playing, and game-over lifecycle states
 - Browser-local save, autosave, validation, migration, deletion, and exact resume
 - A separate serializable match state containing live ownership, armies, phase, selections, events, elimination, and victory
+- An asynchronous controller boundary whose commands are revalidated by the authoritative reducer
+- DOM-free reproducible bot matches with invariants, caps, metrics, JSON reports, and focused traces
 - Reinforcement, repeated attacks, deterministic dice combat, mandatory post-capture movement, one connected-path fortification, and turn advancement
 - Phase-aware globe selection and numbered army markers with non-color source/target cues
 - Versioned setup URLs that reproduce the seed, territory count, continent count, player count, and assignment strategy
@@ -47,6 +49,8 @@ pnpm test
 pnpm test:coverage
 pnpm test:simulation
 pnpm test:simulation:stress
+pnpm test:bot
+pnpm test:bot:stress
 pnpm lint
 pnpm build
 pnpm format:check
@@ -70,7 +74,7 @@ pnpm test:visual
 pnpm test:visual:update
 ```
 
-`test:e2e` covers neutral setup, keyboard assignment selection, random rerolls, draft turn order and duplicate feedback, neutral/draft save-resume, minimap lifecycle styling and camera synchronization, first and later handoffs, reinforcement, land-border and sea-route combat, invalid actions, capture movement, elimination, connected-path fortification, turn completion, in-progress match save-resume, rematches, navigator keyboard behavior, event-log controls, and victory. `test:visual` compares stable UI-region screenshots with the committed baselines in `tests/e2e/visual.spec.ts-snapshots/`. Use `test:visual:update` only after reviewing intentional UI changes.
+`test:e2e` covers neutral setup, controller selection, bot input locking and handoff, keyboard assignment selection, random rerolls, draft turn order and duplicate feedback, neutral/draft save-resume, minimap lifecycle styling and camera synchronization, reinforcement, combat, capture, elimination, fortification, turn completion, rematches, navigator behavior, event logs, and victory. `test:visual` compares stable UI-region screenshots with the committed baselines in `tests/e2e/visual.spec.ts-snapshots/`. Use `test:visual:update` only after reviewing intentional UI changes.
 
 Every visual run also writes full-page human-review captures to `test-results/ui-review/<project>/`. Playwright failure screenshots, traces, and its HTML report remain under `test-results/`. Those generated results are ignored by Git.
 
@@ -87,6 +91,8 @@ Gameplay verification has three complementary layers:
 The simulator validates the runtime match schema and invariants after every transition: immutable planet data, complete valid ownership, integer armies, elimination consistency, a live active player, non-negative reinforcement pools, phase/action compatibility, capture blocking, one fortification per turn, strategic adjacency, turn ownership, monotonic combat sequence, ordered event IDs, winner consistency, and JSON semantic round trips. The pending-capture destination is the one intentional temporary exception to the normal `armyCount >= 1` invariant: it has zero armies between ownership transfer and the mandatory capture move.
 
 The fast matrix runs ten deterministic setup combinations across player counts 2–6 with both policies. The local stress matrix runs 135 world/setup combinations—territory counts 12, 18, and 24; continent counts 2, 3, and 4; player counts 2–6; and three ownership variants—with both policies and a 750-action bound per match. Some small generated worlds cannot satisfy the bounded balanced-connected ownership or starting-position candidate search for their first seed; simulation setup retries a documented deterministic seed suffix sequence and reports the actual successful world seed.
+
+Complete heuristic-bot matches are a separate layer. `pnpm test:bot` runs focused controller and quick match checks; `pnpm test:bot:stress` runs a moderate all-bot matrix. `pnpm simulate:bots -- --games N` runs an explicit sequential extended batch and writes a structured report under ignored `artifacts/bot-simulations/`. Exact descriptors replay with `--reproduce '<json>' --trace`. See [CONTROLLERS.md](./CONTROLLERS.md) for the command contract, heuristic, RNG boundaries, invariants, metrics, cap semantics, and report schema.
 
 Every failure includes the actual world seed, generator version, territory and continent counts, player count, ownership variant, policy, turn, phase, last action, recent actions, and recent events. Replay a reported failure with:
 
@@ -154,7 +160,7 @@ Readable naming is independent of geography generation: a curated descriptor, cu
 
 `WorldSetup` contains the versioned URL parameters listed above, including the assignment-strategy choice. `PlanetDefinition` remains immutable geography and topology; generated territories are neutral (`ownerId: null`, zero armies). A discriminated `MatchSetup` contains stable player IDs, names, palette colors, seat order, strategy, and one of three setup phases: `neutral-preview`, `assignment-in-progress`, or `ready`. Only `ready` contains a complete `StartingPosition`. `MatchState` is nullable before play and is created only from a ready setup; it contains mutable turns, ownership, armies, selections, pending captures, deterministic combat sequence, elimination, victory, and events. Camera, dialogs, hover, and display preferences remain view state.
 
-Generating a world remains in world selection with geographical/continent colors, no army markers, no starting-balance claim, and no playable match. Editing seed or count fields does not mutate the displayed world until the user presses Enter in the seed field or clicks Generate World for a new readable seed. Start Game opens match setup, where player count, names, colors, and assignment mode are configured. Player names are normalized before assignment and blank or duplicate names are blocked. Colors come from six named, high-contrast choices and cannot be duplicated. The table then explicitly begins either random assignment or a player draft. A ready setup must be explicitly started with Begin Match before the first handoff. Gameplay commands are rejected until the application is in `playing` with a real match.
+Generating a world remains in world selection with geographical/continent colors, no army markers, no starting-balance claim, and no playable match. Editing seed or count fields does not mutate the displayed world until the user presses Enter in the seed field or clicks Generate World for a new readable seed. Start Game opens match setup, where player count, names, colors, controllers, and assignment mode are configured. Controller type is independent from identity and color; mixed human/bot and all-bot tables are valid. Player names are normalized before assignment and blank or duplicate names are blocked. Colors come from six named, high-contrast choices and cannot be duplicated. The table then explicitly begins either random assignment or a player draft. A ready setup must be explicitly started with Begin Match before the first handoff. Gameplay commands are rejected until the application is in `playing` with a real match, and human commands are rejected while its active seat is bot-controlled.
 
 Starting ownership evaluates 32 deterministic candidates derived from the world seed, generator version, stable player IDs, ownership variant, and candidate index. The default `distributed` strategy uses shuffled round-robin placement followed by bounded, count-preserving local swaps; it deliberately targets several useful ownership regions instead of growing one empire per player. Hard-invalid candidates are rejected before score comparison, and a failed bounded search reports its leading blocking conditions without changing the world seed.
 
@@ -172,7 +178,7 @@ Starting a match opens a mandatory full-screen handoff before Turn 1. End Turn p
 
 Worldseed uses one browser-local `localStorage` slot (`worldseed.local-match`). Match start and every semantic rules transition are autosaved; a manual Save match action is also available. Camera, minimap projection geometry, hover, animation, live Three.js objects, and open utility dialogs are never saved.
 
-Save schema version 3 stores the world setup and generator version, assignment mode, explicit setup phase, player profiles, ownership variant, optional in-progress draft owner map and pick index, optional completed starting position, nullable match state, application mode, and timestamp. The Save setup control supports neutral, drafting, and ready states; match transitions continue to autosave. Parsed storage is runtime-validated with Zod. Versions 0, 1, and 2 migrate to random/ready active-match saves. Every load or migration reconstructs the planet and rebuilds balance analysis from ownership rather than trusting serialized derived metrics.
+Save schema version 4 stores the world setup and generator version, assignment mode, explicit setup phase, player profiles including controller type, ownership variant, optional in-progress draft owner map and pick index, optional completed starting position, nullable match state, application mode, and timestamp. The Save setup control supports neutral, drafting, and ready states; match transitions continue to autosave. Parsed storage is runtime-validated with Zod. Versions 0–2 migrate to random/ready setup, and versions 0–3 default historical seats to `local-human`. Every load or migration reconstructs the planet and rebuilds balance analysis from ownership rather than trusting serialized derived metrics. Transient bot execution, pacing, promises, highlights, and reports are never persisted.
 
 On load, the world-setup panel presents both the setup from the current URL and any local saved session. Resume restores neutral, drafting, and ready setup saves directly to pregame; active match saves enter handoff before revealing the current turn. Local saves are browser- and device-specific; setup URLs never contain draft picks or active matches.
 
@@ -325,6 +331,6 @@ Run structured friend playtests, collect balance and usability observations, and
 - Individual troop rendering
 - Animations beyond simple feedback
 - Sound
-- AI opponents
-- AI/controller integrations, AI-versus-AI matches, and spectator tooling; future controllers should continue dispatching validated game actions so every renderer reflects them without special cases
+- Remote-model controllers, provider API keys, hidden model reasoning, and networking
+- A spectator/admin dashboard or replay-viewer UI; structured bot reports are ready for later consumption
 - Production mobile polish

@@ -4,9 +4,15 @@ import { calculateReinforcements } from './reinforcement';
 import type { MatchState } from './types';
 import type { ReadyMatchSetup } from '../setup/startingPositions';
 
+export interface CreateMatchOptions {
+  /** Seed for combat and controller decisions; independent from world generation. */
+  matchSeed?: string;
+}
+
 export function createMatch(
   planet: PlanetDefinition,
   setup?: ReadyMatchSetup,
+  options: CreateMatchOptions = {},
 ): MatchState {
   if (
     !setup &&
@@ -22,9 +28,14 @@ export function createMatch(
     ? setup.players.slice().sort((a, b) => a.seatIndex - b.seatIndex)
     : planet.players;
   const activePlayerId = orderedPlayers[0]!.id;
+  const matchSeed =
+    options.matchSeed ??
+    `${planet.seed}|match|${setup?.ownershipVariant ?? 0}|${orderedPlayers
+      .map((player) => player.id)
+      .join(',')}`;
   const state: MatchState = {
-    matchId: `${planet.seed}:local-hot-seat`,
-    seed: planet.seed,
+    matchId: `${planet.seed}:${matchSeed}`,
+    seed: matchSeed,
     turnNumber: 1,
     activePlayerId,
     phase: 'reinforce',

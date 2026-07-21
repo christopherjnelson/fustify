@@ -150,24 +150,33 @@ describe('local match persistence', () => {
     ).toBe(false);
   });
 
-  it.each([0, 1, 2] as const)(
+  it.each([0, 1, 2, 3] as const)(
     'migrates supported version %s to random ready setup',
     (schemaVersion) => {
       const old = structuredClone(save) as unknown as Record<string, unknown>;
       old.schemaVersion = schemaVersion;
       if (schemaVersion === 0) delete old.savedAt;
       const oldWorld = old.worldSetup as Record<string, unknown>;
-      delete oldWorld.assignmentMode;
+      if (schemaVersion < 3) delete oldWorld.assignmentMode;
       const oldSetup = old.matchSetup as Record<string, unknown>;
-      delete oldSetup.assignmentMode;
-      delete oldSetup.setupPhase;
-      delete oldSetup.draft;
+      const oldPlayers = oldSetup.players as Array<Record<string, unknown>>;
+      oldPlayers.forEach((player) => delete player.controllerType);
+      if (schemaVersion < 3) {
+        delete oldSetup.assignmentMode;
+        delete oldSetup.setupPhase;
+        delete oldSetup.draft;
+      }
       const result = parseLocalMatchSave(JSON.stringify(old));
       expect(result.ok && result.migrated).toBe(true);
       if (result.ok) {
         expect(result.save.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
         expect(result.save.matchSetup.assignmentMode).toBe('random');
         expect(result.save.matchSetup.setupPhase).toBe('ready');
+        expect(
+          result.save.matchSetup.players.every(
+            (player) => player.controllerType === 'local-human',
+          ),
+        ).toBe(true);
       }
     },
   );

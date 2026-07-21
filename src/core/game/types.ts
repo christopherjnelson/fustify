@@ -100,6 +100,7 @@ export type GameErrorCode =
   | 'CAPTURE_MOVE_REQUIRED'
   | 'NO_OWNED_PATH'
   | 'FORTIFY_ALREADY_USED'
+  | 'CONTROLLER_LOCKED'
   | 'GAME_OVER';
 
 export interface GameError {

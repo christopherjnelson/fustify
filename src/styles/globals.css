@@ -199,7 +199,7 @@ select:focus-visible {
 
 .player-config {
   display: grid;
-  grid-template-columns: 28px minmax(130px, 1fr) 112px 24px;
+  grid-template-columns: 28px minmax(120px, 1fr) 104px 118px 24px;
   align-items: center;
   gap: 7px;
   padding: 9px;
@@ -235,6 +235,26 @@ select:focus-visible {
 .player-config small {
   grid-column: 2 / -1;
   color: #8299ad;
+  font-size: 0.62rem;
+}
+
+.bot-status-card {
+  border-color: rgba(111, 204, 238, 0.35);
+  background: linear-gradient(
+    145deg,
+    rgba(20, 75, 99, 0.52),
+    rgba(7, 16, 26, 0.86)
+  );
+}
+
+.bot-status-card h2 {
+  margin: 5px 0;
+  color: #e4f5fc;
+  font-size: 0.92rem;
+}
+
+.bot-status-card small {
+  color: #8fa9bb;
   font-size: 0.62rem;
 }
 
@@ -571,7 +591,11 @@ select:focus-visible {
   }
 
   .player-config {
-    grid-template-columns: 24px 1fr 94px 18px;
+    grid-template-columns: 24px minmax(0, 1fr) 94px 18px;
+  }
+
+  .player-config > label:nth-of-type(3) {
+    grid-column: 2 / 4;
   }
 
   .pregame-actions {

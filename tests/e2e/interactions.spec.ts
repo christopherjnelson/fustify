@@ -65,8 +65,85 @@ test('world and pregame controls have accessible labels and headings', async ({
   ).toBeVisible();
   await expect(page.getByLabel('Player 1 name')).toBeVisible();
   await expect(page.getByLabel(/Crimson League color/i)).toBeVisible();
+  await expect(page.getByLabel(/Crimson League controller/i)).toHaveValue(
+    'local-human',
+  );
   await expect(page.getByLabel('Random assignment')).toBeChecked();
   await expect(page.getByLabel('Player draft')).toBeEnabled();
+});
+
+test('player setup supports human, bot, and multiple bot seats accessibly', async ({
+  page,
+}) => {
+  await openScenario(page, 'human-vs-bot-setup');
+  await expect(page.getByLabel(/Crimson League controller/i)).toHaveValue(
+    'local-human',
+  );
+  await expect(page.getByLabel(/Azure Pact controller/i)).toHaveValue(
+    'heuristic-bot',
+  );
+  await page
+    .getByLabel(/Crimson League controller/i)
+    .selectOption('heuristic-bot');
+  await expect(page.getByLabel('Player 1 name')).toHaveValue('Crimson League');
+
+  await openScenario(page, 'multiple-bot-setup');
+  await expect(page.locator('select[aria-label$=" controller"]')).toHaveCount(
+    4,
+  );
+  await expect(
+    page.locator('select[aria-label$=" controller"] option:checked', {
+      hasText: 'Heuristic Bot',
+    }),
+  ).toHaveCount(3);
+});
+
+test('bot status locks gameplay selection and human controls return afterward', async ({
+  page,
+}) => {
+  await openScenario(page, 'bot-turn');
+  const status = page.getByTestId('bot-turn-status');
+  await expect(status).toBeVisible();
+  await expect(status).toHaveAttribute('data-bot-state', 'thinking');
+  await expect(page.getByRole('button', { name: 'Place 1' })).toHaveCount(0);
+  await page.keyboard.press('Control+K');
+  const navigator = page.getByRole('dialog');
+  await expect(navigator).toBeVisible();
+  await expect(navigator.locator('ul button').first()).toBeDisabled();
+  await navigator
+    .getByRole('button', { name: /Close and view globe/i })
+    .click();
+
+  await openScenario(page, 'human-after-bot');
+  await expect(page.getByRole('button', { name: 'Place 1' })).toBeVisible();
+  await expect(page.getByTestId('bot-turn-status')).toHaveCount(0);
+});
+
+test('a configured heuristic seat starts automatically and returns control to a human', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto(
+    '/?v=1&seed=bot-e2e-world&territories=12&continents=2&players=2',
+  );
+  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page
+    .getByLabel(/Crimson League controller/i)
+    .selectOption('heuristic-bot');
+  await page.getByRole('button', { name: 'Assign territories' }).click();
+  page.on('dialog', (dialog) => void dialog.accept());
+  await page.getByRole('button', { name: 'Begin Match' }).click();
+  await expect(page.getByTestId('bot-turn-status')).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByText(/Gameplay controls are locked/i)).toBeVisible();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(
+    page.getByRole('heading', { name: /Pass the device to Azure Pact/i }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.getByRole('button', { name: /Begin turn .* Azure Pact/i }),
+  ).toBeEnabled();
 });
 
 test('minimap follows neutral, draft, ready, and active ownership lifecycle', async ({
@@ -373,8 +450,8 @@ test('world setup, player validation, ownership reroll, and match start flow', a
     page.getByRole('button', { name: 'Assign territories' }),
   ).toBeDisabled();
   await secondName.fill('South');
-  const firstColor = page.locator('select').nth(0);
-  const secondColor = page.locator('select').nth(1);
+  const firstColor = page.getByLabel('North color');
+  const secondColor = page.getByLabel('South color');
   const firstColorValue = await firstColor.inputValue();
   await expect(
     secondColor.locator(`option[value="${firstColorValue}"]`),

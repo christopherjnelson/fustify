@@ -25,6 +25,8 @@ export type VisualScenario =
   | 'generate-world-busy'
   | 'pregame'
   | 'pregame-random-ready'
+  | 'human-vs-bot-setup'
+  | 'multiple-bot-setup'
   | 'draft-started'
   | 'draft-in-progress'
   | 'draft-complete'
@@ -36,6 +38,10 @@ export type VisualScenario =
   | 'reroll-busy'
   | 'handoff'
   | 'reinforcement'
+  | 'bot-turn'
+  | 'bot-reinforcement'
+  | 'human-after-bot'
+  | 'bot-victory'
   | 'attack-source'
   | 'attack-target'
   | 'combat-result'
@@ -240,6 +246,7 @@ function applyScenario(scenario: VisualScenario) {
   let scenarioMatch: MatchState | null = match;
   let eventLogOpen = false;
   let assignmentFeedback: string | null = null;
+  let botExecution = useGameStore.getState().botExecution;
   const scenarioFocus =
     scenario === 'minimap-focus-east'
       ? { longitude: 35, latitude: 8 }
@@ -276,6 +283,22 @@ function applyScenario(scenario: VisualScenario) {
       scenario.startsWith('pregame') || scenario.startsWith('draft')
         ? 'pregame'
         : 'playing';
+  }
+  if (scenario === 'human-vs-bot-setup' || scenario === 'multiple-bot-setup') {
+    applicationMode = 'pregame';
+    const botPlayers = fixed.players.map((player, index) => ({
+      ...player,
+      controllerType:
+        scenario === 'multiple-bot-setup'
+          ? index === 0
+            ? ('local-human' as const)
+            : ('heuristic-bot' as const)
+          : index === 1
+            ? ('heuristic-bot' as const)
+            : ('local-human' as const),
+    }));
+    matchSetup = createNeutralMatchSetup(botPlayers, 'random');
+    scenarioMatch = null;
   }
   if (
     scenario === 'world-setup' ||
@@ -371,6 +394,36 @@ function applyScenario(scenario: VisualScenario) {
   if (scenario === 'reinforcement' || scenario === 'navigator') {
     applicationMode = 'playing';
   }
+  if (
+    scenario === 'bot-turn' ||
+    scenario === 'bot-reinforcement' ||
+    scenario === 'human-after-bot'
+  ) {
+    applicationMode = 'playing';
+    const botPlayers = fixed.players.map((player, index) => ({
+      ...player,
+      controllerType:
+        index === 0 && scenario !== 'human-after-bot'
+          ? ('heuristic-bot' as const)
+          : ('local-human' as const),
+    }));
+    matchSetup = { ...fixed.matchSetup, players: botPlayers };
+    scenarioMatch = match;
+    if (scenario !== 'human-after-bot') {
+      const { sourceId } = borderPair(match, planet);
+      botExecution = {
+        phase: scenario === 'bot-turn' ? 'thinking' : 'applying',
+        playerId: match.activePlayerId,
+        summary:
+          scenario === 'bot-turn'
+            ? 'Crimson League is choosing a legal action.'
+            : `Reinforced ${planet.territories.find((item) => item.id === sourceId)!.name} against hostile borders.`,
+        error: null,
+        sourceTerritoryId: scenario === 'bot-reinforcement' ? sourceId : null,
+        targetTerritoryId: null,
+      };
+    }
+  }
   if (scenario === 'attack-source' || scenario === 'attack-target') {
     scenarioMatch = advanceToAttack(match, planet);
     const { sourceId, targetId } = borderPair(scenarioMatch, planet);
@@ -403,6 +456,20 @@ function applyScenario(scenario: VisualScenario) {
   if (scenario === 'game-over') {
     scenarioMatch = wonMatch(match, planet);
     applicationMode = 'game-over';
+  }
+  if (scenario === 'bot-victory') {
+    scenarioMatch = wonMatch(match, planet);
+    applicationMode = 'game-over';
+    matchSetup = {
+      ...fixed.matchSetup,
+      players: fixed.players.map((player) => ({
+        ...player,
+        controllerType:
+          player.id === scenarioMatch!.winnerId
+            ? ('heuristic-bot' as const)
+            : ('local-human' as const),
+      })),
+    };
   }
   if (scenario === 'event-log') {
     applicationMode = 'playing';
@@ -450,6 +517,7 @@ function applyScenario(scenario: VisualScenario) {
         : scenario === 'reroll-busy'
           ? 'reroll-territories'
           : null,
+    botExecution,
   });
 }
 

@@ -7,8 +7,10 @@ import { WorldSetupPanel } from '../components/WorldSetupPanel';
 import { Minimap } from '../components/Minimap';
 import { ControlLegend } from '../components/ControlLegend';
 import { useGameStore } from '../state/useGameStore';
+import { useBotTurnRunner } from './useBotTurnRunner';
 
 export function App() {
+  useBotTurnRunner();
   const mode = useGameStore((state) => state.applicationMode);
   const loadSetupFromUrl = useGameStore((state) => state.loadSetupFromUrl);
   useEffect(() => {

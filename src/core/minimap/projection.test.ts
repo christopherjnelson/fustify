@@ -292,7 +292,7 @@ describe('minimap canonical state styling and focus', () => {
     expect(wrapLongitude(720)).toBe(0);
   });
 
-  it('derives identical projection after save/load without schema changes', () => {
+  it('derives identical projection after save/load without persisting projection state', () => {
     const planet = generatePlanet(DEFAULT_SETUP.seed, DEFAULT_SETUP);
     const players = createDefaultPlayerConfigs(4);
     const matchSetup = createMatchSetup(planet, players, 0);
@@ -317,6 +317,6 @@ describe('minimap canonical state styling and focus', () => {
     expect(projectWorldGeometry(loadedPlanet)).toEqual(
       projectWorldGeometry(planet),
     );
-    expect(SAVE_SCHEMA_VERSION).toBe(3);
+    expect(SAVE_SCHEMA_VERSION).toBe(4);
   });
 });

@@ -9,8 +9,11 @@ export function HandoffScreen() {
   const begin = useGameStore((state) => state.beginTurn);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const player = players.find((item) => item.id === match.activePlayerId)!;
+  const botControlled = player.controllerType === 'heuristic-bot';
 
-  useEffect(() => buttonRef.current?.focus(), []);
+  useEffect(() => {
+    if (!botControlled) buttonRef.current?.focus();
+  }, [botControlled]);
 
   return (
     <div
@@ -35,8 +38,16 @@ export function HandoffScreen() {
           ◆
         </span>
         <span className="eyebrow">Turn {match.turnNumber} handoff</span>
-        <h1 id="handoff-title">Pass the device to {player.name}</h1>
-        <p>When the correct player is ready, begin the turn.</p>
+        <h1 id="handoff-title">
+          {botControlled
+            ? `${player.name} is preparing`
+            : `Pass the device to ${player.name}`}
+        </h1>
+        <p>
+          {botControlled
+            ? 'The heuristic bot will begin automatically.'
+            : 'When the correct player is ready, begin the turn.'}
+        </p>
         {summary.messages.length > 0 && (
           <div className="handoff-summary">
             <strong>Previous turn</strong>
@@ -47,14 +58,16 @@ export function HandoffScreen() {
             </ul>
           </div>
         )}
-        <button
-          ref={buttonRef}
-          type="button"
-          onClick={begin}
-          aria-label={`Begin turn ${match.turnNumber} for ${player.name}`}
-        >
-          Begin turn
-        </button>
+        {!botControlled && (
+          <button
+            ref={buttonRef}
+            type="button"
+            onClick={begin}
+            aria-label={`Begin turn ${match.turnNumber} for ${player.name}`}
+          >
+            Begin turn
+          </button>
+        )}
       </section>
     </div>
   );

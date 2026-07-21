@@ -38,6 +38,7 @@ export function Planet({ planet }: PlanetProps) {
   const debugView = useGameStore((state) => state.debugView);
   const viewMode = useGameStore((state) => state.viewMode);
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
+  const botExecution = useGameStore((state) => state.botExecution);
   const setHovered = useGameStore((state) => state.setHoveredTerritory);
   const select = useGameStore((state) => state.selectTerritory);
   const displayedTerritories = useMemo(
@@ -65,7 +66,14 @@ export function Planet({ planet }: PlanetProps) {
   const legal = useMemo(() => {
     let sources: string[] = [];
     let targets: string[] = [];
-    if (!match || applicationMode !== 'playing') {
+    const activeController = configuredPlayers.find(
+      (player) => player.id === match?.activePlayerId,
+    )?.controllerType;
+    if (
+      !match ||
+      applicationMode !== 'playing' ||
+      activeController === 'heuristic-bot'
+    ) {
       return {
         sources: new Set<string>(),
         targets: new Set<string>(),
@@ -112,13 +120,15 @@ export function Planet({ planet }: PlanetProps) {
         .filter((id) => targets.includes(id)),
     );
     return { sources: new Set(sources), targets: new Set(targets), seaTargets };
-  }, [applicationMode, match, planet]);
+  }, [applicationMode, configuredPlayers, match, planet]);
 
   const visualKind = useCallback(
     (territoryId: string): TerritoryVisualKind => {
       if (!match || applicationMode !== 'playing') {
         return territoryId === hoveredId ? 'hovered' : null;
       }
+      if (territoryId === botExecution.targetTerritoryId) return 'target';
+      if (territoryId === botExecution.sourceTerritoryId) return 'source';
       if (territoryId === match.selectedTargetTerritoryId) return 'target';
       if (territoryId === match.selectedSourceTerritoryId) return 'source';
       if (territoryId === hoveredId) return 'hovered';
@@ -134,7 +144,7 @@ export function Planet({ planet }: PlanetProps) {
       }
       return null;
     },
-    [hoveredId, applicationMode, legal, match],
+    [botExecution, hoveredId, applicationMode, legal, match],
   );
 
   const { landGeometry, oceanGeometry, landCellIds } = useMemo(() => {

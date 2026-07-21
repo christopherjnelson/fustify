@@ -1,0 +1,114 @@
+# Controllers and bot simulation
+
+Worldseed treats a player seat and the controller operating it as separate
+configuration. A `LocalPlayerConfig` owns the stable player ID, display name,
+palette color, seat order, and `controllerType`. The supported public controller
+types are `local-human` and `heuristic-bot`; names and colors never imply control.
+
+## Authoritative command boundary
+
+```text
+MatchState + PlanetDefinition
+  → detached GameObservation + getLegalGameCommands()
+  → PlayerController.chooseAction()
+  → gameReducer() validation
+  → new MatchState + public event
+```
+
+`getLegalGameCommands` builds commands with the existing reinforcement, attack,
+dice, capture-range, connectivity, and fortification helpers. It is guidance,
+not authority: interactive and headless runners submit the chosen command to
+`gameReducer` again. Rejected commands cannot mutate the prior state.
+
+Observations contain public phase, turn, army, ownership, adjacency, continent,
+elimination, pending-capture, reinforcement, and recent event information. They
+are detached from canonical objects and recursively frozen. Recent history is
+bounded to avoid copying an ever-growing log during bulk simulation. World
+geometry, renderer state, promises, pacing, and store methods are never exposed.
+
+## Determinism and seeds
+
+World generation uses `worldSeed`. Combat and controller decisions use the
+independent `matchSeed` stored as `MatchState.seed`. Interactive matches derive
+it from the world seed, ownership variant, and ordered player IDs. Headless
+matches accept it explicitly.
+
+The balanced heuristic is versioned as `balanced-v1`. Equal-score choices use
+the seeded generator with match seed, controller version, player, turn, phase,
+and decision index. It never calls `Math.random()`. Presentation delays and
+reduced-motion settings do not enter this seed. Identical world, assignment,
+match seed, player order, controller configuration, and heuristic version replay
+the same authoritative transitions.
+
+## Balanced heuristic
+
+Weights and minimum thresholds live in
+`src/core/controllers/heuristicController.ts`. Reinforcement scores hostile army
+pressure, hostile border count, continent defense, and safe overstacking. Attack
+scores army advantage, dice, continent completion, opponent-continent breaks,
+elimination opportunities, and source exposure. A score below `8` ends attack.
+Capture movement balances destination and source threat. Fortification prefers
+safe-interior to threatened-frontier movement and skips below score `4`.
+
+This is one deterministic, general-purpose opponent—not a claim of optimal
+play. There are no remote-model controllers, hidden reasoning displays,
+learning, personalities, or private-information channels.
+
+## Interactive orchestration
+
+`useBotTurnRunner` requests one command per canonical state fingerprint. The
+store checks match ID, active player, turn, phase, combat sequence, event count,
+and a transient controller epoch before applying it. New worlds, load, reset,
+and rematch invalidate the epoch. Effects are aborted on teardown, and stale
+commands are ignored. Human gameplay dispatch is locked on bot seats; menus and
+read-only utilities remain available. Factual action summaries and highlights
+are transient UI state and are not saved.
+
+Controller errors are logged as structured data. The bounded fallback ends an
+optional phase where possible, ends the turn when legal, or selects the first
+deterministic mandatory command. There is no retry loop.
+
+## Headless matches and reports
+
+The headless runner imports no React, DOM, Three.js, timers, or animation code.
+It generates canonical setup, calls the same controller, and applies every
+command through `gameReducer`. After every command it checks ownership, integer
+armies, elimination, active-player eligibility, reinforcement and capture phase
+consistency, attack adjacency, fortification paths, victory, and action-after-
+completion constraints.
+
+Outcomes are `victory`, `stalemate`, `turn-cap`, `command-cap`, or
+`engine-error`; caps never award a winner. Defaults are 1,200 turns, 30,000
+commands, and 160 completed turns without an ownership change. Checkpoints are
+stored on ownership changes and every tenth turn rather than every command.
+
+```bash
+pnpm test:bot
+pnpm test:bot:stress
+pnpm simulate:bots -- --games 10000
+pnpm simulate:bots -- --games 500 --territories 18 --continents 3 --players 3
+pnpm simulate:bots -- --reproduce '<descriptor-json>' --trace
+```
+
+The CLI writes JSON beneath ignored `artifacts/bot-simulations/`. Reports include
+run ID, timestamp, Git commit when available, configuration, completed games,
+outcomes, win rates, average and percentile turns, invariant failures,
+reproduction descriptors, runtime, throughput, and controller version. Normal
+bulk reports omit final states and traces. A focused trace records phase, player,
+command, reducer result, and changed ownership or armies.
+
+## Persistence and URLs
+
+Save schema v4 persists `controllerType` on every player. Versions 0–3 migrate
+missing controller data to `local-human`; no historical save silently becomes a
+bot match. Pending promises, controller epochs, statuses, highlights, delays,
+traces, and reports are transient.
+
+Setup URLs continue to describe geography and assignment only. They do not
+already serialize names, colors, or seats, so controller configuration remains
+with canonical local match setup rather than adding a competing partial profile
+format to URLs.
+
+Structured reports are suitable for a future local admin or analysis dashboard,
+but this milestone adds no dashboard, authentication, database, upload,
+tournament, networking, or remote provider.

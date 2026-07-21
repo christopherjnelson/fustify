@@ -46,6 +46,14 @@ import {
 } from '../core/setup/worldSetup';
 import type { PlanetDefinition } from '../core/types/planet';
 import type { GeographicPoint } from '../core/minimap/projection';
+import type {
+  CommandFingerprint,
+  GameCommand,
+} from '../core/controllers/types';
+import {
+  commandFingerprint,
+  fingerprintsEqual,
+} from '../core/controllers/observation';
 
 function initializeSetupFromLocation() {
   if (typeof window === 'undefined') {
@@ -138,6 +146,27 @@ export type SetupOperation =
   | 'start-game'
   | 'restore-game';
 
+export type BotExecutionPhase =
+  'idle' | 'thinking' | 'applying' | 'waiting' | 'error';
+
+export interface BotExecutionState {
+  phase: BotExecutionPhase;
+  playerId: string | null;
+  summary: string | null;
+  error: string | null;
+  sourceTerritoryId: string | null;
+  targetTerritoryId: string | null;
+}
+
+const IDLE_BOT_EXECUTION: BotExecutionState = {
+  phase: 'idle',
+  playerId: null,
+  summary: null,
+  error: null,
+  sourceTerritoryId: null,
+  targetTerritoryId: null,
+};
+
 export interface GameState {
   applicationMode: ApplicationMode;
   setup: WorldSetup;
@@ -164,6 +193,8 @@ export interface GameState {
   focusSequence: number;
   globeFocus: GeographicPoint;
   setupOperation: SetupOperation | null;
+  botExecution: BotExecutionState;
+  controllerEpoch: number;
   setSeedInput: (seed: string) => void;
   setSetupDraft: (update: Partial<WorldSetup>) => void;
   setPlayerCount: (playerCount: number) => void;
@@ -173,7 +204,9 @@ export interface GameState {
   loadSetupFromUrl: () => void;
   updatePlayer: (
     id: string,
-    update: Partial<Pick<LocalPlayerConfig, 'name' | 'colorId'>>,
+    update: Partial<
+      Pick<LocalPlayerConfig, 'name' | 'colorId' | 'controllerType'>
+    >,
   ) => void;
   setAssignmentMode: (mode: TerritoryAssignmentMode) => void;
   beginAssignment: () => Promise<void>;
@@ -184,9 +217,16 @@ export interface GameState {
   startMatch: () => Promise<void>;
   backToWorldSetup: () => void;
   beginTurn: () => void;
+  beginBotTurn: (matchId: string, playerId: string) => boolean;
   resetMatch: () => void;
   rematchNewOwnership: () => void;
   dispatchGameAction: (action: GameAction) => void;
+  dispatchControllerAction: (
+    action: GameCommand,
+    expected: CommandFingerprint,
+    expectedEpoch: number,
+  ) => boolean;
+  setBotExecution: (execution: BotExecutionState) => void;
   saveMatch: () => void;
   resumeSavedMatch: () => Promise<void>;
   deleteSavedMatch: () => void;
@@ -285,7 +325,12 @@ export const useGameStore = create<GameState>((set, get) => {
     const players = defaults.map((fallback, index) => {
       const existing = previousPlayers[index];
       return existing
-        ? { ...fallback, name: existing.name, colorId: existing.colorId }
+        ? {
+            ...fallback,
+            name: existing.name,
+            colorId: existing.colorId,
+            controllerType: existing.controllerType,
+          }
         : fallback;
     });
     const matchSetup = createNeutralMatchSetup(players, setup.assignmentMode);
@@ -305,6 +350,8 @@ export const useGameStore = create<GameState>((set, get) => {
       focusTargetTerritoryId: null,
       lastActionError: null,
       saveMessage: null,
+      botExecution: IDLE_BOT_EXECUTION,
+      controllerEpoch: get().controllerEpoch + 1,
     });
   };
 
@@ -332,6 +379,8 @@ export const useGameStore = create<GameState>((set, get) => {
     focusSequence: 0,
     globeFocus: { longitude: 90, latitude: 0 },
     setupOperation: null,
+    botExecution: IDLE_BOT_EXECUTION,
+    controllerEpoch: 0,
     setSeedInput: (seedInput) =>
       set((state) => ({
         seedInput,
@@ -356,7 +405,12 @@ export const useGameStore = create<GameState>((set, get) => {
       const players = defaults.map((fallback, index) => {
         const existing = state.matchSetup.players[index];
         return existing
-          ? { ...fallback, name: existing.name, colorId: existing.colorId }
+          ? {
+              ...fallback,
+              name: existing.name,
+              colorId: existing.colorId,
+              controllerType: existing.controllerType,
+            }
           : fallback;
       });
       set({
@@ -676,6 +730,7 @@ export const useGameStore = create<GameState>((set, get) => {
           playerSetupErrors: [],
           assignmentFeedback: null,
           lastActionError: null,
+          controllerEpoch: current.controllerEpoch + 1,
         });
         persist({ ...get(), match, applicationMode: 'handoff' }, 'handoff');
       } catch (error) {
@@ -690,10 +745,19 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     },
     backToWorldSetup: () =>
-      set({ applicationMode: 'world-setup', saveMessage: null }),
+      set({
+        applicationMode: 'world-setup',
+        saveMessage: null,
+        botExecution: IDLE_BOT_EXECUTION,
+        controllerEpoch: get().controllerEpoch + 1,
+      }),
     beginTurn: () => {
       const state = get();
       if (!state.match) return;
+      const controller = state.matchSetup.players.find(
+        (player) => player.id === state.match?.activePlayerId,
+      )?.controllerType;
+      if (controller === 'heuristic-bot') return;
       const match = {
         ...state.match,
         selectedSourceTerritoryId: null,
@@ -701,6 +765,28 @@ export const useGameStore = create<GameState>((set, get) => {
       };
       set({ applicationMode: 'playing', match, lastActionError: null });
       persist({ ...get(), match, applicationMode: 'playing' }, 'playing');
+    },
+    beginBotTurn: (matchId, playerId) => {
+      const state = get();
+      const active = state.matchSetup.players.find(
+        (player) => player.id === state.match?.activePlayerId,
+      );
+      if (
+        state.applicationMode !== 'handoff' ||
+        !state.match ||
+        state.match.matchId !== matchId ||
+        state.match.activePlayerId !== playerId ||
+        active?.controllerType !== 'heuristic-bot'
+      )
+        return false;
+      const match = {
+        ...state.match,
+        selectedSourceTerritoryId: null,
+        selectedTargetTerritoryId: null,
+      };
+      set({ applicationMode: 'playing', match, lastActionError: null });
+      persist({ ...get(), match, applicationMode: 'playing' }, 'playing');
+      return true;
     },
     resetMatch: () => {
       const state = get();
@@ -711,6 +797,8 @@ export const useGameStore = create<GameState>((set, get) => {
         match,
         handoffSummary: { previousTurn: null, messages: [] },
         lastActionError: null,
+        botExecution: IDLE_BOT_EXECUTION,
+        controllerEpoch: state.controllerEpoch + 1,
       });
       persist({ ...get(), match, applicationMode: 'handoff' }, 'handoff');
     },
@@ -722,10 +810,15 @@ export const useGameStore = create<GameState>((set, get) => {
           matchSetup: restartPlayerDraft(state.matchSetup),
           match: null,
           assignmentFeedback: `${state.matchSetup.players[0]!.name} chooses first.`,
+          controllerEpoch: state.controllerEpoch + 1,
         });
       } else {
         get().rerollOwnership();
-        set({ applicationMode: 'pregame', match: null });
+        set({
+          applicationMode: 'pregame',
+          match: null,
+          controllerEpoch: get().controllerEpoch + 1,
+        });
       }
     },
     dispatchGameAction: (action) => {
@@ -735,6 +828,18 @@ export const useGameStore = create<GameState>((set, get) => {
           lastActionError: {
             code: 'WRONG_PHASE',
             message: 'Begin the active player turn before taking game actions.',
+          },
+        });
+        return;
+      }
+      const controller = state.matchSetup.players.find(
+        (player) => player.id === state.match?.activePlayerId,
+      )?.controllerType;
+      if (controller === 'heuristic-bot') {
+        set({
+          lastActionError: {
+            code: 'CONTROLLER_LOCKED',
+            message: 'Gameplay input is disabled while the bot is acting.',
           },
         });
         return;
@@ -764,6 +869,51 @@ export const useGameStore = create<GameState>((set, get) => {
         );
       }
     },
+    dispatchControllerAction: (action, expected, expectedEpoch) => {
+      const state = get();
+      if (
+        state.controllerEpoch !== expectedEpoch ||
+        state.applicationMode !== 'playing' ||
+        !state.match ||
+        !fingerprintsEqual(commandFingerprint(state.match), expected)
+      )
+        return false;
+      const controller = state.matchSetup.players.find(
+        (player) => player.id === state.match?.activePlayerId,
+      )?.controllerType;
+      if (controller !== 'heuristic-bot') return false;
+      const result = gameReducer(state.planet, state.match, action);
+      if (result.error) {
+        set({
+          lastActionError: result.error,
+          botExecution: {
+            ...state.botExecution,
+            phase: 'error',
+            error: `${result.error.code}: ${result.error.message}`,
+          },
+        });
+        return false;
+      }
+      let applicationMode: ApplicationMode = state.applicationMode;
+      let handoffSummary = state.handoffSummary;
+      if (result.state.phase === 'game-over') applicationMode = 'game-over';
+      else if (action.type === 'END_TURN') {
+        applicationMode = 'handoff';
+        handoffSummary = summaryForTurn(result.state, state.match.turnNumber);
+      }
+      set({
+        match: result.state,
+        lastActionError: null,
+        applicationMode,
+        handoffSummary,
+      });
+      persist(
+        { ...get(), match: result.state, applicationMode },
+        applicationMode,
+      );
+      return true;
+    },
+    setBotExecution: (botExecution) => set({ botExecution }),
     saveMatch: () => persist(get()),
     resumeSavedMatch: async () => {
       if (get().setupOperation) return;
@@ -836,6 +986,8 @@ export const useGameStore = create<GameState>((set, get) => {
           hoveredTerritoryId: null,
           assignmentFeedback: null,
           lastActionError: null,
+          botExecution: IDLE_BOT_EXECUTION,
+          controllerEpoch: get().controllerEpoch + 1,
         });
         if (parsed.migrated) persist(get(), applicationMode);
       } catch {
