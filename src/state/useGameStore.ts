@@ -40,7 +40,7 @@ import {
 } from '../core/setup/territoryAssignment';
 import {
   DEFAULT_WORLD_SETUP,
-  normalizeWorldSetup,
+  normalizeNewWorldSetup,
   type WorldSetup,
   worldSetupsEqual,
 } from '../core/setup/worldSetup';
@@ -70,7 +70,7 @@ function initializeSetupFromLocation() {
   ].some((key) => params.has(key));
   const deterministicFixture = params.get('visual-review') === '1';
   if (!hasSharedSetup && !deterministicFixture) {
-    const setup = normalizeWorldSetup({
+    const setup = normalizeNewWorldSetup({
       ...DEFAULT_WORLD_SETUP,
       seed: generateReadableWorldSeed(),
     });
@@ -400,7 +400,7 @@ export const useGameStore = create<GameState>((set, get) => {
         state.setupOperation
       )
         return;
-      const setup = normalizeWorldSetup({ ...state.setup, playerCount });
+      const setup = normalizeNewWorldSetup({ ...state.setup, playerCount });
       const defaults = createDefaultPlayerConfigs(setup.playerCount);
       const players = defaults.map((fallback, index) => {
         const existing = state.matchSetup.players[index];
@@ -438,7 +438,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ setupOperation: 'apply-seed', setupError: null });
       await allowBusyStateToPaint();
       const requestedSetup = { ...get().setupDraft, seed: get().seedInput };
-      const setup = normalizeWorldSetup(requestedSetup);
+      const setup = normalizeNewWorldSetup(requestedSetup);
       const warning = worldSetupsEqual(setup, requestedSetup)
         ? null
         : 'Setup values were normalized to the supported ranges.';
@@ -473,7 +473,7 @@ export const useGameStore = create<GameState>((set, get) => {
       await allowBusyStateToPaint();
       try {
         const seedInput = generateReadableWorldSeed();
-        const setup = normalizeWorldSetup({
+        const setup = normalizeNewWorldSetup({
           ...get().setupDraft,
           seed: seedInput,
         });

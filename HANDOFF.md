@@ -1,5 +1,31 @@
 # Fustify Handoff
 
+## Supabase multiplayer foundation (July 2026)
+
+Branch `feat/supabase-multiplayer-foundation` starts at
+`cd5a263397e717081b3826b55571e32075db16b3`. The dedicated remote project is
+`fustify-multiplayer` (`qwmsybhpjnfjiyxcspwj`, `us-east-1`); unrelated connected
+projects were audited and left untouched. Four source-controlled migrations
+create a private normalized lobby schema, restrictive grants/RLS, eight
+authenticated transactional RPCs, and Realtime publication membership.
+
+`/multiplayer` lazily restores or creates a persisted anonymous Supabase session.
+Private rooms support durable members, five seats, host-only 42/5 defaults and
+settings, concurrency-safe claims, canonical Realtime refetch/recovery, and an
+idempotent host-only start transaction. Match start snapshots immutable setup,
+seat order, and generator metadata. Every member renders the same corrected
+world in a read-only globe/minimap preview and exposes a development fingerprint.
+Gameplay commands are deliberately excluded.
+
+Normal local and multiplayer creation now caps continents and seats at five,
+while existing valid six-continent/six-seat saves, URLs, fixtures, and canonical
+worlds retain compatibility. Do not change the generator as part of follow-up
+multiplayer work; investigate six-continent quality separately.
+
+Operational details, remote audit, migration/type commands, security boundaries,
+cleanup, tests, limitations, and the next server-authoritative gameplay milestone
+are in `MULTIPLAYER.md` and `SUPABASE.md`.
+
 ## Continent-generation quality (July 2026)
 
 Branch `fix/continent-generation-quality` starts at

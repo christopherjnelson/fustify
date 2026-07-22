@@ -19,7 +19,11 @@ import {
   type LocalMatchSave,
 } from './saveGame';
 
-const planet = generatePlanet(DEFAULT_WORLD_SETUP.seed);
+const planet = generatePlanet(DEFAULT_WORLD_SETUP.seed, {
+  territoryCount: DEFAULT_WORLD_SETUP.territoryCount,
+  continentCount: DEFAULT_WORLD_SETUP.continentCount,
+  playerCount: DEFAULT_WORLD_SETUP.playerCount,
+});
 const players = createDefaultPlayerConfigs(4);
 const setup = createMatchSetup(planet, players);
 const match = createMatch(planet, setup);

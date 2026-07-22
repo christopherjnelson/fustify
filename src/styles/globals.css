@@ -23,6 +23,301 @@
   }
 }
 
+.multiplayer-shell {
+  min-height: 100vh;
+  padding: 28px;
+  background:
+    radial-gradient(
+      circle at 75% 20%,
+      rgba(38, 111, 149, 0.2),
+      transparent 35%
+    ),
+    #050914;
+}
+
+.multiplayer-centered {
+  display: grid;
+  place-items: center;
+}
+
+.multiplayer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1180px;
+  margin: 0 auto 20px;
+}
+
+.multiplayer-header h1,
+.multiplayer-card h1,
+.multiplayer-card h2 {
+  margin: 4px 0 10px;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.multiplayer-card {
+  padding: 20px;
+  border: 1px solid rgba(155, 187, 219, 0.2);
+  border-radius: 18px;
+  background: rgba(8, 16, 29, 0.92);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+}
+
+.multiplayer-card p {
+  color: #a5b7c8;
+  line-height: 1.55;
+}
+
+.multiplayer-entry-card {
+  width: min(520px, 100%);
+}
+
+.multiplayer-entry-card > label,
+.multiplayer-join-form label,
+.settings-card > label,
+.multiplayer-setting-grid label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  color: #bed0df;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.multiplayer-card input,
+.multiplayer-card select {
+  width: 100%;
+  padding: 10px 12px;
+  color: #eef7ff;
+  border: 1px solid rgba(153, 190, 224, 0.24);
+  border-radius: 8px;
+  background: #111d2a;
+}
+
+.multiplayer-card button,
+.multiplayer-actions button {
+  padding: 10px 14px;
+  border: 1px solid rgba(122, 202, 234, 0.28);
+  border-radius: 9px;
+  background: #126b91;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.multiplayer-card button:disabled,
+.multiplayer-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.multiplayer-card button.secondary,
+.multiplayer-actions button.secondary {
+  background: #172638;
+}
+
+.multiplayer-actions button.danger {
+  border-color: rgba(235, 123, 115, 0.36);
+  background: #5d292a;
+}
+
+.multiplayer-join-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.multiplayer-session-note {
+  font-size: 0.7rem;
+}
+
+.multiplayer-error {
+  padding: 10px 12px;
+  color: #ffd6d2 !important;
+  border: 1px solid rgba(235, 123, 115, 0.4);
+  border-radius: 9px;
+  background: rgba(91, 31, 31, 0.48);
+}
+
+.multiplayer-page-error {
+  max-width: 1180px;
+  margin: 18px auto;
+}
+
+.multiplayer-connection {
+  padding: 7px 10px;
+  color: #ffd899;
+  border: 1px solid rgba(255, 196, 104, 0.3);
+  border-radius: 999px;
+  background: rgba(103, 69, 22, 0.38);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.multiplayer-connection.connected {
+  color: #a9f4c1;
+  border-color: rgba(95, 216, 137, 0.3);
+  background: rgba(30, 91, 53, 0.42);
+}
+
+.multiplayer-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.7fr) minmax(360px, 1.3fr);
+  gap: 18px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.room-code-card strong {
+  display: block;
+  margin: 10px 0 14px;
+  color: #dff6ff;
+  font-family: 'Space Grotesk', monospace;
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  letter-spacing: 0.1em;
+}
+
+.multiplayer-seat-list,
+.member-card ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.multiplayer-seat-list li,
+.member-card li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px;
+  border-radius: 10px;
+  background: rgba(21, 37, 54, 0.68);
+}
+
+.multiplayer-seat-list span,
+.multiplayer-seat-list small {
+  display: block;
+}
+
+.multiplayer-seat-list small {
+  margin-top: 3px;
+  color: #9eb1c2;
+}
+
+.member-card li span {
+  margin-left: 8px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(64, 121, 149, 0.32);
+  font-size: 0.65rem;
+}
+
+.multiplayer-setting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+}
+
+.multiplayer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 1180px;
+  margin: 18px auto 0;
+}
+
+.multiplayer-match-shell {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  min-height: 620px;
+  overflow: hidden;
+  background: #050914;
+}
+
+.multiplayer-match-panel {
+  position: absolute;
+  z-index: 6;
+  top: 24px;
+  left: 24px;
+  width: min(430px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.multiplayer-match-panel dl {
+  display: grid;
+  gap: 8px;
+}
+
+.multiplayer-match-panel dl div {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.multiplayer-match-panel dt {
+  color: #8fa5b9;
+}
+
+.multiplayer-match-panel dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.world-fingerprint code {
+  display: block;
+  margin-top: 5px;
+  color: #a9f4c1;
+}
+
+.multiplayer-minimap {
+  z-index: 7;
+}
+
+@media (max-width: 720px) {
+  .multiplayer-shell {
+    padding: 16px;
+  }
+
+  .multiplayer-header {
+    align-items: flex-start;
+  }
+
+  .multiplayer-layout,
+  .multiplayer-setting-grid,
+  .multiplayer-join-form {
+    grid-template-columns: 1fr;
+  }
+
+  .multiplayer-join-form button {
+    width: 100%;
+  }
+
+  .multiplayer-match-shell {
+    min-height: 844px;
+    overflow-y: auto;
+  }
+
+  .multiplayer-match-panel {
+    top: 12px;
+    left: 12px;
+    width: calc(100vw - 24px);
+    max-height: min(52vh, 430px);
+  }
+
+  .multiplayer-match-shell .multiplayer-minimap {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+  }
+}
+
 html,
 body,
 #root {
@@ -40,6 +335,15 @@ html.game-route #root {
 html.admin-route,
 html.admin-route body,
 html.admin-route #root {
+  height: auto;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+html.multiplayer-route,
+html.multiplayer-route body,
+html.multiplayer-route #root {
   height: auto;
   min-height: 100%;
   overflow-x: hidden;

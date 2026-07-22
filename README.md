@@ -2,16 +2,21 @@
 
 **Generate a world. Conquer it.**
 
-A browser-based solo and local hot-seat playtest for a voxel-styled planetary strategy game. Fustify separates deterministic world generation, editable player/controller configuration, and the mutable Risk-style match on the interactive globe. It is not a secure multiplayer implementation and has no backend or online persistence.
+A browser-based solo and local hot-seat playtest for a voxel-styled planetary
+strategy game, now with a Supabase-backed private-lobby and synchronized
+read-only match-start preview. Fustify separates deterministic world generation,
+editable player/controller configuration, and mutable local gameplay from the
+new multiplayer foundation. Synchronized gameplay commands are not implemented.
 
 The prototype currently provides:
 
 - A rotatable and zoomable 3D globe with desktop and touch-compatible orbit controls
 - A responsive, read-only equirectangular minimap derived from the same canonical globe geometry and ownership state
 - A deterministic, smoothed land/ocean mask with multiple landmasses and islands
-- Exactly 42 playable land territories grouped into 6 land-connected gameplay continents
-- Four recommended editable seats (one Local Human and three Heuristic Bots), expandable to six; custom two- and three-seat tables remain supported
-- Five- and six-seat tables are supported expanded matches and generally run substantially longer; every seat independently supports Human or Bot
+- Normal creation at 42 playable territories, temporarily capped at 5 land-connected gameplay continents
+- Four recommended editable seats (one Local Human and three Heuristic Bots), expandable to five; custom two- and three-seat tables remain supported
+- Compatibility loading for existing valid six-continent/six-seat saves, URLs, canonical worlds, and fixtures
+- Private anonymous multiplayer rooms with durable membership, transactional seats/settings/start, Realtime recovery, and a deterministic read-only match preview
 - A randomly named neutral world on fresh launch, before any player ownership exists
 - Subtle dotted canonical sea routes on the 3D globe while choosing a neutral world
 - Curated readable names that are also canonical deterministic world seeds
@@ -63,6 +68,9 @@ pnpm format:check
 pnpm verify:report
 pnpm verify:report:full
 pnpm study:balance --preset quick
+pnpm test:e2e:multiplayer
+pnpm test:visual:multiplayer
+pnpm test:multiplayer:concurrency
 ```
 
 The report-enabled commands incrementally write ignored, validated schema-v1
@@ -72,6 +80,10 @@ coverage, simulations, failures, and reproduction commands. The filesystem API
 exists only in the local development server and is read-only. See
 [VERIFICATION.md](./VERIFICATION.md) for profiles, retention, interruption and
 security behavior.
+
+The multiplayer route and hosted-database workflow are documented in
+[MULTIPLAYER.md](./MULTIPLAYER.md) and [SUPABASE.md](./SUPABASE.md). Local play
+does not require Supabase environment variables.
 
 For unattended multi-configuration bot research, preview with
 `pnpm study:balance --preset thorough --dry-run`, run it from a second terminal,
@@ -163,9 +175,12 @@ pnpm test:simulation:replay
 The read-only `/admin` Balance Studies dashboard distinguishes all-match win
 rate from decided-victory share and includes a paired six-seat diagnostic. See
 [BALANCE_STUDIES.md](./BALANCE_STUDIES.md) for dry-run, standard, thorough,
-resume, compact JSON export, and single-match reproduction commands. The
-standard world remains 42 territories and 6 continents; smaller worlds are
-advanced/testing options.
+resume, compact JSON export, and single-match reproduction commands. Normal
+product creation defaults to 42 territories and 5 continents; new worlds and
+tables are temporarily capped at 5 continents and 5 seats. Existing valid
+6-continent/6-seat data remains engine compatibility coverage. Six-continent
+generation is a deferred investigation rather than a supported normal
+configuration.
 
 `pnpm test:coverage` writes text, HTML, and JSON-summary reports for the pure game and save-validation modules. The HTML report is generated under `coverage/`. Coverage is used to identify rule branches—not as a 100% target. Remaining low-value branches are mainly malformed/unknown command variants and defensive lookup failures; browser-local storage exceptions, free-form globe dragging, and subjective play balance still require integration or manual playtesting.
 
@@ -181,19 +196,19 @@ Runtime product metadata is centralized in `src/branding.ts`. The board-level Fu
 
 World setup is plain serializable data kept separate from both immutable `PlanetDefinition` geography and mutable `MatchState` gameplay. Version 1 supports:
 
-| Parameter     | Default                   | Valid values                                        |
-| ------------- | ------------------------- | --------------------------------------------------- |
-| `v`           | `1`                       | `1`                                                 |
-| `seed`        | generated on a fresh root | Any non-empty string                                |
-| `territories` | `42`                      | Whole numbers from 12–48                            |
-| `continents`  | `6`                       | Whole numbers from 2–8, never more than territories |
-| `players`     | `4`                       | Whole numbers from 2–6                              |
-| `assignment`  | `random`                  | `random` or `player-draft`                          |
+| Parameter     | Default                   | Valid values                               |
+| ------------- | ------------------------- | ------------------------------------------ |
+| `v`           | `1`                       | `1`                                        |
+| `seed`        | generated on a fresh root | Any non-empty string                       |
+| `territories` | `42`                      | Whole numbers from 12–48                   |
+| `continents`  | `5`                       | New UI: 2–5; compatible existing URLs: 2–8 |
+| `players`     | `4`                       | New UI: 2–5; compatible existing URLs: 2–6 |
+| `assignment`  | `random`                  | `random` or `player-draft`                 |
 
 Example:
 
 ```text
-http://localhost:5173/?v=1&seed=atlas-prime&territories=42&continents=6&players=4&assignment=random
+http://localhost:5173/?v=1&seed=atlas-prime&territories=42&continents=5&players=4&assignment=random
 ```
 
 On a normal root launch with no supported setup parameters, Fustify creates a readable slug such as `amber-meridian-482`, generates that neutral world once, and replaces the current URL with its complete setup. Refresh therefore reconstructs the same world. An explicit seed or supported shared setup URL takes precedence. Fixed seeds such as `atlas-prime` and `visual-review-atlas` remain test/demo fixtures, not the production root default. A requested local-save resume reconstructs the saved seed and is never replaced by fresh-launch naming.
@@ -208,7 +223,7 @@ Readable naming is independent of geography generation: a curated descriptor, cu
 
 `WorldSetup` contains the versioned URL parameters listed above, including the assignment-strategy choice. `PlanetDefinition` remains immutable geography and topology; generated territories are neutral (`ownerId: null`, zero armies). A discriminated `MatchSetup` contains stable player IDs, names, palette colors, seat order, strategy, and one of three setup phases: `neutral-preview`, `assignment-in-progress`, or `ready`. Only `ready` contains a complete `StartingPosition`. `MatchState` is nullable before play and is created only from a ready setup; it contains mutable turns, ownership, armies, selections, pending captures, deterministic combat sequence, elimination, victory, and events. Camera, dialogs, hover, and display preferences remain view state.
 
-Generating a world remains in world selection with geographical/continent colors, no army markers, no starting-balance claim, and no playable match. Editing seed or count fields does not mutate the displayed world until the user presses Enter in the seed field or clicks Generate World for a new readable seed. Start Game opens match setup with the recommended four seats: one Local Human and three Heuristic Bots. Add Seat creates bot-controlled seats five and six with stable identities, palette colors, and editable names. The count control preserves advanced two- and three-seat tables. Controller type, human count, seat count, identity, color, and world size remain independent; mixed human/bot, all-human, and all-bot tables are valid. The recommended world is 42 territories and 6 continents, while smaller/custom worlds remain available. Player names are normalized before assignment and blank or duplicate names are blocked. Colors come from six named, high-contrast choices and cannot be duplicated. The table then explicitly begins either random assignment or a player draft. A ready setup must be explicitly started with Begin Match before the first handoff. Gameplay commands are rejected until the application is in `playing` with a real match, and human commands are rejected while its active seat is bot-controlled.
+Generating a world remains in world selection with geographical/continent colors, no army markers, no starting-balance claim, and no playable match. Editing seed or count fields does not mutate the displayed world until the user presses Enter in the seed field or clicks Generate World for a new readable seed. Start Game opens match setup with the recommended four seats: one Local Human and three Heuristic Bots. Add Seat creates a fifth bot-controlled seat with stable identity, palette color, and editable name. Normal creation is capped at five seats and five continents; advanced two- and three-seat tables remain supported, while existing valid six-seat/six-continent data still loads. Controller type, human count, seat count, identity, color, and world size remain independent; mixed human/bot, all-human, and all-bot tables are valid within that creation cap. The recommended world is 42 territories and 5 continents. Player names are normalized before assignment and blank or duplicate names are blocked. Colors come from six named, high-contrast choices and cannot be duplicated. The table then explicitly begins either random assignment or a player draft. A ready setup must be explicitly started with Begin Match before the first handoff. Gameplay commands are rejected until the application is in `playing` with a real match, and human commands are rejected while its active seat is bot-controlled.
 
 Starting ownership evaluates 32 deterministic candidates derived from the world seed, generator version, stable player IDs, ownership variant, and candidate index. The default `distributed` strategy uses shuffled round-robin placement followed by bounded, count-preserving local swaps; it deliberately targets several useful ownership regions instead of growing one empire per player. Hard-invalid candidates are rejected before score comparison, and a failed bounded search reports its leading blocking conditions without changing the world seed.
 

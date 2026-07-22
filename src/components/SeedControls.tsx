@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react';
 import {
-  MAX_CONTINENT_COUNT,
+  MAX_NEW_CONTINENT_COUNT,
   MAX_TERRITORY_COUNT,
   MIN_CONTINENT_COUNT,
   MIN_TERRITORY_COUNT,
@@ -68,7 +68,7 @@ export function SeedControls() {
           <input
             type="number"
             min={MIN_CONTINENT_COUNT}
-            max={Math.min(MAX_CONTINENT_COUNT, draft.territoryCount)}
+            max={Math.min(MAX_NEW_CONTINENT_COUNT, draft.territoryCount)}
             value={draft.continentCount}
             onChange={(event) =>
               setDraft({ continentCount: Number(event.target.value) })
@@ -79,8 +79,9 @@ export function SeedControls() {
         </label>
       </div>
       <p className="setup-guidance">
-        Recommended world: 42 territories and 6 continents. These controls
-        remain available for smaller and custom worlds.
+        Recommended world: 42 territories and 5 continents. New worlds are
+        temporarily capped at 5 continents while 6-continent generation is
+        investigated.
       </p>
       {(warning || error) && (
         <p

@@ -1,5 +1,4 @@
 import {
-  DEFAULT_CONTINENT_COUNT,
   DEFAULT_PLAYER_COUNT,
   DEFAULT_TERRITORY_COUNT,
 } from '../generation/constants';
@@ -10,8 +9,11 @@ export const MIN_TERRITORY_COUNT = 12;
 export const MAX_TERRITORY_COUNT = 48;
 export const MIN_CONTINENT_COUNT = 2;
 export const MAX_CONTINENT_COUNT = 8;
+export const MAX_NEW_CONTINENT_COUNT = 5;
+export const DEFAULT_NEW_CONTINENT_COUNT = 5;
 export const MIN_PLAYER_COUNT = 2;
 export const MAX_PLAYER_COUNT = 6;
+export const MAX_NEW_PLAYER_COUNT = 5;
 
 export interface WorldSetup {
   version: number;
@@ -31,7 +33,7 @@ export const DEFAULT_WORLD_SETUP: Readonly<WorldSetup> = Object.freeze({
   version: WORLD_SETUP_VERSION,
   seed: 'atlas-prime',
   territoryCount: DEFAULT_TERRITORY_COUNT,
-  continentCount: DEFAULT_CONTINENT_COUNT,
+  continentCount: DEFAULT_NEW_CONTINENT_COUNT,
   playerCount: DEFAULT_PLAYER_COUNT,
   assignmentMode: 'random',
 });
@@ -81,6 +83,20 @@ export function normalizeWorldSetup(
     assignmentMode:
       candidate.assignmentMode === 'player-draft' ? 'player-draft' : 'random',
   };
+}
+
+export function normalizeNewWorldSetup(
+  candidate: Partial<WorldSetup>,
+): WorldSetup {
+  return normalizeWorldSetup({
+    ...candidate,
+    continentCount: Number.isInteger(candidate.continentCount)
+      ? Math.min(MAX_NEW_CONTINENT_COUNT, candidate.continentCount!)
+      : candidate.continentCount,
+    playerCount: Number.isInteger(candidate.playerCount)
+      ? Math.min(MAX_NEW_PLAYER_COUNT, candidate.playerCount!)
+      : candidate.playerCount,
+  });
 }
 
 export function parseWorldSetup(

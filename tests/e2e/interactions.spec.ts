@@ -27,6 +27,8 @@ test('fresh root launch creates one readable URL-stable neutral world', async ({
     page.getByRole('heading', { name: 'Choose your world' }),
   ).toBeVisible();
   await expect(page.locator('.setup-actions button')).toHaveCount(2);
+  await expect(page.getByLabel('Continent count')).toHaveValue('5');
+  await expect(page.getByLabel('Continent count')).toHaveAttribute('max', '5');
   await expect(
     page.getByRole('button', { name: 'Generate World' }),
   ).toBeVisible();
@@ -111,10 +113,10 @@ test('player setup supports human, bot, and multiple bot seats accessibly', asyn
   ).toHaveCount(3);
 });
 
-test('recommended setup starts with four seats and adds bot seats through six', async ({
+test('recommended setup starts with four seats and caps new tables at five', async ({
   page,
 }) => {
-  await page.goto('/?v=1&seed=recommended-setup&territories=42&continents=6');
+  await page.goto('/?v=1&seed=recommended-setup&territories=42&continents=5');
   await page.getByRole('button', { name: 'Start Game' }).click();
   await expect(page.getByLabel('Player count')).toHaveValue('4');
   await expect(page.locator('.player-config')).toHaveCount(4);
@@ -133,16 +135,11 @@ test('recommended setup starts with four seats and adds bot seats through six', 
   await expect(page.getByLabel(/Violet Assembly controller/i)).toHaveValue(
     'heuristic-bot',
   );
-  await addSeat.click();
-  await expect(page.locator('.player-config')).toHaveCount(6);
-  await expect(page.getByLabel(/Rose Coalition controller/i)).toHaveValue(
-    'heuristic-bot',
-  );
   await expect(addSeat).toBeDisabled();
   await page
-    .getByLabel(/Rose Coalition controller/i)
+    .getByLabel(/Violet Assembly controller/i)
     .selectOption('local-human');
-  await expect(page.getByLabel('Player count')).toHaveValue('6');
+  await expect(page.getByLabel('Player count')).toHaveValue('5');
 });
 
 test('bot status locks gameplay selection and human controls return afterward', async ({

@@ -1,10 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/globals.css';
-import { isAdminRoute } from './browser/routes';
+import { isAdminRoute, isMultiplayerRoute } from './browser/routes';
 
 const isAdmin = isAdminRoute(window.location.pathname);
-document.documentElement.classList.add(isAdmin ? 'admin-route' : 'game-route');
+const isMultiplayer = isMultiplayerRoute(window.location.pathname);
+document.documentElement.classList.add(
+  isAdmin ? 'admin-route' : isMultiplayer ? 'multiplayer-route' : 'game-route',
+);
 
 async function bootstrap() {
   const root = createRoot(document.getElementById('root')!);
@@ -28,6 +31,16 @@ async function bootstrap() {
     return;
   }
 
+  if (isMultiplayer) {
+    const { MultiplayerApp } = await import('./multiplayer/MultiplayerApp');
+    root.render(
+      <StrictMode>
+        <MultiplayerApp />
+      </StrictMode>,
+    );
+    return;
+  }
+
   const { App } = await import('./app/App');
   root.render(
     <StrictMode>
@@ -40,6 +53,7 @@ void bootstrap();
 
 if (
   !isAdmin &&
+  !isMultiplayer &&
   import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get('visual-review') === '1'
 ) {

@@ -1,6 +1,9 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { PLAYER_COLORS, playerColorValue } from '../core/setup/playerConfig';
-import { MAX_PLAYER_COUNT, MIN_PLAYER_COUNT } from '../core/setup/worldSetup';
+import {
+  MAX_NEW_PLAYER_COUNT,
+  MIN_PLAYER_COUNT,
+} from '../core/setup/worldSetup';
 import { activeDraftPlayer } from '../core/setup/territoryAssignment';
 import { useGameStore } from '../state/useGameStore';
 
@@ -74,10 +77,9 @@ export function PregamePanel() {
       </p>
 
       <p className="setup-guidance">
-        Recommended: four seats on the 42-territory, 6-continent world. Each
-        seat can independently be Human or Bot. Five and six seats are supported
-        expanded matches and generally run longer. Smaller worlds remain
-        advanced/testing options.
+        Recommended: four seats on the 42-territory, 5-continent world. Each
+        seat can independently be Human or Bot. New tables are temporarily
+        capped at five seats while six-seat presentation is investigated.
       </p>
 
       <label className="player-count-control">
@@ -85,7 +87,7 @@ export function PregamePanel() {
         <input
           type="number"
           min={MIN_PLAYER_COUNT}
-          max={MAX_PLAYER_COUNT}
+          max={Math.max(MAX_NEW_PLAYER_COUNT, setup.playerCount)}
           value={setup.playerCount}
           onChange={(event) => setPlayerCount(Number(event.target.value))}
           aria-label="Player count"
@@ -100,7 +102,7 @@ export function PregamePanel() {
         className="secondary add-seat-button"
         onClick={() => setPlayerCount(setup.playerCount + 1)}
         disabled={
-          setup.playerCount >= MAX_PLAYER_COUNT ||
+          setup.playerCount >= MAX_NEW_PLAYER_COUNT ||
           matchSetup.setupPhase !== 'neutral-preview' ||
           operation !== null
         }

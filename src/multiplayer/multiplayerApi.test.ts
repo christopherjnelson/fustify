@@ -1,0 +1,78 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { describe, expect, it, vi } from 'vitest';
+import type { Database } from './database.types';
+import { ensureAnonymousSession, multiplayerError } from './multiplayerApi';
+
+describe('multiplayer anonymous session', () => {
+  it('deduplicates concurrent anonymous sign-in attempts for one client', async () => {
+    const auth = {
+      getSession: vi.fn(async () => ({ data: { session: null } })),
+      signInAnonymously: vi.fn(async () => {
+        await Promise.resolve();
+        return { data: { user: { id: 'anonymous-user' } }, error: null };
+      }),
+    };
+    const client = { auth } as unknown as SupabaseClient<Database>;
+
+    await expect(
+      Promise.all([
+        ensureAnonymousSession(client),
+        ensureAnonymousSession(client),
+      ]),
+    ).resolves.toEqual(['anonymous-user', 'anonymous-user']);
+    expect(auth.getSession).toHaveBeenCalledTimes(1);
+    expect(auth.signInAnonymously).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores a valid persisted user before creating another identity', async () => {
+    const auth = {
+      getSession: vi.fn(async () => ({ data: { session: {} } })),
+      getUser: vi.fn(async () => ({
+        data: { user: { id: 'restored-user' } },
+        error: null,
+      })),
+      signInAnonymously: vi.fn(),
+    };
+    const client = { auth } as unknown as SupabaseClient<Database>;
+
+    await expect(ensureAnonymousSession(client)).resolves.toBe('restored-user');
+    expect(auth.signInAnonymously).not.toHaveBeenCalled();
+  });
+
+  it('replaces an invalid persisted session with a fresh anonymous identity', async () => {
+    const auth = {
+      getSession: vi.fn(async () => ({ data: { session: {} } })),
+      getUser: vi.fn(async () => ({
+        data: { user: null },
+        error: new Error('expired'),
+      })),
+      signOut: vi.fn(async () => ({ error: null })),
+      signInAnonymously: vi.fn(async () => ({
+        data: { user: { id: 'replacement-user' } },
+        error: null,
+      })),
+    };
+    const client = { auth } as unknown as SupabaseClient<Database>;
+
+    await expect(ensureAnonymousSession(client)).resolves.toBe(
+      'replacement-user',
+    );
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+});
+
+describe('multiplayer errors', () => {
+  it('preserves stable room errors and explains Auth throttling', () => {
+    expect(multiplayerError(new Error('seat_conflict')).message).toBe(
+      'Another player claimed that seat first.',
+    );
+    expect(
+      multiplayerError(new Error('Request rate limit reached')).message,
+    ).toBe(
+      'Anonymous sign-in is temporarily rate limited. Wait a moment and try again.',
+    );
+    expect(multiplayerError({ status: 429 }).message).toContain(
+      'temporarily rate limited',
+    );
+  });
+});

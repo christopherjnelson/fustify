@@ -3,12 +3,15 @@ import { generatePlanet } from '../generation/generatePlanet';
 import {
   DEFAULT_WORLD_SETUP,
   MAX_CONTINENT_COUNT,
+  MAX_NEW_CONTINENT_COUNT,
+  MAX_NEW_PLAYER_COUNT,
   MAX_PLAYER_COUNT,
   MAX_TERRITORY_COUNT,
   MIN_CONTINENT_COUNT,
   MIN_PLAYER_COUNT,
   MIN_TERRITORY_COUNT,
   normalizeWorldSetup,
+  normalizeNewWorldSetup,
   parseWorldSetup,
   serializeWorldSetup,
   worldSetupsEqual,
@@ -118,6 +121,28 @@ describe('versioned world setup URLs', () => {
         playerCount: DEFAULT_WORLD_SETUP.playerCount,
       }),
     ).not.toThrow();
+  });
+
+  it('caps newly created worlds at five continents and five players', () => {
+    expect(
+      normalizeNewWorldSetup({
+        territoryCount: 42,
+        continentCount: 6,
+        playerCount: 6,
+      }),
+    ).toMatchObject({
+      territoryCount: 42,
+      continentCount: MAX_NEW_CONTINENT_COUNT,
+      playerCount: MAX_NEW_PLAYER_COUNT,
+    });
+  });
+
+  it('keeps existing six-continent and six-player URLs compatible', () => {
+    expect(
+      parseWorldSetup(
+        'v=1&seed=existing-six&territories=42&continents=6&players=6',
+      ).setup,
+    ).toMatchObject({ continentCount: 6, playerCount: 6 });
   });
 
   it('preserves both logo variants and unknown parameters', () => {

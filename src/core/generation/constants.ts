@@ -1,5 +1,7 @@
 export const GENERATOR_VERSION = 3;
 export const DEFAULT_TERRITORY_COUNT = 42;
+// Engine compatibility default for canonical fixtures and legacy callers.
+// Product creation flows use DEFAULT_NEW_CONTINENT_COUNT instead.
 export const DEFAULT_CONTINENT_COUNT = 6;
 export const DEFAULT_PLAYER_COUNT = 4;
 export const MIN_PLACEHOLDER_ARMIES = 2;
