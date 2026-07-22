@@ -613,7 +613,10 @@ function createCandidate(
   const orderedPlayers = players
     .slice()
     .sort((a, b) => a.seatIndex - b.seatIndex);
-  const candidateSeed = `${planet.seed}|v${planet.generatorVersion}|starting|distributed|${variant}|${candidateIndex}|${orderedPlayers.map((player) => player.id).join(',')}`;
+  const canonicalPlayerSlots = orderedPlayers
+    .map((_, index) => `player-${String(index + 1).padStart(2, '0')}`)
+    .join(',');
+  const candidateSeed = `${planet.seed}|v${planet.generatorVersion}|starting|distributed|${variant}|${candidateIndex}|${canonicalPlayerSlots}`;
   const assignments = improveAssignments(
     planet,
     orderedPlayers,

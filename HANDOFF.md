@@ -6,6 +6,23 @@
 
 ## Current state
 
+Branch `fix/controller-identity-bias` starts at
+`f2a47f95b3cfd4e10ce10f4e346f0a47343008f1`. Investigation proved that the
+six-seat runner rotated arrays without reassigning `seatIndex`; setup and match
+sorting restored the original order, while aggregation attributed wins to
+rotations that never occurred. The reducer also advanced turns through
+`PlanetDefinition.players` instead of the authoritative match player order.
+The correction applies real seat/assignment rotations, independently exposes
+controller stream slots, validates complete 36-match coverage, and provides
+compact `--debug-block` JSON.
+
+Literal player IDs were also present in controller, default match, and starting
+position seed material. Those label leaks are removed. Controller ties now use
+match seed, `balanced-v1`, explicit stream slot, turn, phase, and decision
+index. Player renaming is covered at command and complete-match levels. This
+changes old bot choice sequences while leaving rules/combat deterministic and
+save schema v4/URLs unchanged.
+
 Branch `feat/seat-balance-diagnostics` starts at
 `b32589e6e761897e2d5486a00815537e4048878d`. It corrects unresolved-outcome
 seat reporting, makes 4/5/6-seat results primary in `/admin`, and adds a
@@ -80,9 +97,9 @@ command. Invalid or stale commands cannot mutate canonical state.
 
 World generation uses `worldSeed`. Combat and controllers use an independent
 `matchSeed` stored in `MatchState.seed`. Interactive matches derive it from the
-world seed, ownership variant, and ordered player IDs; headless matches accept
-it explicitly. Controller tie-breaking adds controller version, player, turn,
-phase, and decision index to a seeded stream. No controller calls
+world seed, ownership variant, and player count; headless matches accept it
+explicitly. Controller tie-breaking adds controller version, explicit stream
+slot, turn, phase, and decision index to a seeded stream. No controller calls
 `Math.random()`, and UI pacing never enters the seed.
 
 Heuristic weights are centralized. Reinforcement considers hostile pressure,

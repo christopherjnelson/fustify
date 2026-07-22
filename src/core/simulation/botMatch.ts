@@ -3,7 +3,7 @@ import {
   createGameObservation,
   deterministicFallback,
   getLegalGameCommands,
-  heuristicController,
+  HeuristicController,
   HEURISTIC_CONTROLLER_VERSION,
   type GameCommand,
 } from '../controllers';
@@ -37,6 +37,8 @@ export interface HeadlessMatchOptions {
   trace?: boolean;
   seatRotation?: number;
   assignmentRotation?: number;
+  controllerStreamRotation?: number;
+  playerIds?: string[];
 }
 
 export interface ReproductionDescriptor {
@@ -54,6 +56,8 @@ export interface ReproductionDescriptor {
   maxTurnsWithoutCapture: number;
   seatRotation?: number;
   assignmentRotation?: number;
+  controllerStreamRotation?: number;
+  playerIds?: string[];
   failingTurn?: number;
   failingCommandIndex?: number;
 }
@@ -115,6 +119,48 @@ export interface HeadlessMatchResult {
 const DEFAULT_MAX_TURNS = 1_200;
 const DEFAULT_MAX_COMMANDS = 30_000;
 const DEFAULT_STALE_TURNS = 160;
+
+export function createHeadlessPlayerAllocation(
+  playerCount: number,
+  seatRotation = 0,
+  assignmentRotation = 0,
+  controllerStreamRotation = 0,
+  playerIds?: string[],
+) {
+  if (
+    playerIds &&
+    (playerIds.length !== playerCount ||
+      new Set(playerIds).size !== playerCount)
+  )
+    throw new Error(
+      'Headless player IDs must be unique and match playerCount.',
+    );
+  const configuredPlayers = createDefaultPlayerConfigs(playerCount).map(
+    (player, index) => ({
+      ...player,
+      id: playerIds?.[index] ?? player.id,
+      controllerType: 'heuristic-bot' as const,
+    }),
+  );
+  const rotation = seatRotation % playerCount;
+  const players = [
+    ...configuredPlayers.slice(rotation),
+    ...configuredPlayers.slice(0, rotation),
+  ].map((player, seatIndex) => ({ ...player, seatIndex }));
+  const assignment = assignmentRotation % playerCount;
+  const assignmentPlayers = [
+    ...players.slice(assignment),
+    ...players.slice(0, assignment),
+  ].map((player, seatIndex) => ({ ...player, seatIndex }));
+  const streamRotation = controllerStreamRotation % playerCount;
+  const controllerStreamByPlayer = new Map(
+    players.map((player, seatIndex) => [
+      player.id,
+      `controller-${((seatIndex + streamRotation) % playerCount) + 1}`,
+    ]),
+  );
+  return { players, assignmentPlayers, controllerStreamByPlayer };
+}
 
 function ownershipSignature(state: MatchState): string {
   return Object.entries(state.territories)
@@ -185,6 +231,8 @@ function reproduction(options: HeadlessMatchOptions): ReproductionDescriptor {
       options.maxTurnsWithoutCapture ?? DEFAULT_STALE_TURNS,
     seatRotation: options.seatRotation,
     assignmentRotation: options.assignmentRotation,
+    controllerStreamRotation: options.controllerStreamRotation,
+    playerIds: options.playerIds,
   };
 }
 
@@ -236,17 +284,17 @@ export async function runHeadlessMatch(
 ): Promise<HeadlessMatchResult> {
   const startedAt = performance.now();
   const descriptor = reproduction(options);
-  const configuredPlayers = createDefaultPlayerConfigs(options.playerCount).map(
-    (player) => ({
-      ...player,
-      controllerType: 'heuristic-bot' as const,
-    }),
+  const { players, assignmentPlayers, controllerStreamByPlayer } =
+    createHeadlessPlayerAllocation(
+      options.playerCount,
+      options.seatRotation,
+      options.assignmentRotation,
+      options.controllerStreamRotation,
+      options.playerIds,
+    );
+  const controllerByPlayer = new Map(
+    players.map((player) => [player.id, new HeuristicController()]),
   );
-  const rotation = (options.seatRotation ?? 0) % configuredPlayers.length;
-  const players = [
-    ...configuredPlayers.slice(rotation),
-    ...configuredPlayers.slice(0, rotation),
-  ];
   const emptyMetrics: MatchMetrics = {
     attacksAttempted: 0,
     territoriesCaptured: 0,
@@ -271,12 +319,6 @@ export async function runHeadlessMatch(
   let state: MatchState;
   try {
     planet = generatePlanet(options.worldSeed, options);
-    const assignmentRotation =
-      (options.assignmentRotation ?? 0) % players.length;
-    const assignmentPlayers = [
-      ...players.slice(assignmentRotation),
-      ...players.slice(0, assignmentRotation),
-    ];
     const assignedSetup = createMatchSetup(
       planet,
       assignmentPlayers,
@@ -425,12 +467,22 @@ export async function runHeadlessMatch(
     const decisionIndex = commandsApplied;
     let command: GameCommand;
     try {
-      command = await heuristicController.chooseAction(observation, legal, {
-        controllerType: 'heuristic-bot',
-        controllerVersion: HEURISTIC_CONTROLLER_VERSION,
-        decisionIndex,
-        decisionSeed: controllerDecisionSeed(observation, decisionIndex),
-      });
+      const controllerStreamId = controllerStreamByPlayer.get(
+        before.activePlayerId,
+      )!;
+      command = await controllerByPlayer
+        .get(before.activePlayerId)!
+        .chooseAction(observation, legal, {
+          controllerType: 'heuristic-bot',
+          controllerVersion: HEURISTIC_CONTROLLER_VERSION,
+          controllerStreamId,
+          decisionIndex,
+          decisionSeed: controllerDecisionSeed(
+            observation,
+            decisionIndex,
+            controllerStreamId,
+          ),
+        });
       if (
         !legal.some((item) => JSON.stringify(item) === JSON.stringify(command))
       ) {

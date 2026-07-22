@@ -7,6 +7,7 @@ import {
   createGameObservation,
   getLegalGameCommands,
   heuristicController,
+  HeuristicController,
   type ControllerContext,
 } from '.';
 
@@ -17,8 +18,13 @@ function context(
   return {
     controllerType: 'heuristic-bot',
     controllerVersion: heuristicController.version,
+    controllerStreamId: 'controller-1',
     decisionIndex,
-    decisionSeed: controllerDecisionSeed(observation, decisionIndex),
+    decisionSeed: controllerDecisionSeed(
+      observation,
+      decisionIndex,
+      'controller-1',
+    ),
   };
 }
 
@@ -85,6 +91,9 @@ describe('controller boundary', () => {
 });
 
 describe('balanced heuristic controller', () => {
+  it('supports isolated stateless controller instances', () => {
+    expect(new HeuristicController()).not.toBe(new HeuristicController());
+  });
   it('reinforces the threatened frontier instead of a safe interior', async () => {
     const planet = fixturePlanet({
       ids: ['a', 'b', 'c'],
@@ -179,5 +188,47 @@ describe('balanced heuristic controller', () => {
       }
     }
     expect(destinations.size).toBeGreaterThan(1);
+  });
+
+  it('keeps tied choices and seed material neutral under player-ID renaming', async () => {
+    const make = (active: string, opponent: string) =>
+      fixturePlanet({
+        ids: ['a', 'b', 'c', 'd'],
+        edges: [
+          ['a', 'c', 'land-border'],
+          ['b', 'd', 'land-border'],
+        ],
+        owners: [active, active, opponent, opponent],
+        armies: [2, 2, 2, 2],
+      });
+    const original = make('p1', 'p2');
+    const renamed = make('arbitrary-z', 'arbitrary-a');
+    const originalObservation = createGameObservation(
+      original,
+      fixtureMatch(original),
+    );
+    const renamedObservation = createGameObservation(
+      renamed,
+      fixtureMatch(renamed),
+    );
+    expect(controllerDecisionSeed(originalObservation, 0, 'controller-3')).toBe(
+      controllerDecisionSeed(renamedObservation, 0, 'controller-3'),
+    );
+    expect(
+      controllerDecisionSeed(originalObservation, 0, 'controller-3'),
+    ).not.toBe(controllerDecisionSeed(originalObservation, 0, 'controller-4'));
+    await expect(
+      heuristicController.chooseAction(
+        renamedObservation,
+        getLegalGameCommands(renamed, fixtureMatch(renamed)),
+        context(renamedObservation),
+      ),
+    ).resolves.toEqual(
+      await heuristicController.chooseAction(
+        originalObservation,
+        getLegalGameCommands(original, fixtureMatch(original)),
+        context(originalObservation),
+      ),
+    );
   });
 });

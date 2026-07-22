@@ -120,16 +120,17 @@ export const BALANCE_PRESETS = {
 
 export const SIX_SEAT_DIAGNOSTIC_PRESETS = {
   smoke: preset(12, [product[2]!]),
+  block: preset(36, [product[2]!]),
   standard: preset(600, [product[2]!]),
   thorough: preset(1_800, [product[2]!]),
 } as const;
-Object.values(SIX_SEAT_DIAGNOSTIC_PRESETS).forEach((config, index) => {
+Object.entries(SIX_SEAT_DIAGNOSTIC_PRESETS).forEach(([scale, config]) => {
   config.label = 'Six-seat paired rotation diagnostic';
-  config.seedPrefix = `fustify-six-seat-diagnostic-v1-${['smoke', 'standard', 'thorough'][index]}`;
+  config.seedPrefix = `fustify-six-seat-diagnostic-v1-${scale === 'block' ? 'standard' : scale}`;
   config.rotations = 6;
   config.assignmentRotations = 6;
   config.diagnostic = true;
-  config.checkpointEvery = index === 0 ? 6 : 25;
+  config.checkpointEvery = scale === 'smoke' ? 6 : scale === 'block' ? 36 : 25;
 });
 
 export type BalancePreset = keyof typeof BALANCE_PRESETS;
@@ -147,6 +148,7 @@ export interface StudyMatchInput {
   ownershipVariant: number;
   seatRotation: number;
   assignmentRotation: number;
+  controllerStreamRotation: number;
   maxTurns: number;
   maxCommands: number;
   maxTurnsWithoutCapture: number;
@@ -182,6 +184,9 @@ export function createStudyMatrix(configValue: unknown): StudyMatchInput[] {
             localIndex / Math.min(config.rotations, entry.playerCount),
           ) % Math.min(config.assignmentRotations, entry.playerCount)
         : 0;
+      const controllerStreamRotation = config.diagnostic
+        ? (seatRotation + assignmentRotation) % entry.playerCount
+        : 0;
       const ownershipVariant = pair % config.ownershipVariants;
       const shared = `${config.seedPrefix}-${configurationId}-pair-${pair}`;
       matrix.push({
@@ -193,6 +198,7 @@ export function createStudyMatrix(configValue: unknown): StudyMatchInput[] {
         ownershipVariant,
         seatRotation,
         assignmentRotation,
+        controllerStreamRotation,
         maxTurns: config.maxTurns,
         maxCommands: config.maxCommands,
         maxTurnsWithoutCapture: config.maxTurnsWithoutCapture,
@@ -229,6 +235,84 @@ export interface CompletedStudyMatch {
 
 function playerId(number: number): string {
   return `player-${String(number).padStart(2, '0')}`;
+}
+
+export interface DiagnosticPlayerMapping {
+  logicalPlayerId: string;
+  turnSeat: number;
+  assignmentPosition: number;
+  controllerStreamId: string;
+}
+
+export interface DiagnosticDebugRow {
+  fixtureBlockId: string;
+  worldSeed: string;
+  matchSeed: string;
+  seatRotation: number;
+  assignmentRotation: number;
+  controllerStreamRotation: number;
+  logicalPlayersBySeat: string[];
+  players: DiagnosticPlayerMapping[];
+  winnerSeat: number | null;
+  winnerLogicalPlayer: string | null;
+  winnerAssignmentPosition: number | null;
+  winnerControllerStream: string | null;
+  outcome: HeadlessMatchResult['outcome'];
+  matchLength: number;
+}
+
+export function diagnosticPlayerMappings(
+  input: StudyMatchInput,
+): DiagnosticPlayerMapping[] {
+  return Array.from({ length: input.playerCount }, (_, logicalIndex) => {
+    const turnIndex =
+      (logicalIndex - input.seatRotation + input.playerCount) %
+      input.playerCount;
+    const assignmentPosition =
+      ((turnIndex - input.assignmentRotation + input.playerCount) %
+        input.playerCount) +
+      1;
+    const streamPosition =
+      ((turnIndex + input.controllerStreamRotation) % input.playerCount) + 1;
+    return {
+      logicalPlayerId: playerId(logicalIndex + 1),
+      turnSeat: turnIndex + 1,
+      assignmentPosition,
+      controllerStreamId: `controller-${streamPosition}`,
+    };
+  });
+}
+
+export function diagnosticDebugRows(
+  completed: CompletedStudyMatch[],
+): DiagnosticDebugRow[] {
+  return completed
+    .filter(({ input }) => input.playerCount === 6)
+    .map(({ input, result }) => {
+      const players = diagnosticPlayerMappings(input);
+      const winner = players.find(
+        (mapping) => mapping.logicalPlayerId === result.winnerPlayerId,
+      );
+      return {
+        fixtureBlockId: `${input.configurationId}:pair:${input.worldSeed}`,
+        worldSeed: input.worldSeed,
+        matchSeed: input.matchSeed,
+        seatRotation: input.seatRotation,
+        assignmentRotation: input.assignmentRotation,
+        controllerStreamRotation: input.controllerStreamRotation,
+        logicalPlayersBySeat: players
+          .slice()
+          .sort((left, right) => left.turnSeat - right.turnSeat)
+          .map(({ logicalPlayerId }) => logicalPlayerId),
+        players,
+        winnerSeat: winner?.turnSeat ?? null,
+        winnerLogicalPlayer: winner?.logicalPlayerId ?? null,
+        winnerAssignmentPosition: winner?.assignmentPosition ?? null,
+        winnerControllerStream: winner?.controllerStreamId ?? null,
+        outcome: result.outcome,
+        matchLength: result.turns,
+      };
+    });
 }
 
 function reproductionCommand(descriptor: ReproductionDescriptor): string {
@@ -407,25 +491,26 @@ export function aggregateStudy(
   );
   const logicalPlayerWins: Record<string, number> = {};
   const assignmentPositionWins: Record<string, number> = {};
+  const controllerStreamWins: Record<string, number> = {};
   if (diagnosticRows.length)
     for (let index = 1; index <= 6; index += 1) {
       logicalPlayerWins[playerId(index)] = 0;
       assignmentPositionWins[`assignment-${index}`] = 0;
+      controllerStreamWins[`controller-${index}`] = 0;
     }
   diagnosticRows.forEach(({ input, result }) => {
     if (!result.winnerPlayerId) return;
     logicalPlayerWins[result.winnerPlayerId] =
       (logicalPlayerWins[result.winnerPlayerId] ?? 0) + 1;
-    const logicalIndex = Number(result.winnerPlayerId.slice(-2)) - 1;
-    const turnIndex =
-      (logicalIndex - input.seatRotation + input.playerCount) %
-      input.playerCount;
-    const assignmentPosition =
-      ((turnIndex - input.assignmentRotation + input.playerCount) %
-        input.playerCount) +
-      1;
-    const key = `assignment-${assignmentPosition}`;
-    assignmentPositionWins[key] = (assignmentPositionWins[key] ?? 0) + 1;
+    const winnerMapping = diagnosticPlayerMappings(input).find(
+      (mapping) => mapping.logicalPlayerId === result.winnerPlayerId,
+    );
+    if (!winnerMapping) return;
+    const assignmentKey = `assignment-${winnerMapping.assignmentPosition}`;
+    assignmentPositionWins[assignmentKey] =
+      (assignmentPositionWins[assignmentKey] ?? 0) + 1;
+    controllerStreamWins[winnerMapping.controllerStreamId] =
+      (controllerStreamWins[winnerMapping.controllerStreamId] ?? 0) + 1;
   });
   const spread = (values: number[]) =>
     values.length ? Math.max(...values) - Math.min(...values) : 0;
@@ -436,19 +521,68 @@ export function aggregateStudy(
   const seatSpread = spread(seats.slice(0, 6).map(({ wins }) => wins));
   const playerSpread = spread(Object.values(logicalPlayerWins));
   const assignmentSpread = spread(Object.values(assignmentPositionWins));
-  const factorAssessment =
-    diagnosticRows.length < 30
-      ? 'Smoke sample is too small for a factor conclusion.'
-      : seatSpread >= factorThreshold
-        ? 'Outcomes most strongly follow turn position; association only, not causal proof.'
-        : playerSpread >= factorThreshold
-          ? 'Outcomes most strongly follow logical player ID; investigate deterministic controller streams.'
-          : assignmentSpread >= factorThreshold
-            ? 'Outcomes most strongly follow assignment position; investigate starting assignment.'
-            : 'No clear factor exceeds the diagnostic threshold.';
+  const controllerStreamSpread = spread(Object.values(controllerStreamWins));
+  const mappingKeys = (mapping: DiagnosticPlayerMapping) => [
+    `seat-${mapping.turnSeat}`,
+    `assignment-${mapping.assignmentPosition}`,
+    mapping.controllerStreamId,
+  ];
+  const exposureCounts = new Map<string, number>();
+  matrix
+    .filter((input) => input.playerCount === 6)
+    .flatMap(diagnosticPlayerMappings)
+    .forEach((mapping) =>
+      mappingKeys(mapping).forEach((key) =>
+        exposureCounts.set(
+          `${mapping.logicalPlayerId}:${key}`,
+          (exposureCounts.get(`${mapping.logicalPlayerId}:${key}`) ?? 0) + 1,
+        ),
+      ),
+    );
+  const diagnosticInputs = matrix.filter((input) => input.playerCount === 6);
+  const completeRotationBlocks = diagnosticInputs.length % 36 === 0;
+  const mappingValid =
+    diagnosticInputs.every(
+      (input) =>
+        input.controllerStreamRotation ===
+        (input.seatRotation + input.assignmentRotation) % input.playerCount,
+    ) &&
+    new Set(
+      diagnosticInputs.map(
+        (input) =>
+          `${input.worldSeed}:${input.seatRotation}:${input.assignmentRotation}`,
+      ),
+    ).size === diagnosticInputs.length &&
+    (!completeRotationBlocks || new Set(exposureCounts.values()).size <= 1);
+  const strongestFactor = [
+    ['turn position', seatSpread],
+    ['controller stream position', controllerStreamSpread],
+    ['logical player ID', playerSpread],
+    ['assignment position', assignmentSpread],
+  ]
+    .slice()
+    .sort((left, right) => Number(right[1]) - Number(left[1]))[0] as [
+    string,
+    number,
+  ];
+  const factorAssessment = !mappingValid
+    ? 'Diagnostic mapping invalid; factor attribution is unavailable.'
+    : diagnosticRows.length < 36 || diagnosticRows.length % 36 !== 0
+      ? 'Insufficient sample size: complete a full 36-match rotation block.'
+      : diagnosticVictories < thresholds.minimumSamples * 6
+        ? `Insufficient sample size for factor classification: ${diagnosticVictories} decided victories; ${thresholds.minimumSamples * 6} required (${thresholds.minimumSamples} per factor position).`
+        : strongestFactor[1] < factorThreshold
+          ? 'No clear correlation exceeds the diagnostic threshold.'
+          : strongestFactor[0] === 'turn position'
+            ? 'Outcomes most strongly follow turn position; association only, not causal proof.'
+            : strongestFactor[0] === 'controller stream position'
+              ? 'Outcomes most strongly follow controller stream position; investigate deterministic controller choices.'
+              : strongestFactor[0] === 'logical player ID'
+                ? 'Outcomes most strongly follow logical player ID; player labels are not intended bot personalities.'
+                : 'Outcomes most strongly follow assignment position; investigate starting assignment.';
   const suspiciousReproductions =
-    diagnosticRows.length >= thresholds.minimumSamples &&
-    factorAssessment !== 'No clear factor exceeds the diagnostic threshold.'
+    diagnosticVictories >= thresholds.minimumSamples * 6 &&
+    !factorAssessment.startsWith('No clear correlation')
       ? diagnosticRows
           .filter(({ result }) => result.outcome === 'victory')
           .slice(0, 6)
@@ -492,7 +626,7 @@ export function aggregateStudy(
       ? {
           diagnostic: {
             rotationDesign:
-              'Canonical six-seat fixtures cross six logical-player/turn rotations with six assignment-order rotations while holding world and match seeds within each 36-match block.',
+              'Canonical six-seat fixtures cross six logical-player/turn rotations with six assignment-order rotations and balanced explicit controller streams while holding world and match seeds within each 36-match block.',
             pairRotationCount: new Set(
               matrix.map(
                 (item) =>
@@ -501,10 +635,13 @@ export function aggregateStudy(
             ).size,
             logicalPlayerWins,
             assignmentPositionWins,
+            controllerStreamWins,
+            mappingValid,
             logicalPlayerSummaries: factorSummaries(logicalPlayerWins),
             assignmentPositionSummaries: factorSummaries(
               assignmentPositionWins,
             ),
+            controllerStreamSummaries: factorSummaries(controllerStreamWins),
             factorAssessment,
             suspiciousReproductions,
           },
@@ -629,6 +766,18 @@ export function aggregateStudy(
       findings.push({
         classification: 'warning',
         code: 'possible-player-id-correlation',
+        message: assessment,
+      });
+    if (assessment.includes('controller stream'))
+      findings.push({
+        classification: 'warning',
+        code: 'possible-controller-stream-correlation',
+        message: assessment,
+      });
+    if (assessment.includes('mapping invalid'))
+      findings.push({
+        classification: 'warning',
+        code: 'diagnostic-mapping-invalid',
         message: assessment,
       });
     if (assessment.includes('assignment position'))

@@ -68,6 +68,7 @@ export interface GameObservation {
 export interface ControllerContext {
   readonly controllerType: PlayerControllerType;
   readonly controllerVersion: string;
+  readonly controllerStreamId: string;
   readonly decisionIndex: number;
   readonly decisionSeed: string;
 }

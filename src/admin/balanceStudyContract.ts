@@ -97,6 +97,10 @@ export const studyAggregateSchema = z.object({
         z.string(),
         z.number().int().nonnegative(),
       ),
+      controllerStreamWins: z
+        .record(z.string(), z.number().int().nonnegative())
+        .optional(),
+      mappingValid: z.boolean().optional(),
       logicalPlayerSummaries: z
         .array(
           z.object({
@@ -111,6 +115,19 @@ export const studyAggregateSchema = z.object({
         )
         .optional(),
       assignmentPositionSummaries: z
+        .array(
+          z.object({
+            key: z.string(),
+            wins: z.number().int().nonnegative(),
+            decidedVictoryShare: z.number().min(0).max(1),
+            confidenceInterval95: z.tuple([
+              z.number().min(0).max(1),
+              z.number().min(0).max(1),
+            ]),
+          }),
+        )
+        .optional(),
+      controllerStreamSummaries: z
         .array(
           z.object({
             key: z.string(),

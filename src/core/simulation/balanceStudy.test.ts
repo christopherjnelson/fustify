@@ -4,6 +4,8 @@ import {
   BALANCE_PRESETS,
   balanceStudyConfigSchema,
   createStudyMatrix,
+  diagnosticPlayerMappings,
+  diagnosticDebugRows,
   percentile,
   stableHash,
   SIX_SEAT_DIAGNOSTIC_PRESETS,
@@ -116,6 +118,55 @@ describe('balance study configuration and aggregation', () => {
     expect(first.slice(6, 12).map((item) => item.assignmentRotation)).toEqual([
       1, 1, 1, 1, 1, 1,
     ]);
+  });
+  it('covers every seat, assignment, and controller stream in a full 36-match block', () => {
+    const matrix = createStudyMatrix({
+      ...SIX_SEAT_DIAGNOSTIC_PRESETS.standard,
+      matchesPerConfiguration: 36,
+    });
+    const exposures = new Map<string, number>();
+    matrix.flatMap(diagnosticPlayerMappings).forEach((mapping) => {
+      [
+        `seat-${mapping.turnSeat}`,
+        `assignment-${mapping.assignmentPosition}`,
+        mapping.controllerStreamId,
+      ].forEach((factor) => {
+        const key = `${mapping.logicalPlayerId}:${factor}`;
+        exposures.set(key, (exposures.get(key) ?? 0) + 1);
+      });
+    });
+    expect(exposures).toHaveLength(108);
+    expect(new Set(exposures.values())).toEqual(new Set([6]));
+    expect(matrix.map((input) => input.controllerStreamRotation)).toEqual(
+      matrix.map(
+        (input) => (input.seatRotation + input.assignmentRotation) % 6,
+      ),
+    );
+  });
+  it('serializes compact per-match diagnostic mapping and winner attribution', () => {
+    const input = createStudyMatrix({
+      ...SIX_SEAT_DIAGNOSTIC_PRESETS.standard,
+      matchesPerConfiguration: 36,
+    })[7]!;
+    const row = diagnosticDebugRows([completed(input, 'player-03')])[0]!;
+    const winner = diagnosticPlayerMappings(input).find(
+      ({ logicalPlayerId }) => logicalPlayerId === 'player-03',
+    )!;
+    expect(row).toMatchObject({
+      worldSeed: input.worldSeed,
+      matchSeed: input.matchSeed,
+      seatRotation: input.seatRotation,
+      assignmentRotation: input.assignmentRotation,
+      controllerStreamRotation: input.controllerStreamRotation,
+      winnerLogicalPlayer: 'player-03',
+      winnerSeat: winner.turnSeat,
+      winnerAssignmentPosition: winner.assignmentPosition,
+      winnerControllerStream: winner.controllerStreamId,
+      outcome: 'victory',
+      matchLength: 17,
+    });
+    expect(row.logicalPlayersBySeat).toHaveLength(6);
+    expect(() => JSON.parse(JSON.stringify(row))).not.toThrow();
   });
   it('uses nearest-rank percentiles and Wilson uncertainty', () => {
     expect(percentile([1, 2, 3, 4, 100], 0.9)).toBe(100);
@@ -252,7 +303,7 @@ describe('balance study configuration and aggregation', () => {
   it('classifies a rotated logical-player correlation without calling it an engine failure', () => {
     const matrix = createStudyMatrix({
       ...SIX_SEAT_DIAGNOSTIC_PRESETS.standard,
-      matchesPerConfiguration: 36,
+      matchesPerConfiguration: 180,
     });
     const result = aggregateStudy(
       matrix,
@@ -261,7 +312,7 @@ describe('balance study configuration and aggregation', () => {
       SIX_SEAT_DIAGNOSTIC_PRESETS.standard.warningThresholds,
     );
     expect(result.aggregate.diagnostic?.logicalPlayerWins['player-06']).toBe(
-      36,
+      180,
     );
     expect(result.aggregate.diagnostic?.factorAssessment).toContain(
       'logical player ID',
@@ -277,5 +328,72 @@ describe('balance study configuration and aggregation', () => {
     expect(
       result.findings.some((item) => item.classification === 'failure'),
     ).toBe(false);
+  });
+  it('classifies an independently attributed controller-stream correlation', () => {
+    const matrix = createStudyMatrix({
+      ...SIX_SEAT_DIAGNOSTIC_PRESETS.standard,
+      matchesPerConfiguration: 180,
+    });
+    const rows = matrix.map((input) => {
+      const winner = diagnosticPlayerMappings(input).find(
+        ({ controllerStreamId }) => controllerStreamId === 'controller-1',
+      )!;
+      return completed(input, winner.logicalPlayerId);
+    });
+    const result = aggregateStudy(
+      matrix,
+      rows,
+      3_600,
+      SIX_SEAT_DIAGNOSTIC_PRESETS.standard.warningThresholds,
+    );
+    expect(result.aggregate.diagnostic).toMatchObject({
+      mappingValid: true,
+      controllerStreamWins: { 'controller-1': 180 },
+    });
+    expect(result.aggregate.diagnostic?.factorAssessment).toContain(
+      'controller stream position',
+    );
+    expect(result.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'possible-controller-stream-correlation',
+        }),
+      ]),
+    );
+  });
+
+  it('keeps a single complete block below the factor-classification sample floor', () => {
+    const matrix = createStudyMatrix({
+      ...SIX_SEAT_DIAGNOSTIC_PRESETS.standard,
+      matchesPerConfiguration: 36,
+    });
+    const result = aggregateStudy(
+      matrix,
+      matrix.map((input) => completed(input, 'player-02')),
+      3_600,
+      SIX_SEAT_DIAGNOSTIC_PRESETS.standard.warningThresholds,
+    );
+    expect(result.aggregate.diagnostic?.mappingValid).toBe(true);
+    expect(result.aggregate.diagnostic?.factorAssessment).toContain(
+      'Insufficient sample size for factor classification',
+    );
+  });
+
+  it('refuses factor attribution for an invalid rotation mapping', () => {
+    const matrix = createStudyMatrix({
+      ...SIX_SEAT_DIAGNOSTIC_PRESETS.standard,
+      matchesPerConfiguration: 36,
+    });
+    matrix[5] = { ...matrix[5]!, controllerStreamRotation: 0 };
+    const result = aggregateStudy(
+      matrix,
+      matrix.map((input) => completed(input)),
+      3_500,
+      SIX_SEAT_DIAGNOSTIC_PRESETS.standard.warningThresholds,
+    );
+    expect(result.aggregate.diagnostic?.mappingValid).toBe(false);
+    expect(result.aggregate.diagnostic?.factorAssessment).toContain(
+      'mapping invalid',
+    );
   });
 });

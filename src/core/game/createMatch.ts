@@ -31,7 +31,7 @@ export function createMatch(
   const matchSeed =
     options.matchSeed ??
     `${planet.seed}|match|${setup?.ownershipVariant ?? 0}|${orderedPlayers
-      .map((player) => player.id)
+      .map((_, index) => `player-${String(index + 1).padStart(2, '0')}`)
       .join(',')}`;
   const state: MatchState = {
     matchId: `${planet.seed}:${matchSeed}`,

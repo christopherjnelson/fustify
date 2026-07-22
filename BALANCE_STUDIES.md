@@ -20,23 +20,42 @@ pnpm study:balance --preset thorough
 ```
 
 For the focused six-seat investigation, dry-run first and then choose an
-explicit scale. Smoke is 12 matches for implementation checks; standard is 600
+explicit scale. Smoke is a deliberately incomplete 12-match mapping check;
+block is one complete 36-match implementation/debug fixture; standard is 600
 paired/rotated matches for normal local diagnosis; thorough is 1,800 matches
 for an explicit unattended run.
 
 ```bash
 pnpm study:balance --diagnose six-seat --scale smoke --dry-run
+pnpm study:balance --diagnose six-seat --scale block --debug-block
 pnpm study:balance --diagnose six-seat --scale standard --dry-run
 pnpm study:balance --diagnose six-seat --scale standard
 pnpm study:balance --diagnose six-seat --scale thorough
 ```
 
+For implementation/debugging, use the `block` scale (one complete block) and
+add `--debug-block`. The JSON block output contains seeds,
+all rotations and mappings, controller stream IDs, winner attribution, outcome,
+and match length without full command traces.
+
+```bash
+pnpm study:balance --diagnose six-seat --scale block --debug-block
+```
+
 Each complete 36-match canonical fixture holds the 42-territory/6-continent
-world and match/controller seeds fixed while crossing six logical-player/turn
-rotations with six assignment-order rotations. Ownership variants advance
-between fixture blocks. This paired design helps distinguish turn position,
-logical player ID/controller stream, and assignment position from geography;
-it still reports associations rather than causal proof.
+world and match seeds fixed while crossing six logical-player/turn rotations
+with six assignment-order rotations. Controller stream rotation is explicit and
+balanced so every logical player occupies every seat, assignment position, and
+stream slot six times. Ownership variants advance between fixture blocks. The
+report independently summarizes turn seat, logical player ID, assignment
+position, and controller stream. Incomplete or malformed blocks are reported as
+insufficient/invalid instead of receiving a factor attribution; associations
+remain diagnostic evidence rather than causal proof.
+
+Factor classification additionally requires 180 decided victories (30 per
+factor position with the default threshold). A single complete block proves
+mapping and structural neutrality but is intentionally reported as insufficient
+for a correlation conclusion.
 
 `Ctrl+C` and `SIGTERM` finish the current match, atomically checkpoint it, and mark the study `interrupted`. Resume without repeating completed match indices:
 
@@ -94,7 +113,8 @@ Hard failures include only engine errors and invariant failures. Warnings
 separately classify overall unresolved rate, configuration turn/cap rate,
 configuration stalemate rate, unconditional all-match win-rate imbalance,
 decided-victory seat imbalance, possible player-ID correlation, and possible
-assignment-position correlation. They require the configured minimum sample
+assignment-position/controller-stream correlation. A mapping-validity field
+guards factor attribution. They require the configured minimum sample
 size and remain findings, not engine failures.
 
 Primary seat summaries are separated by player count and purpose. **Win rate
@@ -116,6 +136,17 @@ pnpm study:balance --preset thorough
 ```
 
 Successful full traces are not retained. Engine failures preserve reproduction descriptors, and verbose reproduction produces a focused single-match trace on demand.
+
+Player IDs are labels, not bot personalities. Controller tie RNG is derived as
+`match seed + balanced-v1 + controller stream slot + turn + phase + decision
+index`; world generation and combat use their existing independent deterministic
+paths. Reports created before this correction remain schema-v1 readable, but
+their old controller choices are not reinterpreted. To rerun the corrected
+standard diagnostic manually:
+
+```bash
+pnpm study:balance --diagnose six-seat --scale standard
+```
 
 The intended workflow is to start `pnpm dev`, open the clean `/admin` URL,
 dry-run the diagnostic, run it locally without an agent processing the matches,

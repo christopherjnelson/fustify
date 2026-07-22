@@ -35,15 +35,27 @@ geometry, renderer state, promises, pacing, and store methods are never exposed.
 
 World generation uses `worldSeed`. Combat and controller decisions use the
 independent `matchSeed` stored as `MatchState.seed`. Interactive matches derive
-it from the world seed, ownership variant, and ordered player IDs. Headless
+it from the world seed, ownership variant, and player count. Headless
 matches accept it explicitly.
 
 The balanced heuristic is versioned as `balanced-v1`. Equal-score choices use
-the seeded generator with match seed, controller version, player, turn, phase,
-and decision index. It never calls `Math.random()`. Presentation delays and
+the seeded generator with match seed, controller version, explicit canonical
+controller stream slot, turn, phase, and decision index. Literal player IDs and
+display labels are excluded. The browser assigns slots by canonical turn order;
+the diagnostic rotates slots explicitly. Headless matches allocate a distinct
+stateless controller instance per player, and each decision creates its own
+seeded generator, so mutable RNG state is never shared. It never calls
+`Math.random()`. Presentation delays and
 reduced-motion settings do not enter this seed. Identical world, assignment,
 match seed, player order, controller configuration, and heuristic version replay
 the same authoritative transitions.
+
+Player-ID renaming is permutation-equivariant: preserving seats, territory and
+army state, controller configuration, and stream slots preserves the command
+sequence and maps the winner through the same rename. Starting-position and
+default match-seed derivation use player count rather than label text. Stream
+IDs are `controller-1` through `controller-N`; they are diagnostic/runtime
+allocation identifiers, not persisted personalities.
 
 ## Balanced heuristic
 
@@ -125,3 +137,10 @@ The dedicated balance-study orchestrator expands the same headless runner over
 deterministic world, match, assignment, and rotated-seat matrices. It writes
 schema-v1 atomic reports and resumable checkpoints for the local `/admin`
 viewer; it is not a competing simulation engine. See `BALANCE_STUDIES.md`.
+
+The corrected seed scheme intentionally changes bot choices produced by old
+reproduction descriptors, even though world generation, combat rules, and all
+engine transitions remain deterministic. New descriptors include controller
+stream rotation where relevant and replay stably under this scheme. Save schema
+v4 and setup URLs are unchanged because controller streams are derived runtime
+state rather than persisted state.

@@ -239,9 +239,20 @@ export class HeuristicController implements PlayerController {
 
 export const heuristicController = new HeuristicController();
 
+export function controllerStreamIdForObservation(
+  observation: GameObservation,
+): string {
+  const position = Object.keys(observation.players).indexOf(
+    observation.activePlayerId,
+  );
+  if (position < 0) throw new Error('Active player has no controller stream.');
+  return `controller-${position + 1}`;
+}
+
 export function controllerDecisionSeed(
   observation: GameObservation,
   decisionIndex: number,
+  controllerStreamId = controllerStreamIdForObservation(observation),
 ): string {
-  return `${observation.matchSeed}|controller|${HEURISTIC_CONTROLLER_VERSION}|${observation.activePlayerId}|${observation.turnNumber}|${observation.phase}|${decisionIndex}`;
+  return `${observation.matchSeed}|controller|${HEURISTIC_CONTROLLER_VERSION}|${controllerStreamId}|${observation.turnNumber}|${observation.phase}|${decisionIndex}`;
 }

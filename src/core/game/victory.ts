@@ -10,16 +10,14 @@ export function checkPlayerEliminated(
 }
 
 export function getNextActivePlayer(
-  planet: PlanetDefinition,
+  _planet: PlanetDefinition,
   state: MatchState,
 ): string {
-  const currentIndex = planet.players.findIndex(
-    (player) => player.id === state.activePlayerId,
-  );
-  for (let offset = 1; offset <= planet.players.length; offset += 1) {
-    const candidate =
-      planet.players[(currentIndex + offset) % planet.players.length]!;
-    if (!state.players[candidate.id]?.eliminated) return candidate.id;
+  const turnOrder = Object.keys(state.players);
+  const currentIndex = turnOrder.indexOf(state.activePlayerId);
+  for (let offset = 1; offset <= turnOrder.length; offset += 1) {
+    const candidate = turnOrder[(currentIndex + offset) % turnOrder.length]!;
+    if (!state.players[candidate]?.eliminated) return candidate;
   }
   return state.activePlayerId;
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import {
   controllerDecisionSeed,
+  controllerStreamIdForObservation,
   createGameObservation,
   deterministicFallback,
   getLegalGameCommands,
@@ -144,14 +145,21 @@ export function useBotTurnRunner() {
 
       let command: GameCommand;
       try {
+        const controllerStreamId =
+          controllerStreamIdForObservation(observation);
         command = await heuristicController.chooseAction(
           observation,
           Object.freeze(structuredClone(legalActions)),
           {
             controllerType: 'heuristic-bot',
             controllerVersion: heuristicController.version,
+            controllerStreamId,
             decisionIndex,
-            decisionSeed: controllerDecisionSeed(observation, decisionIndex),
+            decisionSeed: controllerDecisionSeed(
+              observation,
+              decisionIndex,
+              controllerStreamId,
+            ),
           },
         );
         if (!legalActions.some((legal) => sameCommand(legal, command))) {

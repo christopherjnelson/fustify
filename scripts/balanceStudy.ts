@@ -14,6 +14,7 @@ import {
   BALANCE_PRESETS,
   balanceStudyConfigSchema,
   createStudyMatrix,
+  diagnosticDebugRows,
   SIX_SEAT_DIAGNOSTIC_PRESETS,
   stableHash,
   type BalancePreset,
@@ -147,7 +148,7 @@ async function loadConfig(): Promise<{
     const scale = value('scale') ?? 'smoke';
     if (!(scale in SIX_SEAT_DIAGNOSTIC_PRESETS))
       throw new Error(
-        'Unknown diagnostic scale. Choose smoke, standard, or thorough.',
+        'Unknown diagnostic scale. Choose smoke, block, standard, or thorough.',
       );
     return {
       config: structuredClone(
@@ -181,7 +182,7 @@ function planText(
     ...(config.diagnostic
       ? [
           `Pair/rotation count: ${new Set(matrix.map((item) => item.worldSeed)).size} canonical seed pairs / ${matrix.length} rotated matches`,
-          'Rotation design: 6 logical-player/turn rotations × 6 assignment-order rotations per complete canonical fixture',
+          'Rotation design: 6 logical-player/turn rotations × 6 assignment-order rotations with balanced explicit controller streams per complete canonical fixture',
         ]
       : []),
     `Estimated runtime: ${elapsed(runtimeEstimate.range[0])}–${elapsed(runtimeEstimate.range[1])} (midpoint ${elapsed(runtimeEstimate.midpoint)})`,
@@ -359,7 +360,7 @@ async function execute(
         ...(config.diagnostic
           ? {
               rotationDesign:
-                '6 logical-player/turn rotations × 6 assignment-order rotations per complete canonical fixture',
+                '6 logical-player/turn rotations × 6 assignment-order rotations with balanced explicit controller streams per complete canonical fixture',
               pairRotationCount: new Set(
                 matrix.map(
                   (item) =>
@@ -426,6 +427,10 @@ async function execute(
       ? 'failed'
       : 'completed';
   const report = buildReport(status);
+  if (has('debug-block'))
+    process.stdout.write(
+      `${JSON.stringify({ diagnosticDebug: diagnosticDebugRows(completed) }, null, 2)}\n`,
+    );
   if (status === 'interrupted') await writeStudyProgress(report, checkpoint());
   else await finalizeStudy(report);
   process.stdout.write(
