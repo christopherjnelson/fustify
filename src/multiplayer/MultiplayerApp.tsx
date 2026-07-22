@@ -653,6 +653,35 @@ function authoritativeSnapshots(match: MultiplayerMatch, userId: string) {
   };
 }
 
+export function MultiplayerGameScene({
+  matchId,
+  revision,
+  connection = 'SUBSCRIBED',
+}: {
+  matchId: string;
+  revision: number;
+  connection?: string;
+}) {
+  return (
+    <main
+      className="app-shell mode-playing multiplayer-game-shell"
+      data-testid="multiplayer-match"
+      data-match-id={matchId}
+      data-revision={revision}
+    >
+      <GlobeScene />
+      <Minimap />
+      <ControlLegend />
+      <TerritoryHud />
+      <div className="multiplayer-game-connection">
+        <ConnectionBadge status={connection} />
+        <span data-testid="match-id">{matchId}</span>
+        <span data-testid="match-revision">{revision}</span>
+      </div>
+    </main>
+  );
+}
+
 function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
   const client = useMemo(() => getSupabaseClient(), []);
   const [match, setMatch] = useState<MultiplayerMatch | null>(null);
@@ -818,22 +847,11 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
   }
 
   return (
-    <main
-      className="app-shell mode-playing multiplayer-game-shell"
-      data-testid="multiplayer-match"
-      data-match-id={match.id}
-      data-revision={match.revision}
-    >
-      <GlobeScene />
-      <Minimap />
-      <ControlLegend />
-      <TerritoryHud />
-      <div className="multiplayer-game-connection">
-        <ConnectionBadge status={connection} />
-        <span data-testid="match-id">{match.id}</span>
-        <span data-testid="match-revision">{match.revision}</span>
-      </div>
-    </main>
+    <MultiplayerGameScene
+      matchId={match.id}
+      revision={match.revision}
+      connection={connection}
+    />
   );
 }
 

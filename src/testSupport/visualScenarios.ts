@@ -41,6 +41,7 @@ export type VisualScenario =
   | 'handoff'
   | 'reinforcement'
   | 'multiplayer-authority'
+  | 'multiplayer-reinforcement-active'
   | 'bot-turn'
   | 'bot-reinforcement'
   | 'human-after-bot'
@@ -253,7 +254,7 @@ function wonMatch(
   }).state;
 }
 
-function applyScenario(scenario: VisualScenario) {
+export function applyScenario(scenario: VisualScenario) {
   window.localStorage.clear();
   const scenarioSetup =
     scenario === 'minimap-seam'
@@ -436,6 +437,7 @@ function applyScenario(scenario: VisualScenario) {
   if (
     scenario === 'reinforcement' ||
     scenario === 'multiplayer-authority' ||
+    scenario === 'multiplayer-reinforcement-active' ||
     scenario === 'navigator'
   ) {
     applicationMode = 'playing';
@@ -596,17 +598,16 @@ function applyScenario(scenario: VisualScenario) {
           ? 'reroll-territories'
           : null,
     botExecution,
-    multiplayerSession:
-      scenario === 'multiplayer-authority'
-        ? {
-            ownPlayerId: match.activePlayerId,
-            revision: 12,
-            stateFingerprint: 'a4'.repeat(32),
-            connection: 'SUBSCRIBED',
-            pending: false,
-            dispatch: async () => {},
-          }
-        : null,
+    multiplayerSession: scenario.startsWith('multiplayer-')
+      ? {
+          ownPlayerId: scenarioMatch!.activePlayerId,
+          revision: 12,
+          stateFingerprint: 'a4'.repeat(32),
+          connection: 'SUBSCRIBED',
+          pending: false,
+          dispatch: async () => {},
+        }
+      : null,
   });
 }
 

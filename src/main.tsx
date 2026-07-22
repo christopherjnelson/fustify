@@ -5,9 +5,15 @@ import { isAdminRoute, isMultiplayerRoute } from './browser/routes';
 
 const isAdmin = isAdminRoute(window.location.pathname);
 const isMultiplayer = isMultiplayerRoute(window.location.pathname);
+const isMultiplayerMatch = window.location.pathname.startsWith(
+  '/multiplayer/match/',
+);
 document.documentElement.classList.add(
   isAdmin ? 'admin-route' : isMultiplayer ? 'multiplayer-route' : 'game-route',
 );
+if (isMultiplayerMatch) {
+  document.documentElement.classList.add('multiplayer-match-route');
+}
 
 async function bootstrap() {
   const root = createRoot(document.getElementById('root')!);
@@ -32,6 +38,20 @@ async function bootstrap() {
   }
 
   if (isMultiplayer) {
+    if (
+      import.meta.env.DEV &&
+      isMultiplayerMatch &&
+      new URLSearchParams(window.location.search).get('visual-review') === '1'
+    ) {
+      const { MultiplayerVisualApp } =
+        await import('./testSupport/MultiplayerVisualApp');
+      root.render(
+        <StrictMode>
+          <MultiplayerVisualApp />
+        </StrictMode>,
+      );
+      return;
+    }
     const { MultiplayerApp } = await import('./multiplayer/MultiplayerApp');
     root.render(
       <StrictMode>
