@@ -14,39 +14,113 @@ export type Database = {
   };
   public: {
     Tables: {
+      match_commands: {
+        Row: {
+          actor_seat_index: number;
+          actor_user_id: string;
+          client_idempotency_key: string;
+          command_hash: string;
+          command_payload: Json;
+          command_type: string;
+          created_at: string;
+          id: number;
+          match_id: string;
+          previous_revision: number;
+          resulting_revision: number;
+          resulting_state_fingerprint: string;
+          sequence: number;
+        };
+        Insert: {
+          actor_seat_index: number;
+          actor_user_id: string;
+          client_idempotency_key: string;
+          command_hash: string;
+          command_payload: Json;
+          command_type: string;
+          created_at?: string;
+          id?: never;
+          match_id: string;
+          previous_revision: number;
+          resulting_revision: number;
+          resulting_state_fingerprint: string;
+          sequence: number;
+        };
+        Update: {
+          actor_seat_index?: number;
+          actor_user_id?: string;
+          client_idempotency_key?: string;
+          command_hash?: string;
+          command_payload?: Json;
+          command_type?: string;
+          created_at?: string;
+          id?: never;
+          match_id?: string;
+          previous_revision?: number;
+          resulting_revision?: number;
+          resulting_state_fingerprint?: string;
+          sequence?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'match_commands_match_id_fkey';
+            columns: ['match_id'];
+            isOneToOne: false;
+            referencedRelation: 'matches';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       matches: {
         Row: {
           created_at: string;
           generator_metadata: Json;
           id: string;
+          last_command_type: string | null;
+          planet_snapshot: Json | null;
           revision: number;
           room_id: string;
           seat_order_snapshot: Json;
           setup_snapshot: Json;
+          state_fingerprint: string | null;
+          state_snapshot: Json | null;
           status: string;
           updated_at: string;
+          winner_player_id: string | null;
+          winner_user_id: string | null;
         };
         Insert: {
           created_at?: string;
           generator_metadata: Json;
           id?: string;
+          last_command_type?: string | null;
+          planet_snapshot?: Json | null;
           revision?: number;
           room_id: string;
           seat_order_snapshot: Json;
           setup_snapshot: Json;
+          state_fingerprint?: string | null;
+          state_snapshot?: Json | null;
           status?: string;
           updated_at?: string;
+          winner_player_id?: string | null;
+          winner_user_id?: string | null;
         };
         Update: {
           created_at?: string;
           generator_metadata?: Json;
           id?: string;
+          last_command_type?: string | null;
+          planet_snapshot?: Json | null;
           revision?: number;
           room_id?: string;
           seat_order_snapshot?: Json;
           setup_snapshot?: Json;
+          state_fingerprint?: string | null;
+          state_snapshot?: Json | null;
           status?: string;
           updated_at?: string;
+          winner_player_id?: string | null;
+          winner_user_id?: string | null;
         };
         Relationships: [
           {
@@ -185,6 +259,65 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      authority_commit_match_command: {
+        Args: {
+          p_actor_user_id: string;
+          p_client_idempotency_key: string;
+          p_command_hash: string;
+          p_command_payload: Json;
+          p_command_type: string;
+          p_expected_revision: number;
+          p_match_id: string;
+          p_state_fingerprint: string;
+          p_state_snapshot: Json;
+          p_winner_player_id: string;
+          p_winner_user_id: string;
+        };
+        Returns: {
+          duplicate: boolean;
+          match_status: string;
+          resulting_revision: number;
+          resulting_state_fingerprint: string;
+          winner_player_id: string;
+          winner_user_id: string;
+        }[];
+      };
+      authority_initialize_room_match: {
+        Args: {
+          p_actor_user_id: string;
+          p_generator_metadata: Json;
+          p_match_id: string;
+          p_planet_snapshot: Json;
+          p_room_id: string;
+          p_seat_order_snapshot: Json;
+          p_setup_snapshot: Json;
+          p_state_fingerprint: string;
+          p_state_snapshot: Json;
+        };
+        Returns: {
+          created_at: string;
+          generator_metadata: Json;
+          id: string;
+          last_command_type: string | null;
+          planet_snapshot: Json | null;
+          revision: number;
+          room_id: string;
+          seat_order_snapshot: Json;
+          setup_snapshot: Json;
+          state_fingerprint: string | null;
+          state_snapshot: Json | null;
+          status: string;
+          updated_at: string;
+          winner_player_id: string | null;
+          winner_user_id: string | null;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'matches';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       claim_room_seat: {
         Args: { room_id: string; seat_index: number };
         Returns: {
@@ -286,12 +419,18 @@ export type Database = {
           created_at: string;
           generator_metadata: Json;
           id: string;
+          last_command_type: string | null;
+          planet_snapshot: Json | null;
           revision: number;
           room_id: string;
           seat_order_snapshot: Json;
           setup_snapshot: Json;
+          state_fingerprint: string | null;
+          state_snapshot: Json | null;
           status: string;
           updated_at: string;
+          winner_player_id: string | null;
+          winner_user_id: string | null;
         };
         SetofOptions: {
           from: '*';

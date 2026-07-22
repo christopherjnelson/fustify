@@ -1,6 +1,6 @@
-import type { SeededRandom } from './seededRandom';
-import { createSeededRandom } from './seededRandom';
-import type { TerritoryBorderWeight } from './buildConnections';
+import type { SeededRandom } from './seededRandom.ts';
+import { createSeededRandom } from './seededRandom.ts';
+import type { TerritoryBorderWeight } from './buildConnections.ts';
 
 function distancesFrom(
   start: number,

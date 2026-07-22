@@ -1,5 +1,5 @@
-import { PLAYER_PALETTE } from '../generation/constants';
-import { BRAND } from '../../branding';
+import { PLAYER_PALETTE } from '../generation/constants.ts';
+import { BRAND } from '../../branding.ts';
 
 export type PlayerControllerType = 'local-human' | 'heuristic-bot';
 

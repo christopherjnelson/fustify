@@ -1,118 +1,119 @@
 # Supabase development
 
-## Remote project and initial audit
+## Remote project
 
-This repository uses the dedicated hosted project `fustify-multiplayer`:
+The only authorized deployment target is:
 
-- Project ref: `qwmsybhpjnfjiyxcspwj`
-- Organization: `Fustify`
+- Project: `fustify-multiplayer`
+- Ref: `qwmsybhpjnfjiyxcspwj`
 - Region: `us-east-1`
-- Postgres: 17
+- PostgreSQL: 17
 
-No secret, service-role key, database password, or direct connection string is
-stored in Git. Before this task the new project had no application tables,
-migrations, public functions, policies, or users. Its default empty
-`supabase_realtime` publication and platform-managed schemas/extensions existed.
-Anonymous sign-in was initially disabled and was enabled for this project; the
-public Auth settings endpoint now reports it enabled.
+Never reset this project or delete unrelated audit rows. The source of truth is
+`supabase/migrations/` plus `supabase/functions/multiplayer-game/`.
 
-Two previously connected hosted projects were also audited and deliberately not
-modified: `mcu_kb` (`eioehvcowocvoixodakc`) contained an unrelated `mcu` schema
-and migrations, while `gcajdeycavucmudirabz` contained unrelated public content
-tables. No ambiguous project was used or reset.
-
-## Source of truth and remote workflow
-
-Database migrations in `supabase/migrations/` are the schema source of truth:
+Migration order:
 
 1. `20260722040118_create_multiplayer_foundation.sql`
 2. `20260722040242_add_rooms_host_index.sql`
 3. `20260722041857_fix_update_room_settings_conflict.sql`
 4. `20260722043353_release_seat_on_member_delete.sql`
+5. `20260722190224_authoritative_multiplayer_gameplay.sql`
+6. `20260722192905_harden_match_command_grants.sql`
+7. `20260722201731_finalize_after_capture_movement.sql`
 
-The hosted migration history contains all four in that order. Create and review
-a migration locally before applying it remotely; never make an undocumented
-dashboard-only schema change and never run a destructive remote reset.
+The authority migration extends `matches`, creates append-only
+`match_commands`, adds member-scoped read RLS, removes browser execution of the
+old preview start RPC, adds service-role-only initialization/commit functions,
+and publishes command notifications. The grant hardening migration narrows the
+command ledger to service-role `SELECT`/`INSERT`. The completion migration keeps
+a winning capture active until its mandatory movement reaches the reducer's
+`game-over` phase, then persists completion. All are additive and preserve
+historical preview/audit rows; an old preview cannot silently become playable
+and reports `legacy_match_incomplete`.
 
-With a Supabase access token available to the CLI:
+The hosted history contains all seven migrations in this order. Edge Function
+`multiplayer-game` is active at version 2 with `verify_jwt=false` and source hash
+`43a9ed43a579286be60938827e5ff2c89e47c6356418ae93b1d5665cc44993a6`.
+The connector-returned entrypoint and 25 shared runtime dependencies match the
+corresponding Git files byte-for-byte.
 
-```bash
-pnpm supabase:link
-pnpm supabase:migrations:list
-pnpm supabase:db:push
-pnpm supabase:types
-```
+## Secrets and browser configuration
 
-`pnpm supabase:config:push` synchronizes checked-in Auth configuration when the
-operator is authorized. The current remote anonymous toggle was separately
-verified because this environment did not expose a CLI access token. This task
-used the connected hosted-project tooling to apply and verify migrations; local
-Docker is not required or authoritative.
-
-Generated public-schema TypeScript types are committed at
-`src/multiplayer/database.types.ts`. Regenerate them after every schema or RPC
-signature change and review the diff with its migration.
-
-## Browser environment
-
-Copy `.env.example` to ignored `.env.local` and use only:
+The browser uses only:
 
 ```dotenv
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_publishable_key
 ```
 
-The publishable value may use Supabase's current `sb_publishable_...` format.
-It is intentionally browser-safe and derives authority from Auth plus RLS.
-Never put an `sb_secret_...`, legacy `service_role`, database password, or
-database URL in a Vite variable or Playwright browser context. If these two
-variables are absent, only `/multiplayer` shows a configuration-unavailable
-state; local play and `/admin` keep working.
+Never add a secret key, legacy `service_role`, database password, access token,
+or database URL to a `VITE_` variable. Hosted Edge Functions receive
+`SUPABASE_URL`, the publishable/anon key, and `SUPABASE_SERVICE_ROLE_KEY`
+automatically. `multiplayer-game` disables the legacy gateway JWT check in
+`config.toml` and explicitly verifies the bearer token with `auth.getUser()` so
+current asymmetric and legacy user JWTs share one controlled path.
 
-## Grants, RLS, and Realtime
+## Deployment
 
-RLS is enabled on `rooms`, `room_members`, `room_seats`, and `matches`.
-Authenticated users receive explicit `SELECT` grants, but policies return rows
-only for durable room members. There are no direct client insert/update/delete
-grants. All writes pass through the eight authenticated RPCs documented in
-[MULTIPLAYER.md](./MULTIPLAYER.md); execute was revoked from `PUBLIC` and
-`anon`. Guessing a UUID or room code cannot bypass membership.
+Using the authenticated Supabase connector:
 
-All four tables are in `supabase_realtime`. Realtime only invalidates client
-caches; canonical authorization and state remain in Postgres.
+1. Confirm project ref and current remote migration history.
+2. Apply the exact source-controlled migrations in filename order.
+3. Deploy `multiplayer-game` with every relative shared-engine dependency and
+   `verify_jwt=false` because authentication is performed in its handler.
+4. Regenerate `src/multiplayer/database.types.ts` from the deployed schema and
+   review the diff.
+5. Confirm remote migration history, function version/configuration, grants,
+   RLS policies, publication membership, and advisors.
 
-Supabase's security advisor reports intentional warnings that authenticated
-users can execute the reviewed security-definer RPCs and that anonymous
-authenticated users can reach membership policies. These are expected for this
-anonymous-RLS architecture: every function validates `auth.uid()`, uses an
-empty search path, and is narrowly granted. Performance advice currently notes
-no findings. The password-leak-protection warning is not applicable to this
-anonymous-only milestone because the product exposes no password sign-in.
-
-## Validation and cleanup
-
-The committed SQL suite is designed to run transactionally:
+CLI equivalents, when `SUPABASE_ACCESS_TOKEN` is available, are:
 
 ```bash
-pnpm test:multiplayer:concurrency
-pnpm test:e2e:multiplayer
+pnpm supabase:link
+pnpm supabase:migrations:list
+pnpm supabase:db:push
+pnpm exec supabase functions deploy multiplayer-game \
+  --project-ref qwmsybhpjnfjiyxcspwj --no-verify-jwt --use-api
+pnpm supabase:types
 ```
 
-`pnpm supabase:test:db` is the CLI's optional local-stack pgTAP runner for the
-same SQL file. It was not used for this task: all authoritative application and
-database verification ran against the dedicated remote project as requested.
+Do not use `--prune`, reset, or dashboard-only DDL.
 
-The connected remote SQL runner executed all 25 database/RLS assertions with
-separate identities. The concurrency harness and browser tests create rooms,
-then close and leave them through supported RPCs. They do not use a service-role
-key. Closed room rows and anonymous Auth identities remain as hosted audit data;
-there is no destructive test teardown.
+## Security model
 
-The checked-in hosted-development setting permits 30 anonymous signups per hour
-per source IP. Normal clients persist sessions, and the visual projects reuse an
-ignored Playwright storage state. Repeated ad hoc isolated-context reruns can
-temporarily exhaust this bucket; the route reports that condition accessibly.
+RLS is enabled on every exposed application table. Authenticated room members
+receive explicit read grants and policies; non-members see no room, seat, match,
+or command rows. There are no browser insert/update/delete grants for canonical
+match state or commands. Authority RPC execute is revoked from `PUBLIC`, `anon`,
+and `authenticated`, then granted only to `service_role`.
 
-For this foundation, no Storage bucket, Edge Function, matchmaking/public room
-listing, permanent account, social login, email invitation, or gameplay reducer
-is configured.
+The Edge Function derives `actor_user_id` from the verified JWT, never request
+JSON. Both TypeScript and SQL validate current seat membership; SQL locks the
+canonical row and independently checks actor-to-player mapping and revision.
+Exact action parsing rejects extra fields, including fabricated combat rolls.
+SHA-256 fingerprints use recursively sorted JSON keys.
+
+`supabase/tests/authoritative_multiplayer.sql` documents transactional pgTAP
+coverage. Remote runtime coverage is `pnpm test:multiplayer:authority`, which
+uses only publishable browser clients and supported endpoints. Advisor output
+must be reviewed after deployment; intentional anonymous-auth warnings do not
+permit weakening grants or policies.
+
+## Remote validation checklist
+
+- Migration history exactly matches Git.
+- `matches` and `match_commands` RLS are enabled.
+- Member reads and non-member zero-row behavior pass.
+- Browser writes and authority-function execution fail.
+- Edge calls without/with invalid JWTs return 401.
+- Unseated, non-member, and out-of-turn commands fail.
+- One duplicate key produces one command row/revision.
+- Changed-payload key reuse and stale revisions fail.
+- Completed matches reject new keys.
+- Function source/configuration matches Git.
+- Frontend output contains no service-role/secret-key material.
+- Two-browser and mobile recovery gates pass before calling the beta playable.
+
+Test cleanup closes/leaves rooms through public RPCs. Closed rooms, command
+history, and anonymous Auth audit rows are retained; tests never delete them.

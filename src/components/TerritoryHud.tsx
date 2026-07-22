@@ -83,6 +83,7 @@ export function TerritoryHud() {
   const eventLogOpen = useGameStore((state) => state.eventLogOpen);
   const error = useGameStore((state) => state.lastActionError);
   const botExecution = useGameStore((state) => state.botExecution);
+  const multiplayerSession = useGameStore((state) => state.multiplayerSession);
   const dispatch = useGameStore((state) => state.dispatchGameAction);
   const resetMatch = useGameStore((state) => state.resetMatch);
   const rematchNewOwnership = useGameStore(
@@ -139,6 +140,11 @@ export function TerritoryHud() {
     (player) => player.id === match.activePlayerId,
   )!;
   const botControlled = activePlayer.controllerType === 'heuristic-bot';
+  const multiplayerPending = multiplayerSession?.pending ?? false;
+  const canControl =
+    !botControlled &&
+    (multiplayerSession === null ||
+      multiplayerSession.ownPlayerId === match.activePlayerId);
   const sourceId = match.selectedSourceTerritoryId;
   const targetId = match.selectedTargetTerritoryId;
   const source = sourceId ? territoryById.get(sourceId) : undefined;
@@ -200,7 +206,14 @@ export function TerritoryHud() {
 
   return (
     <>
-      <aside className="hud" aria-label="Local match controls">
+      <aside
+        className="hud"
+        aria-label={
+          multiplayerSession
+            ? 'Multiplayer match controls'
+            : 'Local match controls'
+        }
+      >
         <section
           className="turn-banner"
           aria-live="polite"
@@ -216,7 +229,13 @@ export function TerritoryHud() {
           <div>
             <span>
               Turn {match.turnNumber} · {PHASE_LABELS[match.phase]} ·{' '}
-              {botControlled ? 'Heuristic Bot' : 'Local Human'}
+              {botControlled
+                ? 'Heuristic Bot'
+                : multiplayerSession
+                  ? canControl
+                    ? 'Your turn'
+                    : 'Remote player'
+                  : 'Local Human'}
             </span>
             <strong>{activePlayer.name}</strong>
           </div>
@@ -247,6 +266,30 @@ export function TerritoryHud() {
           </div>
         )}
 
+        {multiplayerSession && (
+          <section
+            className="phase-card multiplayer-authority-status"
+            aria-live="polite"
+            data-testid="multiplayer-authority-status"
+          >
+            <span className="eyebrow">
+              Authoritative revision {multiplayerSession.revision}
+            </span>
+            <p>
+              {match.phase === 'game-over'
+                ? `Match completed. ${activePlayer.name} won.`
+                : multiplayerPending
+                  ? 'Submitting command…'
+                  : canControl
+                    ? 'Your actions are enabled.'
+                    : `Waiting for ${activePlayer.name}.`}
+            </p>
+            <code data-testid="state-fingerprint">
+              {multiplayerSession.stateFingerprint}
+            </code>
+          </section>
+        )}
+
         {botControlled && match.phase !== 'game-over' && (
           <section
             className="phase-card bot-status-card"
@@ -265,7 +308,7 @@ export function TerritoryHud() {
           </section>
         )}
 
-        {!botControlled && match.phase === 'reinforce' && (
+        {canControl && match.phase === 'reinforce' && (
           <section className="phase-card">
             <div className="phase-heading">
               <div>
@@ -295,7 +338,7 @@ export function TerritoryHud() {
             <div className="action-row">
               <button
                 type="button"
-                disabled={!sourceId}
+                disabled={!sourceId || multiplayerPending}
                 onClick={() =>
                   sourceId &&
                   dispatch({
@@ -309,7 +352,7 @@ export function TerritoryHud() {
               </button>
               <button
                 type="button"
-                disabled={!sourceId}
+                disabled={!sourceId || multiplayerPending}
                 onClick={() =>
                   sourceId &&
                   dispatch({
@@ -325,7 +368,7 @@ export function TerritoryHud() {
           </section>
         )}
 
-        {!botControlled && match.phase === 'attack' && (
+        {canControl && match.phase === 'attack' && (
           <section className="phase-card">
             <span className="eyebrow">Attack phase</span>
             <p className="phase-instruction">
@@ -354,6 +397,7 @@ export function TerritoryHud() {
                 </label>
                 <button
                   type="button"
+                  disabled={multiplayerPending}
                   onClick={() =>
                     dispatch({
                       type: 'ATTACK',
@@ -377,13 +421,14 @@ export function TerritoryHud() {
           </section>
         )}
 
-        {!botControlled && match.phase === 'attack' && (
+        {canControl && match.phase === 'attack' && (
           <section className="phase-actions" aria-label="Attack phase actions">
             <span className="eyebrow">Phase actions</span>
             <button
               ref={endAttackTriggerRef}
               type="button"
               className="wide secondary-action"
+              disabled={multiplayerPending}
               onClick={() => {
                 if (legalAttackRemains) setConfirmingEndAttack(true);
                 else dispatch({ type: 'END_ATTACK_PHASE' });
@@ -429,7 +474,7 @@ export function TerritoryHud() {
           </section>
         )}
 
-        {!botControlled && match.phase === 'capture' && pending && (
+        {canControl && match.phase === 'capture' && pending && (
           <section className="phase-card capture-card">
             <span className="eyebrow">Territory captured</span>
             <h2>Move armies in</h2>
@@ -447,6 +492,7 @@ export function TerritoryHud() {
             <button
               type="button"
               className="wide"
+              disabled={multiplayerPending}
               onClick={() =>
                 dispatch({
                   type: 'MOVE_AFTER_CAPTURE',
@@ -461,7 +507,7 @@ export function TerritoryHud() {
           </section>
         )}
 
-        {!botControlled && match.phase === 'fortify' && (
+        {canControl && match.phase === 'fortify' && (
           <section className="phase-card">
             <span className="eyebrow">Fortify once or skip</span>
             <p className="phase-instruction">
@@ -483,6 +529,7 @@ export function TerritoryHud() {
                 <button
                   type="button"
                   className="wide"
+                  disabled={multiplayerPending}
                   onClick={() =>
                     dispatch({
                       type: 'FORTIFY',
@@ -499,6 +546,7 @@ export function TerritoryHud() {
             <button
               type="button"
               className="wide secondary-action"
+              disabled={multiplayerPending}
               onClick={() => dispatch({ type: 'SKIP_FORTIFY' })}
             >
               Skip fortification
@@ -506,7 +554,7 @@ export function TerritoryHud() {
           </section>
         )}
 
-        {!botControlled && match.phase === 'turn-end' && (
+        {canControl && match.phase === 'turn-end' && (
           <section className="phase-card end-turn-card">
             <span className="eyebrow">Actions complete</span>
             <h2>Ready for the next player?</h2>
@@ -514,6 +562,7 @@ export function TerritoryHud() {
             <button
               type="button"
               className="wide"
+              disabled={multiplayerPending}
               onClick={() => dispatch({ type: 'END_TURN' })}
             >
               End turn
@@ -612,63 +661,67 @@ export function TerritoryHud() {
           >
             Debug
           </button>
-          <details className="game-menu">
-            <summary>Game</summary>
-            <div>
-              <button type="button" onClick={saveMatch}>
-                Save match
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    window.confirm('Restart with the same world and ownership?')
-                  )
-                    resetMatch();
-                }}
-              >
-                Same ownership rematch
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'Return to pregame with a new ownership layout?',
+          {!multiplayerSession && (
+            <details className="game-menu">
+              <summary>Game</summary>
+              <div>
+                <button type="button" onClick={saveMatch}>
+                  Save match
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        'Restart with the same world and ownership?',
+                      )
                     )
-                  )
-                    rematchNewOwnership();
-                }}
-              >
-                {assignmentMode === 'random'
-                  ? 'Reroll ownership'
-                  : 'Restart player draft'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'Leave this match for world setup? The local save will remain.',
+                      resetMatch();
+                  }}
+                >
+                  Same ownership rematch
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        'Return to pregame with a new ownership layout?',
+                      )
                     )
-                  )
-                    backToWorldSetup();
-                }}
-              >
-                Different world
-              </button>
-              <button
-                type="button"
-                className="danger"
-                onClick={deleteSavedMatch}
-              >
-                Delete local save
-              </button>
-            </div>
-          </details>
+                      rematchNewOwnership();
+                  }}
+                >
+                  {assignmentMode === 'random'
+                    ? 'Reroll ownership'
+                    : 'Restart player draft'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        'Leave this match for world setup? The local save will remain.',
+                      )
+                    )
+                      backToWorldSetup();
+                  }}
+                >
+                  Different world
+                </button>
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={deleteSavedMatch}
+                >
+                  Delete local save
+                </button>
+              </div>
+            </details>
+          )}
         </div>
 
-        {(saveMessage || saveError || savedAt) && (
+        {!multiplayerSession && (saveMessage || saveError || savedAt) && (
           <p
             className={saveError ? 'save-status error' : 'save-status'}
             role="status"
@@ -742,24 +795,28 @@ export function TerritoryHud() {
               <button type="button" onClick={() => setReviewingGameOver(true)}>
                 Review world
               </button>
-              <button type="button" onClick={resetMatch}>
-                Same ownership rematch
-              </button>
-              <button type="button" onClick={rematchNewOwnership}>
-                {assignmentMode === 'random'
-                  ? 'Reroll ownership'
-                  : 'Restart player draft'}
-              </button>
-              <button type="button" onClick={backToWorldSetup}>
-                Different world
-              </button>
-              <button
-                type="button"
-                className="danger"
-                onClick={deleteSavedMatch}
-              >
-                Delete saved match
-              </button>
+              {!multiplayerSession && (
+                <>
+                  <button type="button" onClick={resetMatch}>
+                    Same ownership rematch
+                  </button>
+                  <button type="button" onClick={rematchNewOwnership}>
+                    {assignmentMode === 'random'
+                      ? 'Reroll ownership'
+                      : 'Restart player draft'}
+                  </button>
+                  <button type="button" onClick={backToWorldSetup}>
+                    Different world
+                  </button>
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={deleteSavedMatch}
+                  >
+                    Delete saved match
+                  </button>
+                </>
+              )}
             </div>
           </section>
         )}

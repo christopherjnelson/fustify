@@ -1,4 +1,4 @@
-import type { Vector3Tuple } from '../types/territory';
+import type { Vector3Tuple } from '../types/territory.ts';
 
 export function dot(a: Vector3Tuple, b: Vector3Tuple): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];

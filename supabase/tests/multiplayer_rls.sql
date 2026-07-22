@@ -14,7 +14,7 @@ create temporary table test_rooms (
   room_id uuid not null,
   join_code text not null
 ) on commit drop;
-grant all on test_rooms to authenticated;
+grant all on test_rooms to authenticated, service_role;
 
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -77,9 +77,9 @@ select extensions.throws_ok(
   $$select public.start_room_match(
     (select room_id from test_rooms where label = 'primary')
   )$$,
-  'P0001',
-  'host_only',
-  'non-host cannot start the match'
+  '42501',
+  'permission denied for function start_room_match',
+  'non-host cannot invoke the legacy match initializer'
 );
 
 reset role;
@@ -143,22 +143,43 @@ reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
 set local role authenticated;
 create temporary table test_matches (first_id uuid, second_id uuid) on commit drop;
-grant all on test_matches to authenticated;
+grant all on test_matches to authenticated, service_role;
+select extensions.throws_ok(
+  $$select public.start_room_match(
+    (select room_id from test_rooms where label = 'primary')
+  )$$,
+  '42501',
+  'permission denied for function start_room_match',
+  'browser roles cannot initialize mutable match state'
+);
+
+reset role;
+set local role service_role;
 insert into test_matches (first_id)
-select id from public.start_room_match((select room_id from test_rooms where label = 'primary'));
-update test_matches set second_id = (
-  select id from public.start_room_match((select room_id from test_rooms where label = 'primary'))
+select id from public.authority_initialize_room_match(
+  (select room_id from test_rooms where label = 'primary'),
+  '20000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000001',
+  '{"version":2}'::jsonb,
+  '[{"seatIndex":0,"userId":"10000000-0000-4000-8000-000000000001","playerId":"player-01"},{"seatIndex":1,"userId":"10000000-0000-4000-8000-000000000002","playerId":"player-02"}]'::jsonb,
+  '{}'::jsonb,
+  '{}'::jsonb,
+  '{"matchId":"20000000-0000-4000-8000-000000000001","activePlayerId":"player-01","winnerId":null}'::jsonb,
+  repeat('a', 64)
 );
 select extensions.is(
-  (select first_id from test_matches),
-  (select second_id from test_matches),
-  'repeated host start is idempotent'
-);
-select extensions.is(
-  (select count(*)::integer from public.matches),
+  (
+    select count(*)::integer
+    from public.matches
+    where room_id = (select room_id from test_rooms where label = 'primary')
+  ),
   1,
-  'host start creates exactly one match'
+  'trusted initialization creates exactly one authoritative match'
 );
+
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+set local role authenticated;
 select extensions.throws_ok(
   $$update public.matches set setup_snapshot = '{}'::jsonb$$,
   '42501',

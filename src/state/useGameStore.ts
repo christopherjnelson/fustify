@@ -8,6 +8,7 @@ import {
   readSetupFromLocation,
   writeSetupToLocation,
 } from '../browser/setupUrl';
+import { isMultiplayerRoute } from '../browser/routes';
 import type { ApplicationMode, HandoffSummary } from '../core/appFlow';
 import { createMatch } from '../core/game/createMatch';
 import { gameReducer } from '../core/game/gameReducer';
@@ -57,6 +58,9 @@ import {
 
 function initializeSetupFromLocation() {
   if (typeof window === 'undefined') {
+    return { setup: { ...DEFAULT_WORLD_SETUP }, warning: null };
+  }
+  if (isMultiplayerRoute(window.location.pathname)) {
     return { setup: { ...DEFAULT_WORLD_SETUP }, warning: null };
   }
   const params = new URLSearchParams(window.location.search);
@@ -195,6 +199,7 @@ export interface GameState {
   setupOperation: SetupOperation | null;
   botExecution: BotExecutionState;
   controllerEpoch: number;
+  multiplayerSession: MultiplayerStoreSession | null;
   setSeedInput: (seed: string) => void;
   setSetupDraft: (update: Partial<WorldSetup>) => void;
   setPlayerCount: (playerCount: number) => void;
@@ -238,6 +243,15 @@ export interface GameState {
   toggleEventLog: () => void;
   focusSelectedTerritory: () => void;
   setGlobeFocus: (focus: GeographicPoint) => void;
+}
+
+export interface MultiplayerStoreSession {
+  ownPlayerId: string;
+  revision: number;
+  stateFingerprint: string;
+  connection: string;
+  pending: boolean;
+  dispatch: (action: GameAction) => Promise<void>;
 }
 
 function allowBusyStateToPaint(): Promise<void> {
@@ -381,6 +395,7 @@ export const useGameStore = create<GameState>((set, get) => {
     setupOperation: null,
     botExecution: IDLE_BOT_EXECUTION,
     controllerEpoch: 0,
+    multiplayerSession: null,
     setSeedInput: (seedInput) =>
       set((state) => ({
         seedInput,
@@ -823,6 +838,51 @@ export const useGameStore = create<GameState>((set, get) => {
     },
     dispatchGameAction: (action) => {
       const state = get();
+      if (state.multiplayerSession) {
+        if (!state.match) return;
+        if (
+          state.match.activePlayerId !== state.multiplayerSession.ownPlayerId
+        ) {
+          set({
+            lastActionError: {
+              code: 'CONTROLLER_LOCKED',
+              message: 'It is another player’s turn.',
+            },
+          });
+          return;
+        }
+        if (state.multiplayerSession.pending) return;
+        const dispatch = state.multiplayerSession.dispatch;
+        set({
+          multiplayerSession: { ...state.multiplayerSession, pending: true },
+          lastActionError: null,
+        });
+        void dispatch(action)
+          .catch((error: unknown) => {
+            set({
+              lastActionError: {
+                code: 'CONTROLLER_LOCKED',
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : 'The authoritative command failed.',
+              },
+            });
+          })
+          .finally(() => {
+            set((current) =>
+              current.multiplayerSession
+                ? {
+                    multiplayerSession: {
+                      ...current.multiplayerSession,
+                      pending: false,
+                    },
+                  }
+                : current,
+            );
+          });
+        return;
+      }
       if (state.applicationMode !== 'playing' || !state.match) {
         set({
           lastActionError: {

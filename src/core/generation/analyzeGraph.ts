@@ -1,11 +1,14 @@
-import type { ContinentDefinition } from '../types/continent';
+import type { ContinentDefinition } from '../types/continent.ts';
 import type {
   ConnectionGraphMetric,
   StrategicGraphAnalysis,
-} from '../types/analysis';
-import type { LandmassDefinition, TerritoryConnection } from '../types/surface';
-import type { TerritoryDefinition } from '../types/territory';
-import type { TerritoryBorderWeight } from './buildConnections';
+} from '../types/analysis.ts';
+import type {
+  LandmassDefinition,
+  TerritoryConnection,
+} from '../types/surface.ts';
+import type { TerritoryDefinition } from '../types/territory.ts';
+import type { TerritoryBorderWeight } from './buildConnections.ts';
 
 export interface UndirectedEdge {
   from: string;

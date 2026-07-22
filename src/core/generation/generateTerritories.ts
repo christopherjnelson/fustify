@@ -1,6 +1,6 @@
-import type { IcosphereData } from '../geometry/icosphere';
-import { centroid, normalize } from '../geometry/sphericalMath';
-import type { Vector3Tuple } from '../types/territory';
+import type { IcosphereData } from '../geometry/icosphere.ts';
+import { centroid, normalize } from '../geometry/sphericalMath.ts';
+import type { Vector3Tuple } from '../types/territory.ts';
 
 export interface GeneratedTerritoryLayout {
   cellTerritoryIndices: Array<number | null>;

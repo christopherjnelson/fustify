@@ -1,5 +1,5 @@
-import type { Vector3Tuple } from '../types/territory';
-import { midpoint, normalize } from './sphericalMath';
+import type { Vector3Tuple } from '../types/territory.ts';
+import { midpoint, normalize } from './sphericalMath.ts';
 
 export type Triangle = [number, number, number];
 

@@ -1,4 +1,4 @@
-import type { MatchEvent, MatchEventType, MatchState } from './types';
+import type { MatchEvent, MatchEventType, MatchState } from './types.ts';
 
 export function makeEvent(
   state: Pick<MatchState, 'events' | 'turnNumber'>,

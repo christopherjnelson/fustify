@@ -39,6 +39,7 @@ export function Planet({ planet }: PlanetProps) {
   const viewMode = useGameStore((state) => state.viewMode);
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
   const botExecution = useGameStore((state) => state.botExecution);
+  const multiplayerSession = useGameStore((state) => state.multiplayerSession);
   const setHovered = useGameStore((state) => state.setHoveredTerritory);
   const select = useGameStore((state) => state.selectTerritory);
   const displayedTerritories = useMemo(
@@ -72,7 +73,10 @@ export function Planet({ planet }: PlanetProps) {
     if (
       !match ||
       applicationMode !== 'playing' ||
-      activeController === 'heuristic-bot'
+      activeController === 'heuristic-bot' ||
+      (multiplayerSession !== null &&
+        (multiplayerSession.pending ||
+          multiplayerSession.ownPlayerId !== match.activePlayerId))
     ) {
       return {
         sources: new Set<string>(),
@@ -120,7 +124,7 @@ export function Planet({ planet }: PlanetProps) {
         .filter((id) => targets.includes(id)),
     );
     return { sources: new Set(sources), targets: new Set(targets), seaTargets };
-  }, [applicationMode, configuredPlayers, match, planet]);
+  }, [applicationMode, configuredPlayers, match, multiplayerSession, planet]);
 
   const visualKind = useCallback(
     (territoryId: string): TerritoryVisualKind => {

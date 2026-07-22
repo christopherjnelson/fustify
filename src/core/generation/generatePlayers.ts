@@ -1,6 +1,6 @@
-import type { PlayerDefinition } from '../types/player';
-import { PLAYER_PALETTE } from './constants';
-import { createSeededRandom } from './seededRandom';
+import type { PlayerDefinition } from '../types/player.ts';
+import { PLAYER_PALETTE } from './constants.ts';
+import { createSeededRandom } from './seededRandom.ts';
 
 const PLAYER_NAMES = [
   'Crimson League',

@@ -230,6 +230,48 @@
   margin: 18px auto 0;
 }
 
+.multiplayer-actions > div {
+  display: grid;
+  gap: 6px;
+}
+
+.multiplayer-start-helper {
+  max-width: 360px;
+  margin: 0;
+  color: #ffd899;
+  font-size: 0.72rem;
+}
+
+.multiplayer-game-shell {
+  width: 100%;
+  height: 100dvh;
+  min-height: 620px;
+  overflow: hidden;
+}
+
+.multiplayer-game-connection {
+  position: absolute;
+  z-index: 12;
+  top: 14px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+}
+
+.multiplayer-game-connection > span:not(.multiplayer-connection) {
+  display: none;
+}
+
+.multiplayer-authority-status code {
+  display: block;
+  overflow: hidden;
+  color: #8ab7cc;
+  font-size: 0.56rem;
+  text-overflow: ellipsis;
+}
+
 .multiplayer-match-shell {
   position: relative;
   width: 100%;
@@ -315,6 +357,14 @@
     bottom: 12px;
     left: 12px;
     width: auto;
+  }
+
+  .multiplayer-game-connection {
+    top: auto;
+    right: 12px;
+    bottom: 52px;
+    left: auto;
+    transform: none;
   }
 }
 

@@ -40,6 +40,7 @@ export type VisualScenario =
   | 'reroll-busy'
   | 'handoff'
   | 'reinforcement'
+  | 'multiplayer-authority'
   | 'bot-turn'
   | 'bot-reinforcement'
   | 'human-after-bot'
@@ -432,7 +433,11 @@ function applyScenario(scenario: VisualScenario) {
   }
   if (applicationMode === 'pregame') scenarioMatch = null;
   if (scenario === 'handoff') applicationMode = 'handoff';
-  if (scenario === 'reinforcement' || scenario === 'navigator') {
+  if (
+    scenario === 'reinforcement' ||
+    scenario === 'multiplayer-authority' ||
+    scenario === 'navigator'
+  ) {
     applicationMode = 'playing';
   }
   if (
@@ -591,6 +596,17 @@ function applyScenario(scenario: VisualScenario) {
           ? 'reroll-territories'
           : null,
     botExecution,
+    multiplayerSession:
+      scenario === 'multiplayer-authority'
+        ? {
+            ownPlayerId: match.activePlayerId,
+            revision: 12,
+            stateFingerprint: 'a4'.repeat(32),
+            connection: 'SUBSCRIBED',
+            pending: false,
+            dispatch: async () => {},
+          }
+        : null,
   });
 }
 

@@ -1,6 +1,6 @@
-import { createSeededRandom } from '../generation/seededRandom';
-import type { PlanetDefinition } from '../types/planet';
-import type { LocalPlayerConfig } from './playerConfig';
+import { createSeededRandom } from '../generation/seededRandom.ts';
+import type { PlanetDefinition } from '../types/planet.ts';
+import type { LocalPlayerConfig } from './playerConfig.ts';
 
 export interface StartingBalanceBreakdown {
   territoryParity: number;

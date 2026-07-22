@@ -1,8 +1,8 @@
-import type { PlanetDefinition } from '../types/planet';
-import { makeEvent } from './events';
-import { calculateReinforcements } from './reinforcement';
-import type { MatchState } from './types';
-import type { ReadyMatchSetup } from '../setup/startingPositions';
+import type { PlanetDefinition } from '../types/planet.ts';
+import { makeEvent } from './events.ts';
+import { calculateReinforcements } from './reinforcement.ts';
+import type { MatchState } from './types.ts';
+import type { ReadyMatchSetup } from '../setup/startingPositions.ts';
 
 export interface CreateMatchOptions {
   /** Seed for combat and controller decisions; independent from world generation. */

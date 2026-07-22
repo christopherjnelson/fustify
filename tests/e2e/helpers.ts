@@ -20,6 +20,7 @@ export type Scenario =
   | 'reroll-busy'
   | 'handoff'
   | 'reinforcement'
+  | 'multiplayer-authority'
   | 'bot-turn'
   | 'bot-reinforcement'
   | 'human-after-bot'

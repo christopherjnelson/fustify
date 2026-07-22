@@ -74,5 +74,11 @@ describe('multiplayer errors', () => {
     expect(multiplayerError({ status: 429 }).message).toContain(
       'temporarily rate limited',
     );
+    expect(multiplayerError(new Error('not_enough_players')).message).toBe(
+      'Claim at least two human seats before starting.',
+    );
+    expect(multiplayerError(new Error('revision_conflict')).message).toBe(
+      'The match changed before that action was accepted.',
+    );
   });
 });

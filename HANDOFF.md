@@ -1,5 +1,47 @@
 # Fustify Handoff
 
+## Authoritative human multiplayer beta (July 2026)
+
+Branch `feat/playable-multiplayer-beta` starts at
+`90307470451889b3558ed0433fda39a12347104f`. This milestone replaces the
+read-only match preview with a human-only 2–5-player authoritative command
+flow. The complete generated planet and reducer state live in `matches`; an
+append-only `match_commands` ledger records actor, seat, exact validated
+payload, idempotency key, revision transition, and SHA-256 state fingerprint.
+
+`multiplayer-game` verifies the anonymous user's JWT, resolves current seat
+membership, imports the shared generator/setup/`gameReducer`, owns deterministic
+combat progression, and calls two short service-role-only transactional RPCs.
+Browser roles retain member-scoped reads but cannot write snapshots/commands or
+execute the authority RPCs. Realtime only prompts canonical refetch; focus,
+online, subscription, and periodic reconciliation recover missed events.
+
+The multiplayer UI hydrates the existing globe, minimap, navigator, phase
+controls, end-attack confirmation, capture/fortification controls, event log,
+and victory panel from canonical state. Only the active seat can act, submissions
+are non-optimistic and idempotent, and local play remains on its original store
+path. Multiplayer draft, bots, takeover, joining after start, spectators,
+matchmaking, chat, timers, kicking, and host migration remain excluded.
+
+The beta gate passed against hosted project `qwmsybhpjnfjiyxcspwj`. The complete
+12-territory browser-driven match reached Alpha victory at authoritative
+revision 303; both isolated clients agreed on final SHA-256 fingerprint
+`8b08e3bc64097d581b544dcae484fa8a49bc3bf7f919195068d958733a2ff1d9`.
+Active-phase refresh, mobile restore, focused local-play regression, 25 lobby
+RLS assertions, 18 transition assertions, the live JWT/RLS/revision/idempotency
+harness, 247 passing unit cases (3 intentional skips), TypeScript, ESLint,
+Prettier, production build, visual baselines, diff checks, and bundle budgets
+passed. The deployed
+`multiplayer-game` Edge Function is active at version 2 with source hash
+`43a9ed43a579286be60938827e5ff2c89e47c6356418ae93b1d5665cc44993a6`;
+all 26 returned source dependencies match Git byte-for-byte.
+
+The three authority migrations are remotely recorded in Git order. No frontend
+deployment or production-domain smoke test was performed; follow the checklist
+in `MULTIPLAYER.md` after deploying this commit to `dev.fustify.com`. Deployment,
+security model, and known human-only limitations are canonical in
+`MULTIPLAYER.md` and `SUPABASE.md`.
+
 ## Supabase multiplayer foundation (July 2026)
 
 Branch `feat/supabase-multiplayer-foundation` starts at

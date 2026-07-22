@@ -39,7 +39,8 @@
     "supabase:db:push": "SUPABASE_TELEMETRY_DISABLED=1 supabase db push --linked",
     "supabase:test:db": "SUPABASE_TELEMETRY_DISABLED=1 supabase test db supabase/tests",
     "supabase:types": "SUPABASE_TELEMETRY_DISABLED=1 supabase gen types --project-id qwmsybhpjnfjiyxcspwj --schema public > src/multiplayer/database.types.ts",
-    "test:multiplayer:concurrency": "node --env-file-if-exists=.env.local --import tsx scripts/testMultiplayerConcurrency.ts"
+    "test:multiplayer:concurrency": "node --env-file-if-exists=.env.local --import tsx scripts/testMultiplayerConcurrency.ts",
+    "test:multiplayer:authority": "node --env-file-if-exists=.env.local --import tsx scripts/testAuthoritativeMultiplayer.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

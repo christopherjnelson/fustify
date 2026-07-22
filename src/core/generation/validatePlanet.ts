@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { createIcosphere } from '../geometry/icosphere';
-import type { PlanetDefinition } from '../types/planet';
-import { analyzeStrategicGraph } from './analyzeGraph';
-import { buildTerritoryBorderWeights } from './buildConnections';
-import { calculateContinentBonus } from './generateContinents';
+import { createIcosphere } from '../geometry/icosphere.ts';
+import type { PlanetDefinition } from '../types/planet.ts';
+import { analyzeStrategicGraph } from './analyzeGraph.ts';
+import { buildTerritoryBorderWeights } from './buildConnections.ts';
+import { calculateContinentBonus } from './generateContinents.ts';
 import {
   DEFAULT_CONTINENT_COUNT,
   DEFAULT_PLAYER_COUNT,
@@ -13,8 +13,8 @@ import {
   MIN_LAND_COVERAGE,
   MIN_SUBSTANTIAL_LANDMASSES,
   PLANET_SUBDIVISIONS,
-} from './constants';
-import { buildCellAdjacency, connectedComponents } from './surfaceTopology';
+} from './constants.ts';
+import { buildCellAdjacency, connectedComponents } from './surfaceTopology.ts';
 
 const vectorSchema = z.tuple([z.number(), z.number(), z.number()]);
 const idList = z.array(z.string().min(1));

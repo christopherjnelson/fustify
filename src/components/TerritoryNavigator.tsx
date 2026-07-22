@@ -40,6 +40,7 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
   const match = useGameStore((state) => state.match)!;
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
   const selectAndFocus = useGameStore((state) => state.selectAndFocusTerritory);
+  const multiplayerSession = useGameStore((state) => state.multiplayerSession);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
@@ -78,7 +79,11 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
     configuredPlayers.find((player) => player.id === match.activePlayerId)
       ?.controllerType === 'heuristic-bot';
   const selectionUnavailable =
-    botControlled || !['reinforce', 'attack', 'fortify'].includes(match.phase);
+    botControlled ||
+    (multiplayerSession !== null &&
+      (multiplayerSession.pending ||
+        multiplayerSession.ownPlayerId !== match.activePlayerId)) ||
+    !['reinforce', 'attack', 'fortify'].includes(match.phase);
 
   useEffect(() => {
     if (!open || !dialogRef.current) return;

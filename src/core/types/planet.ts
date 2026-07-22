@@ -1,12 +1,12 @@
-import type { ContinentDefinition } from './continent';
-import type { StrategicGraphAnalysis } from './analysis';
-import type { PlayerDefinition } from './player';
-import type { TerritoryDefinition } from './territory';
+import type { ContinentDefinition } from './continent.ts';
+import type { StrategicGraphAnalysis } from './analysis.ts';
+import type { PlayerDefinition } from './player.ts';
+import type { TerritoryDefinition } from './territory.ts';
 import type {
   LandmassDefinition,
   SurfaceCellDefinition,
   TerritoryConnection,
-} from './surface';
+} from './surface.ts';
 
 export interface PlanetDefinition {
   seed: string;

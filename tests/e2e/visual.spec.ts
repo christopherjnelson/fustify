@@ -93,6 +93,11 @@ const scenarios: Array<{
   },
   { name: 'handoff', region: '.handoff-card', heading: /Pass the device/i },
   { name: 'reinforcement', region: '.hud', heading: /Crimson League/i },
+  {
+    name: 'multiplayer-authority',
+    region: '.hud',
+    heading: /Authoritative revision 12/i,
+  },
   { name: 'bot-turn', region: '.hud', heading: /is acting/i },
   { name: 'bot-reinforcement', region: '.hud', heading: /is acting/i },
   { name: 'human-after-bot', region: '.hud', heading: /Crimson League/i },

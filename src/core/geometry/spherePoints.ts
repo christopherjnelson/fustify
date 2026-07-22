@@ -1,6 +1,6 @@
-import type { Vector3Tuple } from '../types/territory';
-import type { SeededRandom } from '../generation/seededRandom';
-import { normalize } from './sphericalMath';
+import type { Vector3Tuple } from '../types/territory.ts';
+import type { SeededRandom } from '../generation/seededRandom.ts';
+import { normalize } from './sphericalMath.ts';
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 

@@ -1,5 +1,7 @@
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
+import type { GameAction } from '../core/game/types';
 import type { Database, Tables } from './database.types';
+import type { AuthoritativeCommandResult } from './gameProtocol';
 
 export type Room = Tables<'rooms'>;
 export type RoomMember = Tables<'room_members'>;
@@ -25,13 +27,27 @@ export const MULTIPLAYER_ERRORS: Record<string, string> = {
   invalid_display_name: 'Use a display name between 1 and 32 characters.',
   invalid_seat: 'That seat is not available.',
   invalid_settings: 'Those room settings are not supported.',
+  invalid_action: 'That action is no longer legal. The match was refreshed.',
+  invalid_authoritative_state:
+    'The authoritative match state is unavailable. Reconnect and try again.',
+  idempotency_conflict:
+    'That request key was already used for a different action.',
+  legacy_match_incomplete:
+    'This earlier preview cannot become a playable match. Create a new room.',
   match_snapshot_immutable: 'The match setup snapshot cannot be changed.',
+  match_completed: 'This match is complete. No more actions can be played.',
+  match_not_active: 'This match is not active.',
+  multiplayer_draft_unsupported:
+    'Player draft is not available in multiplayer yet. Choose random assignment.',
   not_authenticated: 'Your anonymous session expired. Reconnect and try again.',
   not_enough_players: 'Claim at least two human seats before starting.',
+  not_your_turn: 'It is another player’s turn.',
+  revision_conflict: 'The match changed before that action was accepted.',
   room_access_denied: 'This private room is unavailable to this player.',
   room_active: 'This room has already started.',
   room_not_waiting: 'This action is available only while the room is waiting.',
   seat_conflict: 'Another player claimed that seat first.',
+  seat_required: 'Claimed seat membership is required to play this match.',
   settings_conflict:
     'Release affected seats or members before reducing capacity.',
 };
@@ -198,15 +214,67 @@ export async function updateRoomSettings(
   if (error) throw multiplayerError(error);
 }
 
+async function functionError(error: unknown): Promise<Error> {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'context' in error &&
+    error.context instanceof Response
+  ) {
+    try {
+      const body = (await error.context.clone().json()) as {
+        code?: string;
+        gameError?: { message?: string };
+      };
+      if (body.gameError?.message) return new Error(body.gameError.message);
+      if (body.code) return multiplayerError(body.code);
+    } catch {
+      // Fall through to the generic mapper for non-JSON gateway errors.
+    }
+  }
+  return multiplayerError(error);
+}
+
 export async function startMatch(
   client: SupabaseClient<Database>,
   roomId: string,
 ): Promise<MultiplayerMatch> {
-  const { data, error } = await client.rpc('start_room_match', {
-    room_id: roomId,
+  const { data, error } = await client.functions.invoke('multiplayer-game', {
+    body: { operation: 'start', roomId },
   });
-  if (error) throw multiplayerError(error);
-  return data;
+  if (error) throw await functionError(error);
+  const match = (data as { match?: MultiplayerMatch } | null)?.match;
+  if (!match) throw multiplayerError('invalid_authoritative_state');
+  return match;
+}
+
+export async function submitGameplayCommand(
+  client: SupabaseClient<Database>,
+  matchId: string,
+  expectedRevision: number,
+  idempotencyKey: string,
+  action: GameAction,
+): Promise<AuthoritativeCommandResult> {
+  const { data, error } = await client.functions.invoke('multiplayer-game', {
+    body: {
+      operation: 'command',
+      matchId,
+      expectedRevision,
+      idempotencyKey,
+      action,
+    },
+  });
+  if (error) throw await functionError(error);
+  const result = data as Partial<AuthoritativeCommandResult> | null;
+  if (
+    !result ||
+    !Number.isSafeInteger(result.acceptedRevision) ||
+    typeof result.stateFingerprint !== 'string' ||
+    typeof result.duplicate !== 'boolean'
+  ) {
+    throw multiplayerError('invalid_authoritative_state');
+  }
+  return result as AuthoritativeCommandResult;
 }
 
 export async function leaveRoom(
@@ -272,6 +340,33 @@ export function subscribeToRoom(
         filter: `room_id=eq.${roomId}`,
       },
       onChange,
+    )
+    .subscribe(onStatus);
+  return channel;
+}
+
+export function subscribeToMatch(
+  client: SupabaseClient<Database>,
+  matchId: string,
+  onRevision: (revision: number) => void,
+  onStatus: (status: string) => void,
+): RealtimeChannel {
+  const channel = client.channel(`private-match:${matchId}`);
+  channel
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'matches',
+        filter: `id=eq.${matchId}`,
+      },
+      (payload) => {
+        const revision = Number(
+          (payload.new as { revision?: number } | null)?.revision ?? -1,
+        );
+        if (Number.isSafeInteger(revision)) onRevision(revision);
+      },
     )
     .subscribe(onStatus);
   return channel;

@@ -1,6 +1,6 @@
-import type { PlanetDefinition } from '../types/planet';
-import type { MatchState } from './types';
-import { getOwnedTerritories } from './reinforcement';
+import type { PlanetDefinition } from '../types/planet.ts';
+import type { MatchState } from './types.ts';
+import { getOwnedTerritories } from './reinforcement.ts';
 
 function territoryAdjacency(planet: PlanetDefinition): Map<string, string[]> {
   return new Map(

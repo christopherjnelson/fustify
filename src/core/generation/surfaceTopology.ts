@@ -1,4 +1,4 @@
-import type { IcosphereData } from '../geometry/icosphere';
+import type { IcosphereData } from '../geometry/icosphere.ts';
 
 export function buildCellAdjacency(sphere: IcosphereData): number[][] {
   const adjacency = sphere.faces.map(() => new Set<number>());

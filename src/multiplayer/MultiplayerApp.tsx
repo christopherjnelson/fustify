@@ -8,7 +8,15 @@ import {
 } from 'react';
 import { z } from 'zod';
 import { BRAND } from '../branding';
-import { generatePlanet } from '../core/generation/generatePlanet';
+import { GlobeScene } from '../components/GlobeScene';
+import { Minimap } from '../components/Minimap';
+import { TerritoryHud } from '../components/TerritoryHud';
+import { ControlLegend } from '../components/ControlLegend';
+import type { MatchState } from '../core/game/types';
+import type { PlanetDefinition } from '../core/types/planet';
+import type { LocalPlayerConfig } from '../core/setup/playerConfig';
+import { createNeutralMatchSetup } from '../core/setup/startingPositions';
+import { useGameStore } from '../state/useGameStore';
 import {
   claimSeat,
   closeRoom,
@@ -22,6 +30,8 @@ import {
   multiplayerError,
   releaseSeat,
   startMatch,
+  submitGameplayCommand,
+  subscribeToMatch,
   subscribeToRoom,
   updateRoomSettings,
   type MultiplayerMatch,
@@ -32,8 +42,7 @@ import {
   getSupabaseClient,
   readMultiplayerConfiguration,
 } from './supabaseClient';
-import { ReadonlyGlobe, ReadonlyMinimap } from './ReadonlyWorld';
-import { worldFingerprint } from './worldFingerprint';
+import { isMatchState } from './gameProtocol';
 
 type Route =
   | { kind: 'lobby' }
@@ -45,23 +54,16 @@ declare global {
     __FUSTIFY_MULTIPLAYER_TEST__?: {
       interruptRealtime: () => Promise<void>;
       getRealtimeEventCount: () => number;
+      refreshCanonical?: () => Promise<void>;
     };
   }
 }
-
-const setupSnapshotSchema = z.object({
-  version: z.literal(1),
-  seed: z.string().min(1).max(64),
-  territoryCount: z.number().int().min(12).max(48),
-  continentCount: z.number().int().min(2).max(5),
-  playerCount: z.number().int().min(2).max(5),
-  assignmentMode: z.enum(['random', 'player-draft']),
-});
 
 const seatOrderSchema = z.array(
   z.object({
     seatIndex: z.number().int().min(0).max(4),
     userId: z.string().uuid(),
+    playerId: z.string().min(1),
     displayName: z.string().min(1).max(32),
     controllerType: z.literal('human'),
   }),
@@ -87,7 +89,7 @@ function StatusScreen({ title, message }: { title: string; message: string }) {
   return (
     <main className="multiplayer-shell multiplayer-centered">
       <section className="multiplayer-card" aria-live="polite">
-        <span className="eyebrow">Multiplayer foundation</span>
+        <span className="eyebrow">Authoritative multiplayer beta</span>
         <h1>{title}</h1>
         <p>{message}</p>
         <a href="/">Return to local game</a>
@@ -144,14 +146,12 @@ function Lobby({ userId }: { userId: string }) {
   return (
     <main className="multiplayer-shell multiplayer-centered">
       <section className="multiplayer-card multiplayer-entry-card">
-        <span className="eyebrow">
-          {BRAND.productName} multiplayer foundation
-        </span>
+        <span className="eyebrow">{BRAND.productName} multiplayer beta</span>
         <h1>Private multiplayer rooms</h1>
         <p>
-          Create a private room or join with a shared code. This preview
-          synchronizes the lobby and deterministic match-start world; gameplay
-          commands remain local-only.
+          Create a private room or join with a shared code. Match state,
+          commands, combat, reconnect, and victory are synchronized through the
+          authoritative server boundary.
         </p>
         <label>
           Display name
@@ -337,6 +337,12 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     state.members.map((member) => [member.user_id, member]),
   );
   const ownSeat = state.seats.find((seat) => seat.occupant_user_id === userId);
+  const claimedHumanSeats = state.seats.filter(
+    (seat) =>
+      seat.occupant_user_id !== null && seat.controller_type === 'human',
+  ).length;
+  const canStart =
+    claimedHumanSeats >= 2 && state.room.assignment_mode === 'random';
 
   return (
     <main className="multiplayer-shell">
@@ -540,8 +546,11 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                 }}
               >
                 <option value="random">Random</option>
-                <option value="player-draft">Player draft</option>
+                <option value="player-draft" disabled>
+                  Player draft (local only)
+                </option>
               </select>
+              <small>Player draft remains available in local play.</small>
             </label>
           </div>
           {host && (
@@ -559,18 +568,31 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
       )}
       <footer className="multiplayer-actions">
         {host && waiting && (
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() =>
-              void act('start', async () => {
-                const match = await startMatch(client, roomId);
-                navigate(`/multiplayer/match/${match.id}`, true);
-              })
-            }
-          >
-            {busy === 'start' ? 'Starting…' : 'Start Match'}
-          </button>
+          <div>
+            <button
+              type="button"
+              disabled={busy !== null || !canStart}
+              onClick={() =>
+                void act('start', async () => {
+                  const match = await startMatch(client, roomId);
+                  navigate(`/multiplayer/match/${match.id}`, true);
+                })
+              }
+            >
+              {busy === 'start' ? 'Starting…' : 'Start Match'}
+            </button>
+            {claimedHumanSeats < 2 && (
+              <p className="multiplayer-start-helper">
+                At least 2 players must claim seats before starting.
+              </p>
+            )}
+            {state.room.assignment_mode !== 'random' && (
+              <p className="multiplayer-start-helper">
+                Multiplayer player draft is not supported. Choose random
+                assignment.
+              </p>
+            )}
+          </div>
         )}
         <button
           type="button"
@@ -600,108 +622,217 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   );
 }
 
-function MatchView({ matchId }: { matchId: string }) {
+function authoritativeSnapshots(match: MultiplayerMatch, userId: string) {
+  if (!isMatchState(match.state_snapshot)) {
+    throw new Error('The authoritative match state is unavailable.');
+  }
+  const planet = match.planet_snapshot as unknown as PlanetDefinition;
+  if (
+    !planet ||
+    !Array.isArray(planet.territories) ||
+    !Array.isArray(planet.surfaceCells) ||
+    !Array.isArray(planet.players)
+  ) {
+    throw new Error('The authoritative world snapshot is unavailable.');
+  }
+  const seats = seatOrderSchema.parse(match.seat_order_snapshot);
+  const players: LocalPlayerConfig[] = seats.map((seat, index) => ({
+    id: seat.playerId,
+    name: seat.displayName,
+    colorId: `color-${index + 1}`,
+    seatIndex: index,
+    controllerType: 'local-human',
+  }));
+  const ownSeat = seats.find((seat) => seat.userId === userId);
+  if (!ownSeat) throw new Error('Claimed seat membership is required.');
+  return {
+    planet,
+    state: match.state_snapshot as unknown as MatchState,
+    players,
+    ownPlayerId: ownSeat.playerId,
+  };
+}
+
+function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
   const client = useMemo(() => getSupabaseClient(), []);
   const [match, setMatch] = useState<MultiplayerMatch | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [connection, setConnection] = useState('CONNECTING');
+  const matchRef = useRef<MultiplayerMatch | null>(null);
+  const refreshSequence = useRef(0);
+
+  const install = useCallback(
+    (canonical: MultiplayerMatch) => {
+      const snapshots = authoritativeSnapshots(canonical, userId);
+      matchRef.current = canonical;
+      setMatch(canonical);
+      setError(null);
+      useGameStore.setState((current) => ({
+        applicationMode:
+          snapshots.state.phase === 'game-over' ? 'game-over' : 'playing',
+        planet: snapshots.planet,
+        match: snapshots.state,
+        matchSetup: createNeutralMatchSetup(snapshots.players, 'random'),
+        setup: {
+          ...current.setup,
+          seed: snapshots.planet.seed,
+          territoryCount: snapshots.planet.territoryCount,
+          continentCount: snapshots.planet.continentCount,
+          playerCount: snapshots.players.length,
+          assignmentMode: 'random',
+        },
+        setupDraft: {
+          ...current.setupDraft,
+          seed: snapshots.planet.seed,
+          territoryCount: snapshots.planet.territoryCount,
+          continentCount: snapshots.planet.continentCount,
+          playerCount: snapshots.players.length,
+          assignmentMode: 'random',
+        },
+        lastActionError: null,
+        multiplayerSession: {
+          ownPlayerId: snapshots.ownPlayerId,
+          revision: canonical.revision,
+          stateFingerprint: canonical.state_fingerprint ?? '',
+          connection: current.multiplayerSession?.connection ?? 'CONNECTING',
+          pending: current.multiplayerSession?.pending ?? false,
+          dispatch: current.multiplayerSession?.dispatch ?? (async () => {}),
+        },
+      }));
+    },
+    [userId],
+  );
+
+  const refresh = useCallback(
+    async (minimumRevision = -1) => {
+      const sequence = ++refreshSequence.current;
+      const canonical = await fetchMatch(client, matchId);
+      if (sequence !== refreshSequence.current) return;
+      const currentRevision = matchRef.current?.revision ?? -1;
+      if (
+        canonical.revision >= minimumRevision &&
+        canonical.revision >= currentRevision
+      ) {
+        install(canonical);
+      }
+    },
+    [client, install, matchId],
+  );
+
+  const dispatch = useCallback(
+    async (action: Parameters<typeof submitGameplayCommand>[4]) => {
+      const canonical = matchRef.current;
+      if (!canonical) throw new Error('Reconnecting to the match…');
+      const idempotencyKey = crypto.randomUUID();
+      try {
+        const result = await submitGameplayCommand(
+          client,
+          matchId,
+          canonical.revision,
+          idempotencyKey,
+          action,
+        );
+        await refresh(result.acceptedRevision);
+      } catch (requestError) {
+        await refresh().catch(() => undefined);
+        throw multiplayerError(requestError);
+      }
+    },
+    [client, matchId, refresh],
+  );
 
   useEffect(() => {
     let active = true;
-    void fetchMatch(client, matchId)
-      .then((result) => {
-        if (active) setMatch(result);
-      })
-      .catch((requestError: unknown) => {
-        if (active) setError(multiplayerError(requestError).message);
-      });
+    let channel = subscribeToMatch(
+      client,
+      matchId,
+      (revision) => {
+        if (revision > (matchRef.current?.revision ?? -1))
+          void refresh(revision);
+      },
+      (status) => {
+        if (!active) return;
+        setConnection(status);
+        useGameStore.setState((current) => ({
+          multiplayerSession: current.multiplayerSession
+            ? { ...current.multiplayerSession, connection: status }
+            : null,
+        }));
+        if (status === 'SUBSCRIBED') void refresh();
+      },
+    );
+    void refresh().catch((requestError: unknown) => {
+      if (active) setError(multiplayerError(requestError).message);
+    });
+    const recover = () => void refresh();
+    const reconcile = window.setInterval(recover, 2_000);
+    window.addEventListener('focus', recover);
+    window.addEventListener('online', recover);
+
+    if (import.meta.env.DEV) {
+      window.__FUSTIFY_MULTIPLAYER_TEST__ = {
+        getRealtimeEventCount: () => matchRef.current?.revision ?? 0,
+        refreshCanonical: () => refresh(),
+        interruptRealtime: async () => {
+          setConnection('RECONNECTING');
+          await client.removeChannel(channel);
+          channel = subscribeToMatch(
+            client,
+            matchId,
+            (revision) => void refresh(revision),
+            (status) => {
+              setConnection(status);
+              if (status === 'SUBSCRIBED') void refresh();
+            },
+          );
+          await refresh();
+        },
+      };
+    }
     return () => {
       active = false;
+      window.clearInterval(reconcile);
+      window.removeEventListener('focus', recover);
+      window.removeEventListener('online', recover);
+      delete window.__FUSTIFY_MULTIPLAYER_TEST__;
+      void client.removeChannel(channel);
+      useGameStore.setState({ multiplayerSession: null });
     };
-  }, [client, matchId]);
+  }, [client, matchId, refresh]);
 
-  const preview = useMemo(() => {
-    if (!match) return null;
-    try {
-      const setup = setupSnapshotSchema.parse(match.setup_snapshot);
-      const seats = seatOrderSchema.parse(match.seat_order_snapshot);
-      const planet = generatePlanet(setup.seed, {
-        territoryCount: setup.territoryCount,
-        continentCount: setup.continentCount,
-        playerCount: setup.playerCount,
-      });
-      return { setup, seats, planet, fingerprint: worldFingerprint(planet) };
-    } catch {
-      return new Error('The immutable match setup is invalid or unsupported.');
-    }
-  }, [match]);
+  useEffect(() => {
+    useGameStore.setState((current) => ({
+      multiplayerSession: current.multiplayerSession
+        ? { ...current.multiplayerSession, dispatch, connection }
+        : null,
+    }));
+  }, [connection, dispatch, match]);
 
   if (!match) {
     return (
       <StatusScreen
-        title={error ? 'Private match unavailable' : 'Loading match preview'}
-        message={error ?? 'Reading the immutable setup snapshot…'}
+        title={error ? 'Private match unavailable' : 'Loading private match'}
+        message={error ?? 'Restoring authoritative match state…'}
       />
     );
   }
-  if (preview instanceof Error) {
-    return (
-      <StatusScreen
-        title="Match preview unavailable"
-        message={preview.message}
-      />
-    );
-  }
-  if (!preview) return null;
-
-  const { setup, seats, planet, fingerprint } = preview;
 
   return (
     <main
-      className="multiplayer-match-shell"
-      data-testid="multiplayer-match-preview"
+      className="app-shell mode-playing multiplayer-game-shell"
+      data-testid="multiplayer-match"
+      data-match-id={match.id}
+      data-revision={match.revision}
     >
-      <ReadonlyGlobe planet={planet} />
-      <ReadonlyMinimap planet={planet} />
-      <section className="multiplayer-card multiplayer-match-panel">
-        <span className="eyebrow">
-          Multiplayer foundation · read-only preview
-        </span>
-        <h1>Synchronized world ready</h1>
-        <dl>
-          <div>
-            <dt>Match</dt>
-            <dd data-testid="match-id">{match.id}</dd>
-          </div>
-          <div>
-            <dt>Seed</dt>
-            <dd data-testid="match-seed">{setup.seed}</dd>
-          </div>
-          <div>
-            <dt>Setup</dt>
-            <dd data-testid="match-setup">
-              {setup.territoryCount} territories · {setup.continentCount}{' '}
-              continents
-            </dd>
-          </div>
-        </dl>
-        <h2>Participant order</h2>
-        <ol>
-          {seats.map((seat) => (
-            <li key={seat.seatIndex}>{seat.displayName}</li>
-          ))}
-        </ol>
-        {import.meta.env.DEV && (
-          <p className="world-fingerprint">
-            World fingerprint
-            <code data-testid="world-fingerprint">{fingerprint}</code>
-          </p>
-        )}
-        <p>
-          Gameplay synchronization is intentionally not enabled in this
-          milestone.
-        </p>
-        <a href={`/multiplayer/room/${match.room_id}`}>Return to room</a>
-      </section>
+      <GlobeScene />
+      <Minimap />
+      <ControlLegend />
+      <TerritoryHud />
+      <div className="multiplayer-game-connection">
+        <ConnectionBadge status={connection} />
+        <span data-testid="match-id">{match.id}</span>
+        <span data-testid="match-revision">{match.revision}</span>
+      </div>
     </main>
   );
 }
@@ -766,6 +897,7 @@ export function MultiplayerApp() {
   }
   if (route.kind === 'room')
     return <RoomView roomId={route.id} userId={userId} />;
-  if (route.kind === 'match') return <MatchView matchId={route.id} />;
+  if (route.kind === 'match')
+    return <MatchView matchId={route.id} userId={userId} />;
   return <Lobby userId={userId} />;
 }

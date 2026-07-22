@@ -67,6 +67,12 @@ describe('setup and match store integration', () => {
   });
 
   it('paints a busy lock before generation and ignores duplicate activation', async () => {
+    vi.stubGlobal('crypto', {
+      getRandomValues: (values: Uint32Array) => {
+        values[0] = 0;
+        return values;
+      },
+    });
     const first = useGameStore.getState().generateWorld();
     expect(useGameStore.getState().setupOperation).toBe('generate-world');
     const seedBeforeWork = useGameStore.getState().setup.seed;

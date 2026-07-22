@@ -1,105 +1,127 @@
-# Multiplayer foundation
+# Authoritative multiplayer beta
 
-Fustify's first multiplayer slice is a private-lobby and synchronized
-match-start preview. It deliberately stops before synchronized gameplay: no
-attacks, reinforcements, fortifications, combat reducer, command log, or mutable
-match snapshot crosses the network yet.
+Fustify multiplayer is a private, anonymous, human-only mode for 2–5 players.
+It reuses the local deterministic generator, setup code, `gameReducer`, globe,
+minimap, territory navigator, accessible phase controls, and victory rules.
+Multiplayer is considered playable only after the remote migration, deployed
+Edge Function, security harness, and complete two-browser winner test all pass.
 
-## Routes and identity
+## Routes and lifecycle
 
-- `/multiplayer` restores a persisted Supabase session or creates an anonymous
-  authenticated user with `signInAnonymously()`.
-- `/multiplayer/room/:roomId` is a private lobby. A direct URL reveals nothing
-  unless the current authenticated user is a durable room member.
-- `/multiplayer/match/:matchId` reads the immutable setup and seat-order
-  snapshots and renders the existing corrected deterministic world read-only.
+- `/multiplayer` restores or creates an anonymous Supabase Auth session.
+- `/multiplayer/room/:roomId` creates/joins a private room and claims one human
+  seat per member. Start is disabled until two seats are claimed, while the
+  database independently enforces the same minimum against concurrent changes.
+- `/multiplayer/match/:matchId` restores the persisted canonical world and
+  mutable match snapshot. It never invents ownership or combat results locally.
 
-Display names belong to `room_members`; they are not credentials. Supabase's
-browser client persists and refreshes anonymous sessions. If a cached session
-is invalid, multiplayer discards it locally and creates a new anonymous session.
-The Supabase client is dynamically imported only for multiplayer routes, so `/`
-and `/admin` neither initialize Auth nor require multiplayer configuration.
+The host selects 12–48 territories, 2–5 continents, 2–5 seats, and a seed.
+Multiplayer accepts random assignment only; player draft remains unchanged in
+local play. There are no bots, bot takeover, mid-match joins, spectators,
+matchmaking, public rooms, chat, timers, kicking, or host migration.
 
-## Room lifecycle
+## Authority boundary
 
-1. An authenticated anonymous user calls `create_room`; the transaction creates
-   a waiting room, makes the caller host/member, and creates five open seats.
-2. Another authenticated user calls `join_room` with the case-insensitive,
-   shareable eight-character code. Joining is the only code lookup exposed to
-   clients and does not return room data on failure.
-3. Members claim or release one human seat through transactional functions.
-   Durable Postgres rows—not Realtime Presence—are authoritative.
-4. The host may update the seed, 12–48 territory count, 2–5 continent count,
-   assignment mode, and 2–5 seat capacity through `update_room_settings`.
-5. With at least two claimed human seats, the host calls `start_room_match`.
-   One transaction locks the room, validates it, creates exactly one immutable
-   match snapshot, changes the room to `active`, and advances revisions.
-6. `close_room` prevents future joins. `leave_room` releases the caller's seat
-   and membership; a host closes the room before leaving. Automated tests clean
-   up through these same supported functions. Closed room and Auth audit rows
-   are retained rather than deleted remotely.
+Browsers call the `multiplayer-game` Edge Function with their current JWT. The
+function verifies the token with Supabase Auth, resolves current room membership
+and the claimed seat, loads the canonical match, validates actor/turn/revision,
+parses an exact `GameAction`, and invokes the shared platform-neutral
+`gameReducer`. Combat uses the reducer's deterministic stream derived from the
+persisted match seed and `combatSequence`; clients can select legal attack dice
+but cannot submit rolls, casualties, ownership, a winner, or resulting state.
 
-Normal world creation defaults to 42 territories / 5 continents, with new
-worlds and tables temporarily capped at five continents and five seats. The
-existing local engine, saves, setup URLs, canonical worlds, and fixtures
-continue to accept valid six-continent and six-player data where practical.
-Six-continent generation is a deferred quality investigation, not a normal
-creation option in this milestone.
+The service-role credential is an automatically provisioned Edge Function
+environment value. It is never stored in Git, Vite variables, browser code,
+fixtures, screenshots, command payloads, or logs.
 
-## Durable data and transactions
+Initialization also crosses this boundary. The function generates the complete
+`PlanetDefinition`, random starting position, initial armies, player order,
+turn/phase/reinforcement values, combat sequence, events, and match status. It
+persists those snapshots before clients enter the match. Setup and generator
+metadata remain as audit/reproduction data.
 
-The normalized `public` schema contains:
+## Durable state and command protocol
 
-- `rooms`: private join code, host, lifecycle, world settings, capacity,
-  revision, and timestamps.
-- `room_members`: one durable row per room/user with display name and role.
-- `room_seats`: zero-based capacity rows with a human occupant, ready metadata,
-  and claim time. Constraints enforce one occupant per seat and one human seat
-  per room/user.
-- `matches`: one row per room with status/revision, immutable JSON setup and
-  seat-order snapshots, generator metadata, and timestamps.
+`public.matches` contains immutable setup/seat/generator/planet snapshots and
+the mutable canonical `state_snapshot`, monotonically increasing `revision`,
+SHA-256 `state_fingerprint`, last command type, status, and winner IDs.
 
-Mutations are RPC-only: `create_room`, `join_room`, `leave_room`,
-`claim_room_seat`, `release_room_seat`, `update_room_settings`,
-`start_room_match`, and `close_room`. Each uses `auth.uid()`, validates the
-caller, is `SECURITY DEFINER` only because it crosses restrictive RLS, has an
-empty search path, fully qualifies objects, and is executable only by
-`authenticated`. Stable database errors map to accessible UI feedback.
+`public.match_commands` is append-only to browser roles. Each accepted row has:
 
-Seat claims lock the room and selected seat. The primary key and partial unique
-human-occupancy index are the final concurrency guard: simultaneous claims of
-one seat produce exactly one winner and one `seat_conflict`. Match start locks
-the room and is idempotent; repeated host requests return the existing match
-instead of fabricating another.
+- match and sequence/resulting revision;
+- authenticated actor user and seat;
+- exact reducer command type and validated payload;
+- SHA-256 command hash;
+- client-generated UUID idempotency key;
+- previous/resulting revision and resulting state fingerprint;
+- server timestamp.
 
-## Realtime and recovery
+The Edge Function alone can execute `authority_initialize_room_match` and
+`authority_commit_match_command`. The commit function locks the match row,
+checks current room membership and seat mapping again, requires the expected
+revision, inserts one command, updates one snapshot/fingerprint, advances the
+revision exactly once, and records completion/winner in the same transaction.
+Browser roles have `SELECT` only through member-scoped RLS and cannot execute
+either authority function or write either table.
 
-Each lobby opens one Supabase Realtime channel filtered to its current room for
-`rooms`, `room_members`, `room_seats`, and `matches`. Events are hints to refetch
-all canonical rows. A request sequence discards stale responses, a short debounce
-coalesces duplicate events, and a periodic reconciliation plus online/focus and
-`SUBSCRIBED` callbacks repairs missed or out-of-order events. Channels are
-removed on route change/unmount. A browser refresh reconstructs state from the
-persisted anonymous session and Postgres; correctness never requires receiving
-every event.
+Every command uses a UUID idempotency key. Repeating the same key, actor,
+expected revision, and payload returns its already-accepted revision and
+fingerprint without another reducer transition. Reusing the key for a different
+payload is `idempotency_conflict`. A new key with an old revision is
+`revision_conflict`; clients refetch canonical state and do not replay it.
 
-Starting creates a setup snapshot containing the seed, territory/continent and
-player counts, and assignment mode, plus a seat-order snapshot and generator
-version. Every member generates the same corrected `PlanetDefinition` locally.
-Development/test builds expose an FNV-1a world fingerprint so two clients can
-prove agreement. The preview intentionally has no gameplay controls.
+## UI, Realtime, and recovery
 
-## Tests and next milestone
+Only the active seat gets enabled gameplay actions. A pending submission locks
+repeat input and is not applied optimistically. Accepted responses and Realtime
+notifications cause a canonical refetch and whole-state replacement. Friendly
+feedback covers another player's turn, invalid actions, conflicts, reconnecting,
+seat loss, and completion. Ambiguous failures refetch in `finally`-safe command
+handling so the UI cannot remain permanently pending.
 
-`supabase/tests/multiplayer_rls.sql` uses separate identities for RLS, grants,
-RPC authorization, immutability, lifecycle, and idempotency checks.
-`pnpm test:multiplayer:concurrency` performs a real simultaneous remote claim.
-`pnpm test:e2e:multiplayer` runs two isolated anonymous browser contexts plus a
-focused mobile lobby check. `pnpm test:visual:multiplayer` compares the focused
-desktop/laptop/mobile lobby baselines without running the unchanged gameplay
-visual matrix. See [SUPABASE.md](./SUPABASE.md) for remote workflow.
+Each active route subscribes only to its current match; the lobby subscribes
+only to its current room. Realtime is an invalidation hint, never the source of
+truth. Older/duplicate revisions are ignored. `SUBSCRIBED`, online, focus, and
+periodic reconciliation refetch canonical state, covering refresh, suspension,
+temporary offline periods, missed/out-of-order events, and reconnect during
+reinforcement, attack, capture movement, fortification, or another turn.
 
-The exact next milestone is a server-authoritative match command protocol:
-versioned commands, transactional validation/reduction, durable ordered command
-records or snapshots, idempotency keys, and Realtime-driven gameplay recovery.
-It should build on the immutable setup created here without weakening lobby RLS.
+## Verification
+
+Focused commands are:
+
+```bash
+pnpm test
+pnpm test:multiplayer:authority
+pnpm test:multiplayer:concurrency
+pnpm test:e2e:multiplayer
+pnpm test:visual:multiplayer
+pnpm bundle:check
+```
+
+The remote authority harness uses separate anonymous identities to verify RLS,
+non-member/unseated/out-of-turn denial, direct snapshot and command-log write
+denial, stale revisions, and duplicate/reused idempotency keys. The desktop
+Playwright test drives the real UI from create/join/claim/start through
+reinforcement, server combat, capture movement, attack end, fortification skip,
+turn change, active-phase refresh, and a deterministic winner. Both browsers
+must agree on every observed revision and final fingerprint. The mobile test
+restores an active match and checks readability/clipping.
+
+## Production smoke test (`dev.fustify.com`)
+
+1. Open two separate devices or isolated browser profiles.
+2. Create a 12-territory, 2-continent, 2-seat random room; join and claim both
+   seats; verify Start was unavailable before the second claim.
+3. Start and confirm both browsers show revision 0 and the same fingerprint.
+4. Complete at least one turn on each device, including combat and capture move.
+5. Refresh both devices during active phases and confirm phase, armies,
+   revision, and fingerprint recover unchanged.
+6. Disconnect one device, play on the other where legal, reconnect, and verify
+   canonical catch-up.
+7. Complete the small match and confirm identical winner, final revision, and
+   fingerprint.
+
+There are no hidden production test bypasses. If any step fails, keep the
+feature labeled incomplete and capture the function/Postgres/Realtime logs plus
+the match ID and last agreed revision.

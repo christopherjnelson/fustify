@@ -91,6 +91,11 @@ enabled = true
 # The maximum length in bytes of HTTP request headers. (default: 4096)
 # max_header_length = 4096
 
+[functions.multiplayer-game]
+# Authentication is verified inside the function with Auth getUser so both
+# current asymmetric signing keys and legacy JWTs follow one explicit path.
+verify_jwt = false
+
 [studio]
 enabled = true
 # Port to use for Supabase Studio.

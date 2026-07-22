@@ -1,4 +1,4 @@
-import type { TerritoryConnectionType } from './surface';
+import type { TerritoryConnectionType } from './surface.ts';
 
 export interface TerritoryGraphMetric {
   territoryId: string;

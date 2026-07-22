@@ -1,7 +1,7 @@
-import { dot, normalize } from '../geometry/sphericalMath';
-import type { PlanetDefinition } from '../types/planet';
-import type { Vector3Tuple } from '../types/territory';
-import { analyzeUndirectedGraph } from './analyzeGraph';
+import { dot, normalize } from '../geometry/sphericalMath.ts';
+import type { PlanetDefinition } from '../types/planet.ts';
+import type { Vector3Tuple } from '../types/territory.ts';
+import { analyzeUndirectedGraph } from './analyzeGraph.ts';
 
 export type WorldQualityCategory =
   'hard-invalid' | 'severe-visual-quality' | 'acceptable-diversity';

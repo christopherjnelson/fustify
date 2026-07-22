@@ -2,11 +2,10 @@
 
 **Generate a world. Conquer it.**
 
-A browser-based solo and local hot-seat playtest for a voxel-styled planetary
-strategy game, now with a Supabase-backed private-lobby and synchronized
-read-only match-start preview. Fustify separates deterministic world generation,
-editable player/controller configuration, and mutable local gameplay from the
-new multiplayer foundation. Synchronized gameplay commands are not implemented.
+A browser-based solo, local hot-seat, and private human multiplayer playtest for
+a voxel-styled planetary strategy game. Multiplayer persists a complete
+server-authoritative world and reducer state through Supabase; browsers submit
+typed commands and never write resulting state or combat outcomes.
 
 The prototype currently provides:
 
@@ -16,7 +15,7 @@ The prototype currently provides:
 - Normal creation at 42 playable territories, temporarily capped at 5 land-connected gameplay continents
 - Four recommended editable seats (one Local Human and three Heuristic Bots), expandable to five; custom two- and three-seat tables remain supported
 - Compatibility loading for existing valid six-continent/six-seat saves, URLs, canonical worlds, and fixtures
-- Private anonymous multiplayer rooms with durable membership, transactional seats/settings/start, Realtime recovery, and a deterministic read-only match preview
+- Private anonymous 2–5-player rooms with durable seats, trusted initialization, authoritative reducer commands, ordered revisions/idempotency, deterministic server combat, Realtime recovery, reconnect, and shared victory
 - A randomly named neutral world on fresh launch, before any player ownership exists
 - Subtle dotted canonical sea routes on the 3D globe while choosing a neutral world
 - Curated readable names that are also canonical deterministic world seeds
@@ -71,6 +70,7 @@ pnpm study:balance --preset quick
 pnpm test:e2e:multiplayer
 pnpm test:visual:multiplayer
 pnpm test:multiplayer:concurrency
+pnpm test:multiplayer:authority
 ```
 
 The report-enabled commands incrementally write ignored, validated schema-v1
@@ -83,7 +83,8 @@ security behavior.
 
 The multiplayer route and hosted-database workflow are documented in
 [MULTIPLAYER.md](./MULTIPLAYER.md) and [SUPABASE.md](./SUPABASE.md). Local play
-does not require Supabase environment variables.
+does not require Supabase environment variables. Multiplayer player draft is
+currently rejected; local player draft is unchanged.
 
 For unattended multi-configuration bot research, preview with
 `pnpm study:balance --preset thorough --dry-run`, run it from a second terminal,

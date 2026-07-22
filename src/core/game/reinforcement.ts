@@ -1,5 +1,5 @@
-import type { PlanetDefinition } from '../types/planet';
-import type { MatchState } from './types';
+import type { PlanetDefinition } from '../types/planet.ts';
+import type { MatchState } from './types.ts';
 
 export function getOwnedTerritories(
   state: MatchState,

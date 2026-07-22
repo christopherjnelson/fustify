@@ -1,26 +1,26 @@
-import { createSeededRandom } from '../generation/seededRandom';
-import type { PlanetDefinition } from '../types/planet';
-import { resolveCombat, type DiceRng } from './combat';
-import { makeEvent } from './events';
+import { createSeededRandom } from '../generation/seededRandom.ts';
+import type { PlanetDefinition } from '../types/planet.ts';
+import { resolveCombat, type DiceRng } from './combat.ts';
+import { makeEvent } from './events.ts';
 import {
   getAttackSources,
   getAttackTargets,
   getFortifyTargets,
   getValidAttackDice,
-} from './legalActions';
-import { calculateReinforcements } from './reinforcement';
+} from './legalActions.ts';
+import { calculateReinforcements } from './reinforcement.ts';
 import type {
   GameAction,
   GameErrorCode,
   GameTransition,
   MatchEvent,
   MatchState,
-} from './types';
+} from './types.ts';
 import {
   checkPlayerEliminated,
   checkVictory,
   getNextActivePlayer,
-} from './victory';
+} from './victory.ts';
 
 export interface GameReducerOptions {
   createCombatRng?: (seed: string, sequence: number) => DiceRng;

@@ -1,11 +1,11 @@
-import { createIcosphere } from '../geometry/icosphere';
+import { createIcosphere } from '../geometry/icosphere.ts';
 import type {
   PlanetDefinition,
   PlanetGenerationOptions,
-} from '../types/planet';
-import type { TerritoryDefinition } from '../types/territory';
-import { analyzeStrategicGraph } from './analyzeGraph';
-import { analyzeContinentQuality } from './continentQuality';
+} from '../types/planet.ts';
+import type { TerritoryDefinition } from '../types/territory.ts';
+import { analyzeStrategicGraph } from './analyzeGraph.ts';
+import { analyzeContinentQuality } from './continentQuality.ts';
 import {
   adjacencyFromConnections,
   buildLandBorderConnections,
@@ -13,7 +13,7 @@ import {
   buildTerritoryBorderWeights,
   findCoastalTerritoryIndices,
   territoryId,
-} from './buildConnections';
+} from './buildConnections.ts';
 import {
   CONTINENT_PALETTE,
   DEFAULT_CONTINENT_COUNT,
@@ -22,17 +22,17 @@ import {
   DEFAULT_TERRITORY_COUNT,
   GENERATOR_VERSION,
   PLANET_SUBDIVISIONS,
-} from './constants';
+} from './constants.ts';
 import {
   calculateContinentBonus,
   chooseSpatialContinentAssignments,
-} from './generateContinents';
-import { generatePlayers } from './generatePlayers';
-import { generateTerrain } from './generateTerrain';
-import { generateTerritoryLayout } from './generateTerritories';
-import { createSeededRandom } from './seededRandom';
-import { buildCellAdjacency } from './surfaceTopology';
-import { validatePlanet } from './validatePlanet';
+} from './generateContinents.ts';
+import { generatePlayers } from './generatePlayers.ts';
+import { generateTerrain } from './generateTerrain.ts';
+import { generateTerritoryLayout } from './generateTerritories.ts';
+import { createSeededRandom } from './seededRandom.ts';
+import { buildCellAdjacency } from './surfaceTopology.ts';
+import { validatePlanet } from './validatePlanet.ts';
 
 const CONTINENT_NAMES = [
   'Azure Reach',

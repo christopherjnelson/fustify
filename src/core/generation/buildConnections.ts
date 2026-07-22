@@ -1,6 +1,6 @@
-import { dot } from '../geometry/sphericalMath';
-import type { TerritoryConnection } from '../types/surface';
-import type { Vector3Tuple } from '../types/territory';
+import { dot } from '../geometry/sphericalMath.ts';
+import type { TerritoryConnection } from '../types/surface.ts';
+import type { Vector3Tuple } from '../types/territory.ts';
 
 function connectionKey(left: number, right: number): string {
   return left < right ? `${left}:${right}` : `${right}:${left}`;

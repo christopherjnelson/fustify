@@ -1,9 +1,9 @@
-import type { IcosphereData } from '../geometry/icosphere';
-import { centroid, dot } from '../geometry/sphericalMath';
-import { generateSpherePoints } from '../geometry/spherePoints';
-import type { Vector3Tuple } from '../types/territory';
-import { createSeededRandom } from './seededRandom';
-import { connectedComponents } from './surfaceTopology';
+import type { IcosphereData } from '../geometry/icosphere.ts';
+import { centroid, dot } from '../geometry/sphericalMath.ts';
+import { generateSpherePoints } from '../geometry/spherePoints.ts';
+import type { Vector3Tuple } from '../types/territory.ts';
+import { createSeededRandom } from './seededRandom.ts';
+import { connectedComponents } from './surfaceTopology.ts';
 
 const MIN_FRAGMENT_CELLS = 12;
 const CANDIDATE_COUNT = 18;
