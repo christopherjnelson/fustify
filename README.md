@@ -56,6 +56,8 @@ pnpm test:bot
 pnpm test:bot:stress
 pnpm lint
 pnpm build
+pnpm bundle:analyze
+pnpm bundle:check
 pnpm format:check
 pnpm verify:report
 pnpm verify:report:full
@@ -76,6 +78,24 @@ and monitor Balance Studies on `/admin`. See
 [BALANCE_STUDIES.md](./BALANCE_STUDIES.md) for checkpoint, resume, compact
 summary, export, and interpretation details. Large studies are not normal
 verification gates.
+
+## Production bundle inspection
+
+Run `pnpm bundle:analyze` to make a production-equivalent build with an HTML
+treemap, raw module statistics, and a Vite manifest. It writes only under the
+ignored `.fustify/reports/bundle/` directory and never opens a browser. Run
+`pnpm bundle:check` to regenerate that analysis and enforce tolerant,
+hash-independent budgets for the game route, admin route, largest JavaScript
+chunk, and forbidden test/Node module imports.
+
+The expected large application chunk is currently dominated by Three.js and
+React Three Fiber needed for the neutral globe on `/`; Vite's 500 kB warning is
+therefore understood and intentionally remains visible. `/admin` is a separate
+dynamic graph and does not load the globe. Source maps are not enabled in the
+current production configuration; if they are enabled later, report their size
+separately because map bytes are not shipped JavaScript. See
+[BUNDLE_ANALYSIS.md](./BUNDLE_ANALYSIS.md) for the measured baseline, budgets,
+route accounting, and investigation procedure.
 
 ## Playwright visual inspection
 

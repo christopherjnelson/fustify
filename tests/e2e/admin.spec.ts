@@ -1,5 +1,39 @@
 import { expect, test } from '@playwright/test';
 
+test('routes load only their browser entry graph', async ({ page }) => {
+  const requested = new Set<string>();
+  page.on('request', (request) => {
+    requested.add(new URL(request.url()).pathname);
+  });
+
+  await page.goto('/?v=1&seed=route-graph&territories=18&continents=3');
+  await expect(
+    page.getByRole('heading', { name: 'Choose your world' }),
+  ).toBeVisible();
+  expect([...requested]).toContain('/src/app/App.tsx');
+  expect([...requested].some((path) => path.startsWith('/src/admin/'))).toBe(
+    false,
+  );
+
+  requested.clear();
+  await page.goto('/admin?admin-fixture=empty');
+  await expect(
+    page.getByRole('heading', { name: 'Verification Dashboard' }),
+  ).toBeVisible();
+  expect([...requested]).toContain('/src/admin/AdminDashboard.tsx');
+  expect([...requested]).toContain('/src/admin/reportSource.ts');
+  expect([...requested].some((path) => path.startsWith('/src/app/'))).toBe(
+    false,
+  );
+  expect(
+    [...requested].some((path) => path.startsWith('/src/components/')),
+  ).toBe(false);
+  expect(
+    [...requested].some((path) => path.startsWith('/src/core/generation/')),
+  ).toBe(false);
+  await expect(page.locator('canvas')).toHaveCount(0);
+});
+
 test('direct /admin navigation shows an understandable empty state', async ({
   page,
 }) => {

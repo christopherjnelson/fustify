@@ -1,5 +1,22 @@
 # Fustify Handoff
 
+## Production bundle audit (July 2026)
+
+Branch `perf/audit-production-bundle` starts at
+`37825085f457771db21e3b7c3a077e6ecb37edf0`. The measured 1,039.22 kB raw
+`App` chunk is about 88% Three.js/React Three Fiber by rendered module weight
+and is required to show the initial neutral globe. Existing dynamic imports
+keep `/admin` independent at about 309.07 kB raw route JavaScript; browser
+coverage now asserts both route graphs directly.
+
+`pnpm bundle:analyze` writes an ignored static treemap, raw statistics,
+manifest, and isolated build under `.fustify/reports/bundle/`.
+`pnpm bundle:check` applies tolerant, hash-independent route/chunk budgets and
+rejects test, development-only, and Node runner imports. No manual chunks,
+source-map setting, warning threshold, gameplay, generation, visuals, URLs,
+admin behavior, or save schema v4 semantics changed. See `BUNDLE_ANALYSIS.md`
+for the complete baseline and investigation procedure.
+
 ## Gameplay UX and study-liveness polish (July 2026)
 
 Branch `feat/gameplay-ux-heartbeat-polish` starts at
