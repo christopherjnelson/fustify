@@ -144,21 +144,110 @@ function borderLookup(weights: readonly TerritoryBorderWeight[]) {
   return lookup;
 }
 
+function graphComponents(adjacency: readonly number[][]): number[][] {
+  const visited = new Set<number>();
+  const result: number[][] = [];
+  for (let start = 0; start < adjacency.length; start += 1) {
+    if (visited.has(start)) continue;
+    const component: number[] = [];
+    const queue = [start];
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const current = queue[cursor]!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      component.push(current);
+      for (const neighbor of adjacency[current]!) {
+        if (!visited.has(neighbor)) queue.push(neighbor);
+      }
+    }
+    result.push(component.sort((a, b) => a - b));
+  }
+  return result;
+}
+
+function allocateContinents(
+  components: readonly number[][],
+  continentCount: number,
+): number[] {
+  if (components.length > continentCount) {
+    throw new Error(
+      `Cannot create ${continentCount} land-connected continents across ${components.length} landmasses.`,
+    );
+  }
+  const allocations = components.map(() => 1);
+  while (allocations.reduce((sum, value) => sum + value, 0) < continentCount) {
+    let selected = -1;
+    let bestCapacity = Number.NEGATIVE_INFINITY;
+    for (let index = 0; index < components.length; index += 1) {
+      if (allocations[index]! >= components[index]!.length) continue;
+      const capacity = components[index]!.length / (allocations[index]! + 1);
+      if (capacity > bestCapacity) {
+        bestCapacity = capacity;
+        selected = index;
+      }
+    }
+    if (selected < 0) {
+      throw new Error('Continent allocation exhausted available territories.');
+    }
+    allocations[selected] += 1;
+  }
+  return allocations;
+}
+
+function chooseComponentSeeds(
+  component: readonly number[],
+  count: number,
+  adjacency: readonly number[][],
+  random: SeededRandom,
+): number[] {
+  const allowed = new Set(component);
+  const seeds = [random.pick(component)];
+  while (seeds.length < count) {
+    const distanceMaps = seeds.map((seed) => distancesFrom(seed, adjacency));
+    let bestDistance = -1;
+    let candidates: number[] = [];
+    for (const node of component) {
+      if (seeds.includes(node)) continue;
+      const minDistance = Math.min(...distanceMaps.map((map) => map[node]!));
+      if (minDistance > bestDistance) {
+        bestDistance = minDistance;
+        candidates = [node];
+      } else if (minDistance === bestDistance) {
+        candidates.push(node);
+      }
+    }
+    const next = random.pick(candidates.filter((node) => allowed.has(node)));
+    seeds.push(next);
+  }
+  return seeds;
+}
+
 function generateSpatialAssignments(
   adjacency: readonly number[][],
   borderWeights: readonly TerritoryBorderWeight[],
   continentCount: number,
   random: SeededRandom,
 ): number[] {
-  const seeds = chooseSpreadSeeds(adjacency, continentCount, random);
+  const components = graphComponents(adjacency);
+  const allocations = allocateContinents(components, continentCount);
+  const seeds: number[] = [];
+  const targets: number[] = [];
+  for (
+    let componentIndex = 0;
+    componentIndex < components.length;
+    componentIndex += 1
+  ) {
+    const component = components[componentIndex]!;
+    const allocation = allocations[componentIndex]!;
+    seeds.push(
+      ...chooseComponentSeeds(component, allocation, adjacency, random),
+    );
+    for (let index = 0; index < allocation; index += 1) {
+      targets.push(component.length / allocation);
+    }
+  }
   const assignments = adjacency.map(() => -1);
   const sizes = Array.from({ length: continentCount }, () => 1);
-  const targets = Array.from(
-    { length: continentCount },
-    (_, index) =>
-      Math.floor(adjacency.length / continentCount) +
-      (index < adjacency.length % continentCount ? 1 : 0),
-  );
   const weights = borderLookup(borderWeights);
   const tieOrder = random.shuffle(adjacency.map((_, index) => index));
   const tieRank = new Map(tieOrder.map((territory, rank) => [territory, rank]));
@@ -202,7 +291,6 @@ function generateSpatialAssignments(
             externalBoundary += boundary;
           }
         }
-        const seaOnlyPenalty = sameLand === 0 ? 22 : 0;
         const fillPenalty = (sizes[continent]! / targets[continent]!) * 8;
         candidates.push({
           territory,
@@ -213,17 +301,11 @@ function generateSpatialAssignments(
             sameStrategic * 2.5 -
             externalBoundary * 1.15 -
             externalLand * 5 -
-            seaOnlyPenalty -
             fillPenalty,
         });
       }
     });
-    const underTarget = candidates.filter(
-      (candidate) =>
-        sizes[candidate.continent]! < targets[candidate.continent]!,
-    );
-    const pool = underTarget.length > 0 ? underTarget : candidates;
-    const selected = pool.sort(
+    const selected = candidates.sort(
       (a, b) =>
         b.score - a.score ||
         tieRank.get(a.territory)! - tieRank.get(b.territory)! ||
@@ -236,6 +318,112 @@ function generateSpatialAssignments(
     remaining -= 1;
   }
   return assignments;
+}
+
+function longestNarrowChain(
+  continent: number,
+  assignments: readonly number[],
+  adjacency: readonly number[][],
+): number {
+  const nodes = assignments
+    .map((assigned, territory) => ({ assigned, territory }))
+    .filter(({ assigned }) => assigned === continent)
+    .map(({ territory }) => territory);
+  const allowed = new Set(
+    nodes.filter(
+      (territory) =>
+        adjacency[territory]!.filter(
+          (neighbor) => assignments[neighbor] === continent,
+        ).length <= 2,
+    ),
+  );
+  let longest = 0;
+  for (const start of allowed) {
+    const distances = new Map([[start, 0]]);
+    const queue = [start];
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const current = queue[cursor]!;
+      for (const neighbor of adjacency[current]!) {
+        if (!allowed.has(neighbor) || distances.has(neighbor)) continue;
+        distances.set(neighbor, distances.get(current)! + 1);
+        queue.push(neighbor);
+      }
+    }
+    longest = Math.max(longest, 1 + Math.max(0, ...distances.values()));
+  }
+  return longest;
+}
+
+function spatialFailureReasons(
+  assignments: readonly number[],
+  adjacency: readonly number[][],
+  borderWeights: readonly TerritoryBorderWeight[],
+  continentCount: number,
+): string[] {
+  const reasons: string[] = [];
+  for (let continent = 0; continent < continentCount; continent += 1) {
+    const territories = assignments
+      .map((assigned, territory) => ({ assigned, territory }))
+      .filter(({ assigned }) => assigned === continent)
+      .map(({ territory }) => territory);
+    const allowed = new Set(territories);
+    if (territories.length === 0) {
+      reasons.push(`continent ${continent + 1} is empty`);
+      continue;
+    }
+    const visited = new Set<number>();
+    const queue = [territories[0]!];
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const current = queue[cursor]!;
+      if (visited.has(current) || !allowed.has(current)) continue;
+      visited.add(current);
+      queue.push(...adjacency[current]!);
+    }
+    if (visited.size !== territories.length) {
+      reasons.push(`continent ${continent + 1} is not land-connected`);
+    }
+    let internalEdges = 0;
+    let boundaryEdges = 0;
+    let dominated = 0;
+    for (const territory of territories) {
+      const same = adjacency[territory]!.filter(
+        (neighbor) => assignments[neighbor] === continent,
+      ).length;
+      const externalCounts = new Map<number, number>();
+      for (const neighbor of adjacency[territory]!) {
+        const external = assignments[neighbor]!;
+        if (external === continent) continue;
+        externalCounts.set(external, (externalCounts.get(external) ?? 0) + 1);
+      }
+      if (Math.max(0, ...externalCounts.values()) > same) dominated += 1;
+    }
+    for (const border of borderWeights) {
+      const left = assignments[border.leftTerritoryIndex]!;
+      const right = assignments[border.rightTerritoryIndex]!;
+      if (left === continent && right === continent) internalEdges += 1;
+      else if (left === continent || right === continent) boundaryEdges += 1;
+    }
+    const chain = longestNarrowChain(continent, assignments, adjacency);
+    const compactness =
+      internalEdges / Math.max(1, internalEdges + boundaryEdges);
+    const boundaryRatio = boundaryEdges / territories.length;
+    if (
+      territories.length >= 3 &&
+      chain === territories.length &&
+      dominated > 0 &&
+      compactness < 0.3 &&
+      boundaryRatio > 1.5
+    ) {
+      reasons.push(`continent ${continent + 1} is an exposed narrow strip`);
+    }
+    if (
+      territories.length >= 5 &&
+      chain >= Math.max(4, Math.ceil(territories.length * 0.6))
+    ) {
+      reasons.push(`continent ${continent + 1} has an extreme narrow chain`);
+    }
+  }
+  return reasons;
 }
 
 function spatialScore(
@@ -337,7 +525,12 @@ export function chooseSpatialContinentAssignments(
 ): number[] {
   let best: number[] | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  let nearestFailure: string[] = [];
+  for (
+    let attempt = 0;
+    attempt < MAX_CONTINENT_ASSIGNMENT_ATTEMPTS;
+    attempt += 1
+  ) {
     const assignments = generateSpatialAssignments(
       adjacency,
       borderWeights,
@@ -350,13 +543,32 @@ export function chooseSpatialContinentAssignments(
       borderWeights,
       continentCount,
     );
-    if (score < bestScore) {
+    const failures = spatialFailureReasons(
+      assignments,
+      adjacency,
+      borderWeights,
+      continentCount,
+    );
+    if (
+      nearestFailure.length === 0 ||
+      failures.length < nearestFailure.length
+    ) {
+      nearestFailure = failures;
+    }
+    if (failures.length === 0 && score < bestScore) {
       bestScore = score;
       best = assignments;
     }
   }
-  return best!;
+  if (!best) {
+    throw new Error(
+      `Unable to generate an accepted land-connected continent layout after ${MAX_CONTINENT_ASSIGNMENT_ATTEMPTS} deterministic attempts: ${nearestFailure.join(', ') || 'no candidate was produced'}.`,
+    );
+  }
+  return best;
 }
+
+export const MAX_CONTINENT_ASSIGNMENT_ATTEMPTS = 96;
 
 /** Placeholder bonus: size / 3 + neighboring continents / 2 - gateways / 4. */
 export function calculateContinentBonus(

@@ -58,3 +58,27 @@ contract and reducer remain authoritative.
 Future agents should run the appropriate report-enabled profile, keep `/admin`
 open, and include the resulting run ID in their handoff. Never claim that an
 interrupted, incomplete, pending, or skipped suite passed.
+
+## Procedural-world visual audit
+
+World-generation changes use a focused Playwright path rather than gameplay
+matches:
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:world-visual
+WORLD_AUDIT_PHASE=investigation pnpm audit:world-visual
+```
+
+The acceptance command runs the checked-in seed matrix and fails hard
+structural or severe shape findings. The audit command preserves the same
+evidence without failing on findings, which is useful for a pre-fix baseline.
+Artifacts live under ignored
+`.fustify/reports/world-generation/<phase>/`. Inspect `index.html`, every
+known-bad capture, the complete laptop matrix, and responsive full-page images;
+passing DOM/metric assertions do not replace image review. Camera captures use
+0°, 90°, 180°, and 270° longitude at fixed elevation and distance.
+
+This suite does not run matches or bot simulations. Focused generator, URL,
+save, typecheck, lint, build, formatting, diff, and bundle checks remain
+separate gates. Details and quality thresholds are in `WORLD_GENERATION.md`.

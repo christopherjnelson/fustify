@@ -9,7 +9,7 @@ The prototype currently provides:
 - A rotatable and zoomable 3D globe with desktop and touch-compatible orbit controls
 - A responsive, read-only equirectangular minimap derived from the same canonical globe geometry and ownership state
 - A deterministic, smoothed land/ocean mask with multiple landmasses and islands
-- Exactly 42 playable land territories grouped into 6 connected gameplay continents
+- Exactly 42 playable land territories grouped into 6 land-connected gameplay continents
 - Four recommended editable seats (one Local Human and three Heuristic Bots), expandable to six; custom two- and three-seat tables remain supported
 - Five- and six-seat tables are supported expanded matches and generally run substantially longer; every seat independently supports Human or Bot
 - A randomly named neutral world on fresh launch, before any player ownership exists
@@ -35,6 +35,7 @@ The prototype currently provides:
 - Serializable graph analysis for degrees, gateways, articulation points, bridges, landmass degrees, route redundancy, and continent cohesion
 - A responsive HUD with selection details and a compact graph/debug panel
 - Generator and graph tests covering neutral terrain, assignment, armies, compact continents, routes, bonuses, graph algorithms, validation, and serialization
+- A deterministic Playwright world-quality matrix with land-connectivity, tendril, narrow-neck, spherical-spread, globe/minimap agreement, and canonical camera evidence
 
 ## Run locally
 
@@ -113,11 +114,23 @@ Run the suites with:
 pnpm test:e2e
 pnpm test:visual
 pnpm test:visual:update
+pnpm test:world-visual
+WORLD_AUDIT_PHASE=my-review pnpm audit:world-visual
 ```
 
 `test:e2e` covers neutral setup, controller selection, bot input locking and handoff, keyboard assignment selection, random rerolls, draft turn order and duplicate feedback, neutral/draft save-resume, minimap lifecycle styling and camera synchronization, reinforcement, combat, capture, elimination, fortification, turn completion, rematches, navigator behavior, event logs, and victory. `test:visual` compares stable UI-region screenshots with the committed baselines in `tests/e2e/visual.spec.ts-snapshots/`. Use `test:visual:update` only after reviewing intentional UI changes.
 
 Every visual run also writes full-page human-review captures to `test-results/ui-review/<project>/`. Playwright failure screenshots, traces, and its HTML report remain under `test-results/`. Those generated results are ignored by Git.
+
+`test:world-visual` is the focused procedural-world acceptance suite. It drives
+seed entry through the real neutral-preview UI, captures the fixed 34-world
+matrix at 1366×768, adds four responsive fixtures, and writes minimaps, four
+canonical globe longitudes, component metrics, JSON summary, and an HTML index
+under `.fustify/reports/world-generation/corrected/`. The non-blocking
+`audit:world-visual` command uses `WORLD_AUDIT_PHASE` to retain named exploratory
+runs without changing committed UI baselines. See
+[`WORLD_GENERATION.md`](./WORLD_GENERATION.md) for invariants, thresholds,
+before/after procedure, and the 42/6 versus 42/5 findings.
 
 The visual route uses the fixed `visual-review-atlas` world, reduced motion, a deterministic font and timezone, and no animated star field. Minimap scenarios additionally cover a deliberate land-and-route antimeridian fixture and representative camera orientations. Scenario state is built with the real generator, match setup, match constructor, and rules reducer. The scenario driver is loaded only when Vite is in development mode and `visual-review=1` is present; production builds do not include or expose it. Full-page images are for human inspection, while assertions target UI regions with a small pixel tolerance so animated WebGL details do not make the suite brittle.
 

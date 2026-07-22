@@ -38,14 +38,16 @@ function candidateScore(
   coverage: number,
   components: readonly number[][],
   targetCoverage: number,
+  maximumLandmassCount: number,
 ): number {
   const landCount = components.reduce((sum, item) => sum + item.length, 0);
   const largestShare = landCount === 0 ? 1 : components[0]!.length / landCount;
+  const preferredMinimum = Math.min(4, maximumLandmassCount);
   const countPenalty =
-    components.length < 4
-      ? (4 - components.length) * 8
-      : components.length > 8
-        ? (components.length - 8) * 5
+    components.length < preferredMinimum
+      ? (preferredMinimum - components.length) * 8
+      : components.length > maximumLandmassCount
+        ? (components.length - maximumLandmassCount) * 40
         : 0;
   const dominancePenalty = Math.max(0, largestShare - 0.48) * 24;
   return (
@@ -62,6 +64,7 @@ export function generateTerrain(
   sphere: IcosphereData,
   adjacency: readonly number[][],
   targetCoverage: number,
+  maximumLandmassCount = 8,
 ): GeneratedTerrain {
   const centers = cellCenters(sphere);
   let best: GeneratedTerrain | null = null;
@@ -69,7 +72,12 @@ export function generateTerrain(
 
   for (let attempt = 0; attempt < CANDIDATE_COUNT; attempt += 1) {
     const random = createSeededRandom(`${seed}|terrain|${attempt}`);
-    const anchorCount = random.integer(5, 7);
+    const minimumAnchors = Math.max(2, Math.min(5, maximumLandmassCount));
+    const maximumAnchors = Math.max(
+      minimumAnchors,
+      Math.min(7, maximumLandmassCount + 1),
+    );
+    const anchorCount = random.integer(minimumAnchors, maximumAnchors);
     const anchors = generateSpherePoints(anchorCount, random);
     const anchorBiases = anchors.map(() => (random.next() - 0.5) * 0.11);
     const detailDirections = generateSpherePoints(4, random);
@@ -101,11 +109,16 @@ export function generateTerrain(
     const initialComponents = connectedComponents(initialLand, adjacency);
     const retainedComponents = initialComponents
       .filter((component) => component.length >= MIN_FRAGMENT_CELLS)
-      .slice(0, 8);
+      .slice(0, maximumLandmassCount);
     const landCellIds = new Set(retainedComponents.flat());
     const landComponents = connectedComponents(landCellIds, adjacency);
     const coverage = landCellIds.size / sphere.faces.length;
-    const score = candidateScore(coverage, landComponents, targetCoverage);
+    const score = candidateScore(
+      coverage,
+      landComponents,
+      targetCoverage,
+      maximumLandmassCount,
+    );
 
     if (score < bestScore) {
       bestScore = score;

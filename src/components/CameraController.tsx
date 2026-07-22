@@ -36,6 +36,38 @@ export function CameraController() {
   }, [publishFocus]);
 
   useEffect(() => {
+    if (!visualReview || !import.meta.env.DEV) return;
+    const orient = (event: Event) => {
+      const {
+        longitude,
+        latitude,
+        distance = 5.2,
+      } = (
+        event as CustomEvent<{
+          longitude: number;
+          latitude: number;
+          distance?: number;
+        }>
+      ).detail;
+      const longitudeRadians = THREE.MathUtils.degToRad(longitude);
+      const latitudeRadians = THREE.MathUtils.degToRad(latitude);
+      const direction = new THREE.Vector3(
+        Math.cos(latitudeRadians) * Math.cos(longitudeRadians),
+        Math.sin(latitudeRadians),
+        Math.cos(latitudeRadians) * Math.sin(longitudeRadians),
+      ).applyEuler(PLANET_ROTATION_EULER);
+      focusing.current = false;
+      camera.position.copy(direction.normalize().multiplyScalar(distance));
+      camera.lookAt(0, 0, 0);
+      controls.current?.target.set(0, 0, 0);
+      controls.current?.update();
+      publishFocus();
+    };
+    window.addEventListener('fustify:orient-globe', orient);
+    return () => window.removeEventListener('fustify:orient-globe', orient);
+  }, [camera, publishFocus, visualReview]);
+
+  useEffect(() => {
     if (focusTargetTerritoryId === null) {
       focusing.current = false;
       if (controls.current) controls.current.enabled = !visualReview;

@@ -44,6 +44,9 @@ export function SeedControls() {
           aria-label="Planet seed"
           disabled={operation !== null}
         />
+        <button type="submit" className="sr-only" tabIndex={-1}>
+          Use seed
+        </button>
       </div>
       <div className="setup-counts">
         <label>
@@ -82,7 +85,7 @@ export function SeedControls() {
       {(warning || error) && (
         <p
           className={error ? 'setup-message error' : 'setup-message'}
-          role="status"
+          role={error ? 'alert' : 'status'}
         >
           {error ?? warning}
         </p>

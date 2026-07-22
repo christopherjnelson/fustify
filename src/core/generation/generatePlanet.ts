@@ -5,6 +5,7 @@ import type {
 } from '../types/planet';
 import type { TerritoryDefinition } from '../types/territory';
 import { analyzeStrategicGraph } from './analyzeGraph';
+import { analyzeContinentQuality } from './continentQuality';
 import {
   adjacencyFromConnections,
   buildLandBorderConnections,
@@ -110,6 +111,7 @@ export function generatePlanet(
     sphere,
     cellAdjacency,
     targetLandCoverage,
+    continentCount,
   );
   const layout = generateTerritoryLayout(
     sphere,
@@ -142,8 +144,9 @@ export function generatePlanet(
     territoryCount,
     connections,
   );
+  const landAdjacency = adjacencyFromConnections(territoryCount, landBorders);
   const assignments = chooseSpatialContinentAssignments(
-    strategicAdjacency,
+    landAdjacency,
     borderWeights,
     continentCount,
     `${normalizedSeed}|v${GENERATOR_VERSION}`,
@@ -265,6 +268,12 @@ export function generatePlanet(
   if (!validation.valid) {
     throw new Error(
       `Generated an invalid planet: ${validation.errors.join(' ')}`,
+    );
+  }
+  const quality = analyzeContinentQuality(planet);
+  if (quality.severeFailures.length > 0) {
+    throw new Error(
+      `Generated a structurally valid planet that failed continent shape quality: ${quality.severeFailures.join(' ')}`,
     );
   }
   return planet;

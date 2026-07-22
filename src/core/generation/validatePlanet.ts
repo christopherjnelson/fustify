@@ -331,6 +331,9 @@ export function validatePlanet(
   const strategicAdjacency = new Map(
     planet.territories.map((territory) => [territory.id, new Set<string>()]),
   );
+  const landAdjacency = new Map(
+    planet.territories.map((territory) => [territory.id, new Set<string>()]),
+  );
   const seenConnections = new Set<string>();
   for (const connection of planet.connections) {
     const { fromTerritoryId: left, toTerritoryId: right } = connection;
@@ -355,6 +358,10 @@ export function validatePlanet(
     }
     strategicAdjacency.get(left)!.add(right);
     strategicAdjacency.get(right)!.add(left);
+    if (connection.type === 'land-border') {
+      landAdjacency.get(left)!.add(right);
+      landAdjacency.get(right)!.add(left);
+    }
   }
 
   for (const territory of planet.territories) {
@@ -404,10 +411,12 @@ export function validatePlanet(
     for (const id of allowed) membership.set(id, (membership.get(id) ?? 0) + 1);
     if (
       allowed.size > 0 &&
-      visitGraph(continent.territoryIds[0]!, allowed, strategicAdjacency)
-        .size !== allowed.size
+      visitGraph(continent.territoryIds[0]!, allowed, landAdjacency).size !==
+        allowed.size
     ) {
-      errors.push(`${continent.id} is not internally connected.`);
+      errors.push(
+        `${continent.id} is not connected through land-territory adjacency.`,
+      );
     }
     const detectedGateways = continent.territoryIds.filter((id) =>
       [...(strategicAdjacency.get(id) ?? [])].some(
@@ -478,6 +487,29 @@ export function validatePlanet(
       cell.territoryId === null ? null : territoryIndex.get(cell.territoryId)!,
     );
     const borderWeights = buildTerritoryBorderWeights(ownership, cellAdjacency);
+    const derivedLandBorders = new Set(
+      borderWeights.map((border) =>
+        pairKey(
+          planet.territories[border.leftTerritoryIndex]!.id,
+          planet.territories[border.rightTerritoryIndex]!.id,
+        ),
+      ),
+    );
+    const listedLandBorders = new Set(
+      planet.connections
+        .filter((connection) => connection.type === 'land-border')
+        .map((connection) =>
+          pairKey(connection.fromTerritoryId, connection.toTerritoryId),
+        ),
+    );
+    if (
+      derivedLandBorders.size !== listedLandBorders.size ||
+      [...derivedLandBorders].some((border) => !listedLandBorders.has(border))
+    ) {
+      errors.push(
+        'Land-border connections do not match geographically adjacent territories.',
+      );
+    }
     const expectedAnalysis = analyzeStrategicGraph(
       planet.territories,
       planet.connections,

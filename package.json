@@ -23,6 +23,8 @@
     "test:e2e": "playwright test tests/e2e/interactions.spec.ts tests/e2e/admin.spec.ts",
     "test:visual": "playwright test tests/e2e/visual.spec.ts",
     "test:visual:update": "playwright test tests/e2e/visual.spec.ts --update-snapshots",
+    "test:world-visual": "WORLD_AUDIT_PHASE=corrected playwright test tests/e2e/world-generation.visual.spec.ts && WORLD_AUDIT_PHASE=corrected node --import tsx scripts/worldGenerationReport.ts",
+    "audit:world-visual": "WORLD_AUDIT_PHASE=${WORLD_AUDIT_PHASE:-audit} WORLD_AUDIT_ALLOW_FAILURES=1 playwright test tests/e2e/world-generation.visual.spec.ts && WORLD_AUDIT_PHASE=${WORLD_AUDIT_PHASE:-audit} node --import tsx scripts/worldGenerationReport.ts",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

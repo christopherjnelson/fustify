@@ -139,6 +139,7 @@ export function Minimap() {
                 fill={style.fill}
                 stroke={style.fill}
                 data-territory-id={territory.territoryId}
+                data-continent-id={territory.continentId}
                 data-owner-id={style.ownerId ?? ''}
                 data-fragment-count={territory.fragments.length}
                 data-active={style.active ? 'true' : 'false'}

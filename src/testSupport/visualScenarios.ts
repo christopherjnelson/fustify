@@ -616,6 +616,11 @@ declare global {
       dispatch: (action: Parameters<typeof gameReducer>[2]) => void;
       save: () => void;
       prepareAttack: (type: 'land-border' | 'sea-route') => void;
+      orientGlobe: (
+        longitude: number,
+        latitude?: number,
+        distance?: number,
+      ) => void;
     };
   }
 }
@@ -649,6 +654,13 @@ window.__WORLDSEED_VISUAL__ = {
   },
   dispatch: (action) => useGameStore.getState().dispatchGameAction(action),
   save: () => useGameStore.getState().saveMatch(),
+  orientGlobe: (longitude, latitude = 12, distance = 5.2) => {
+    window.dispatchEvent(
+      new CustomEvent('fustify:orient-globe', {
+        detail: { longitude, latitude, distance },
+      }),
+    );
+  },
   prepareAttack: (type) => {
     const store = useGameStore.getState();
     const match = advanceToAttack(store.match!, store.planet);

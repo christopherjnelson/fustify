@@ -1,5 +1,32 @@
 # Fustify Handoff
 
+## Continent-generation quality (July 2026)
+
+Branch `fix/continent-generation-quality` starts at
+`e765a5324dad4253d110e037b11e353f98d6e004`. A 34-world real-UI Playwright
+baseline found 15 land-disconnected continents and one severe exposed strip.
+The combined 42/6 sample failed 10/22; 42/5 failed 4/8, so the adjacent
+configuration was not better. History shows 42/6 was the initial prototype
+default; the defect entered with physical landmasses when continent growth used
+strategic adjacency and could cross sea routes.
+
+Generation now limits terrain landmasses to the requested continent count,
+allocates continent seeds per physical landmass, grows only over land borders,
+and screens 96 deterministic candidates for hard connectivity and explicit
+strip/tendril components. Validation independently enforces land-only
+continent connectivity. Natural size diversity remains (the audited corrected
+matrix includes 1–15-territory continents), while `calm-reef-648` and
+`golden-citadel-587` are permanent unit and Playwright fixtures.
+
+Run `pnpm test:world-visual` for acceptance or
+`WORLD_AUDIT_PHASE=<name> pnpm audit:world-visual` for a non-blocking evidence
+run. Ignored results include an HTML index, summary, metrics, minimaps, and four
+canonical globe views under `.fustify/reports/world-generation/<phase>/`.
+Generator seed output intentionally changes, but setup URLs, save schema v4,
+migrations, territory-ID state restoration, gameplay, bonuses, controllers,
+and sea routes retain their contracts. Full details are in
+`WORLD_GENERATION.md`.
+
 ## Production bundle audit (July 2026)
 
 Branch `perf/audit-production-bundle` starts at
