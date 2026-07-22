@@ -41,6 +41,22 @@ export const seatSummarySchema = z.object({
     .optional(),
 });
 
+const numericDistributionSchema = z.object({
+  samples: z.number().int().nonnegative(),
+  mean: z.number(),
+  median: z.number(),
+  p10: z.number(),
+  p90: z.number(),
+  minimum: z.number(),
+  maximum: z.number(),
+});
+
+const startingBoardAggregateSchema = z.object({
+  key: z.string(),
+  samples: z.number().int().nonnegative(),
+  metrics: z.record(z.string(), numericDistributionSchema),
+});
+
 export const studyAggregateSchema = z.object({
   matchesRequested: z.number().int().nonnegative(),
   matchesStarted: z.number().int().nonnegative(),
@@ -101,6 +117,54 @@ export const studyAggregateSchema = z.object({
         .record(z.string(), z.number().int().nonnegative())
         .optional(),
       mappingValid: z.boolean().optional(),
+      blockAccounting: z
+        .object({
+          matchesPerBlock: z.number().int().positive(),
+          totalMatches: z.number().int().nonnegative(),
+          completeBlockCount: z.number().int().nonnegative(),
+          matchesInCompleteBlocks: z.number().int().nonnegative(),
+          partialRemainder: z.number().int().nonnegative(),
+        })
+        .optional(),
+      factorMatchesAnalyzed: z.number().int().nonnegative().optional(),
+      exposureTables: z
+        .record(
+          z.string(),
+          z.record(z.string(), z.number().int().nonnegative()),
+        )
+        .optional(),
+      startingBoardSummaries: z
+        .object({
+          assignmentPosition: z.array(startingBoardAggregateSchema),
+          turnSeat: z.array(startingBoardAggregateSchema),
+          logicalPlayer: z.array(startingBoardAggregateSchema),
+          controllerStream: z.array(startingBoardAggregateSchema),
+          worldFixture: z.array(startingBoardAggregateSchema),
+          outcome: z.array(startingBoardAggregateSchema),
+        })
+        .optional(),
+      blockSummaries: z
+        .array(
+          z.object({
+            blockId: z.string(),
+            worldSeed: z.string(),
+            matchSeed: z.string(),
+            ownershipVariant: z.number().int().nonnegative(),
+            mappingValid: z.boolean(),
+            winsByAssignmentPosition: z.record(
+              z.string(),
+              z.number().int().nonnegative(),
+            ),
+            unresolved: z.number().int().nonnegative(),
+            startingBoardMetricsByAssignment: z.array(
+              startingBoardAggregateSchema,
+            ),
+            assignment5Outperformed: z.boolean(),
+            assignment6Underperformed: z.boolean(),
+          }),
+        )
+        .optional(),
+      factorAssessmentEvidence: z.array(z.string().max(1_000)).optional(),
       logicalPlayerSummaries: z
         .array(
           z.object({
@@ -210,6 +274,10 @@ export const balanceStudyReportSchema = z.object({
       .optional(),
     rotationDesign: z.string().max(1_000).optional(),
     pairRotationCount: z.number().int().nonnegative().optional(),
+    matchesPerRotationBlock: z.number().int().positive().optional(),
+    completeRotationBlocks: z.number().int().nonnegative().optional(),
+    matchesInCompleteBlocks: z.number().int().nonnegative().optional(),
+    partialRotationRemainder: z.number().int().nonnegative().optional(),
   }),
   aggregate: studyAggregateSchema,
   configurations: z.array(configurationAggregateSchema).max(5_000),

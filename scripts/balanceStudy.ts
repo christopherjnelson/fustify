@@ -174,6 +174,11 @@ function planText(
 ) {
   const matrix = createStudyMatrix(config);
   const runtimeEstimate = estimateRuntime(config, history);
+  const blockSize = 36;
+  const completeBlocks = config.diagnostic
+    ? Math.floor(matrix.length / blockSize)
+    : 0;
+  const completeMatches = completeBlocks * blockSize;
   return [
     `Balance study plan (${preset})`,
     `Configurations: ${config.configurations.length}`,
@@ -183,6 +188,10 @@ function planText(
       ? [
           `Pair/rotation count: ${new Set(matrix.map((item) => item.worldSeed)).size} canonical seed pairs / ${matrix.length} rotated matches`,
           'Rotation design: 6 logical-player/turn rotations × 6 assignment-order rotations with balanced explicit controller streams per complete canonical fixture',
+          `Matches per block: ${blockSize}`,
+          `Complete blocks: ${completeBlocks}`,
+          `Matches in complete blocks: ${completeMatches}`,
+          `Partial remainder: ${matrix.length - completeMatches}`,
         ]
       : []),
     `Estimated runtime: ${elapsed(runtimeEstimate.range[0])}–${elapsed(runtimeEstimate.range[1])} (midpoint ${elapsed(runtimeEstimate.midpoint)})`,
@@ -235,7 +244,7 @@ async function inspectRun(id: string) {
     process.stdout.write(`${JSON.stringify(compact(report), null, 2)}\n`);
   else if (format === 'csv') {
     const header =
-      'configuration,group,players,territories,continents,completed,victories,stalemates,turn_caps,command_caps,engine_errors,mean_turns,p95_turns,games_per_second';
+      'configuration,group,players,territories,continents,completed,victories,stalemates,turn_caps,command_caps,engine_errors,mean_turns,p95_turns,games_per_second,complete_rotation_blocks,matches_in_complete_blocks,partial_rotation_remainder,mapping_valid,assignment_position_wins';
     const rows = report.configurations.map((item) =>
       [
         item.id,
@@ -252,6 +261,14 @@ async function inspectRun(id: string) {
         item.meanTurns,
         item.p95Turns,
         item.gamesPerSecond,
+        report.aggregate.diagnostic?.blockAccounting?.completeBlockCount ?? '',
+        report.aggregate.diagnostic?.blockAccounting?.matchesInCompleteBlocks ??
+          '',
+        report.aggregate.diagnostic?.blockAccounting?.partialRemainder ?? '',
+        report.aggregate.diagnostic?.mappingValid ?? '',
+        report.aggregate.diagnostic
+          ? `"${JSON.stringify(report.aggregate.diagnostic.assignmentPositionWins).replaceAll('"', '""')}"`
+          : '',
       ].join(','),
     );
     process.stdout.write(`${[header, ...rows].join('\n')}\n`);
@@ -273,6 +290,59 @@ async function reproduce(raw: string) {
   });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   if (result.outcome === 'engine-error') process.exitCode = 1;
+}
+
+async function diagnoseAssignmentPosition() {
+  const block = Number(value('block') ?? '0');
+  const seatRotation = Number(value('seat') ?? '0');
+  if (!Number.isInteger(block) || block < 0 || block >= 16)
+    throw new Error(
+      'Assignment-position block must be an integer from 0 through 15.',
+    );
+  if (!Number.isInteger(seatRotation) || seatRotation < 0 || seatRotation > 5)
+    throw new Error(
+      'Held turn-seat rotation must be an integer from 0 through 5.',
+    );
+  const matrix = createStudyMatrix(SIX_SEAT_DIAGNOSTIC_PRESETS.standard);
+  const base = matrix[block * 36]!;
+  const completed: CompletedStudyMatch[] = [];
+  for (
+    let assignmentRotation = 0;
+    assignmentRotation < 6;
+    assignmentRotation += 1
+  ) {
+    const input = {
+      ...base,
+      index: block * 36 + assignmentRotation,
+      seatRotation,
+      assignmentRotation,
+      controllerStreamRotation: 0,
+    };
+    const result = await runHeadlessMatch(input);
+    const { finalState, trace, ...stored } = result;
+    void finalState;
+    void trace;
+    completed.push({ input, result: stored });
+  }
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        mode: 'held-world-assignment-position',
+        block,
+        held: {
+          worldSeed: base.worldSeed,
+          matchSeed: base.matchSeed,
+          ownershipVariant: base.ownershipVariant,
+          seatRotation,
+          controllerStreamRotation: 0,
+          controllers: Array.from({ length: 6 }, () => 'heuristic-bot'),
+        },
+        comparisons: diagnosticDebugRows(completed),
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 async function execute(
@@ -367,6 +437,10 @@ async function execute(
                     `${item.worldSeed}:${item.seatRotation}:${item.assignmentRotation}`,
                 ),
               ).size,
+              matchesPerRotationBlock: 36,
+              completeRotationBlocks: Math.floor(matrix.length / 36),
+              matchesInCompleteBlocks: Math.floor(matrix.length / 36) * 36,
+              partialRotationRemainder: matrix.length % 36,
             }
           : {}),
       },
@@ -443,7 +517,9 @@ try {
   const reproduceValue = value('reproduce');
   const inspectValue = value('inspect');
   const resumeValue = value('resume');
-  if (reproduceValue) await reproduce(reproduceValue);
+  if (value('diagnose') === 'assignment-position')
+    await diagnoseAssignmentPosition();
+  else if (reproduceValue) await reproduce(reproduceValue);
   else if (inspectValue) await inspectRun(inspectValue);
   else if (resumeValue) {
     const checkpoint = await readCheckpoint(resumeValue);

@@ -57,6 +57,12 @@ default match-seed derivation use player count rather than label text. Stream
 IDs are `controller-1` through `controller-N`; they are diagnostic/runtime
 allocation identifiers, not persisted personalities.
 
+For six-seat diagnostics, assignment slots are one-based in reports and are
+derived only after zero-based seat and assignment rotations are normalized.
+`createHeadlessPlayerAllocation` passes assignment-rotated players to setup but
+restores the independently seat-rotated player order for `createMatch`; the
+match seed and controller streams therefore do not inherit assignment labels.
+
 ## Balanced heuristic
 
 Weights and minimum thresholds live in

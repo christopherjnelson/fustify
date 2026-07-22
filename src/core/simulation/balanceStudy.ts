@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { HeadlessMatchResult, ReproductionDescriptor } from './botMatch';
+import type { StartingBoardMetrics } from './startingBoardMetrics';
 import { HEURISTIC_CONTROLLER_VERSION } from '../controllers';
 import type {
   BalanceStudyReport,
@@ -121,7 +122,7 @@ export const BALANCE_PRESETS = {
 export const SIX_SEAT_DIAGNOSTIC_PRESETS = {
   smoke: preset(12, [product[2]!]),
   block: preset(36, [product[2]!]),
-  standard: preset(600, [product[2]!]),
+  standard: preset(576, [product[2]!]),
   thorough: preset(1_800, [product[2]!]),
 } as const;
 Object.entries(SIX_SEAT_DIAGNOSTIC_PRESETS).forEach(([scale, config]) => {
@@ -259,6 +260,35 @@ export interface DiagnosticDebugRow {
   winnerControllerStream: string | null;
   outcome: HeadlessMatchResult['outcome'];
   matchLength: number;
+  startingBoards?: StartingBoardMetrics[];
+  reproduction: ReproductionDescriptor;
+}
+
+export const DIAGNOSTIC_ROTATION_BLOCK_SIZE = 36;
+
+export interface DiagnosticBlockAccounting {
+  matchesPerBlock: number;
+  totalMatches: number;
+  completeBlockCount: number;
+  matchesInCompleteBlocks: number;
+  partialRemainder: number;
+}
+
+export function diagnosticBlockAccounting(
+  totalMatches: number,
+): DiagnosticBlockAccounting {
+  const completeBlockCount = Math.floor(
+    totalMatches / DIAGNOSTIC_ROTATION_BLOCK_SIZE,
+  );
+  const matchesInCompleteBlocks =
+    completeBlockCount * DIAGNOSTIC_ROTATION_BLOCK_SIZE;
+  return {
+    matchesPerBlock: DIAGNOSTIC_ROTATION_BLOCK_SIZE,
+    totalMatches,
+    completeBlockCount,
+    matchesInCompleteBlocks,
+    partialRemainder: totalMatches - matchesInCompleteBlocks,
+  };
 }
 
 export function diagnosticPlayerMappings(
@@ -311,12 +341,97 @@ export function diagnosticDebugRows(
         winnerControllerStream: winner?.controllerStreamId ?? null,
         outcome: result.outcome,
         matchLength: result.turns,
+        startingBoards: result.metrics.startingBoards,
+        reproduction: result.reproduction,
       };
     });
 }
 
 function reproductionCommand(descriptor: ReproductionDescriptor): string {
   return `pnpm study:balance --reproduce '${JSON.stringify(descriptor)}' --verbose`;
+}
+
+const STARTING_BOARD_NUMERIC_KEYS: Array<keyof StartingBoardMetrics> = [
+  'territoryCount',
+  'armyCount',
+  'friendlyAdjacencyEdges',
+  'hostileFrontierEdges',
+  'frontierTerritoryCount',
+  'isolatedTerritoryCount',
+  'connectedComponentCount',
+  'largestConnectedComponent',
+  'meanFriendlyComponentSize',
+  'continentsRepresented',
+  'maximumTerritoriesInContinent',
+  'closestDistanceToCompletingContinent',
+  'fullyControlledContinents',
+  'seaRouteExposure',
+  'territoryDegreeMinimum',
+  'territoryDegreeMean',
+  'territoryDegreeMaximum',
+  'meanHostileNeighborsPerTerritory',
+];
+
+type MetricObservation = { key: string; metrics: StartingBoardMetrics };
+
+function summarizeStartingBoards(observations: MetricObservation[]) {
+  return [...new Set(observations.map(({ key }) => key))]
+    .sort((left, right) =>
+      left.localeCompare(right, undefined, { numeric: true }),
+    )
+    .map((key) => {
+      const rows = observations.filter((row) => row.key === key);
+      return {
+        key,
+        samples: rows.length,
+        metrics: Object.fromEntries(
+          STARTING_BOARD_NUMERIC_KEYS.map((metric) => {
+            const values = rows.map(({ metrics }) => Number(metrics[metric]));
+            return [
+              metric,
+              {
+                samples: values.length,
+                mean:
+                  values.reduce((sum, value) => sum + value, 0) /
+                  Math.max(1, values.length),
+                median: percentile(values, 0.5),
+                p10: percentile(values, 0.1),
+                p90: percentile(values, 0.9),
+                minimum: values.length ? Math.min(...values) : 0,
+                maximum: values.length ? Math.max(...values) : 0,
+              },
+            ];
+          }),
+        ),
+      };
+    });
+}
+
+function blockMappingValid(inputs: StudyMatchInput[]): boolean {
+  if (inputs.length !== DIAGNOSTIC_ROTATION_BLOCK_SIZE) return false;
+  const matrixCases = new Set(
+    inputs.map(
+      ({ seatRotation, assignmentRotation }) =>
+        `${seatRotation}:${assignmentRotation}`,
+    ),
+  );
+  if (matrixCases.size !== DIAGNOSTIC_ROTATION_BLOCK_SIZE) return false;
+  const exposures = new Map<string, number>();
+  inputs.flatMap(diagnosticPlayerMappings).forEach((mapping) => {
+    for (const key of mappingKeys(mapping)) {
+      const exposure = `${mapping.logicalPlayerId}:${key}`;
+      exposures.set(exposure, (exposures.get(exposure) ?? 0) + 1);
+    }
+  });
+  return exposures.size === 108 && new Set(exposures.values()).size === 1;
+}
+
+function mappingKeys(mapping: DiagnosticPlayerMapping) {
+  return [
+    `seat-${mapping.turnSeat}`,
+    `assignment-${mapping.assignmentPosition}`,
+    mapping.controllerStreamId,
+  ];
 }
 
 export function aggregateStudy(
@@ -486,15 +601,28 @@ export function aggregateStudy(
         },
       );
     });
-  const diagnosticRows = completed.filter(
+  const allDiagnosticRows = completed.filter(
     ({ input }) => input.playerCount === 6,
   );
+  const diagnosticInputs = allDiagnosticRows.map(({ input }) => input);
+  const blockAccounting = diagnosticBlockAccounting(diagnosticInputs.length);
+  // Factor comparisons intentionally use only the balanced complete-block prefix.
+  const factorInputIndices = new Set(
+    diagnosticInputs
+      .slice(0, blockAccounting.matchesInCompleteBlocks)
+      .map(({ index }) => index),
+  );
+  const diagnosticRows = allDiagnosticRows.filter(({ input }) =>
+    factorInputIndices.has(input.index),
+  );
   const logicalPlayerWins: Record<string, number> = {};
+  const diagnosticSeatWins: Record<string, number> = {};
   const assignmentPositionWins: Record<string, number> = {};
   const controllerStreamWins: Record<string, number> = {};
   if (diagnosticRows.length)
     for (let index = 1; index <= 6; index += 1) {
       logicalPlayerWins[playerId(index)] = 0;
+      diagnosticSeatWins[`seat-${index}`] = 0;
       assignmentPositionWins[`assignment-${index}`] = 0;
       controllerStreamWins[`controller-${index}`] = 0;
     }
@@ -507,6 +635,8 @@ export function aggregateStudy(
     );
     if (!winnerMapping) return;
     const assignmentKey = `assignment-${winnerMapping.assignmentPosition}`;
+    diagnosticSeatWins[`seat-${winnerMapping.turnSeat}`] =
+      (diagnosticSeatWins[`seat-${winnerMapping.turnSeat}`] ?? 0) + 1;
     assignmentPositionWins[assignmentKey] =
       (assignmentPositionWins[assignmentKey] ?? 0) + 1;
     controllerStreamWins[winnerMapping.controllerStreamId] =
@@ -518,18 +648,13 @@ export function aggregateStudy(
     ({ result }) => result.outcome === 'victory',
   ).length;
   const factorThreshold = Math.max(2, diagnosticVictories * 0.08);
-  const seatSpread = spread(seats.slice(0, 6).map(({ wins }) => wins));
+  const seatSpread = spread(Object.values(diagnosticSeatWins));
   const playerSpread = spread(Object.values(logicalPlayerWins));
   const assignmentSpread = spread(Object.values(assignmentPositionWins));
   const controllerStreamSpread = spread(Object.values(controllerStreamWins));
-  const mappingKeys = (mapping: DiagnosticPlayerMapping) => [
-    `seat-${mapping.turnSeat}`,
-    `assignment-${mapping.assignmentPosition}`,
-    mapping.controllerStreamId,
-  ];
   const exposureCounts = new Map<string, number>();
-  matrix
-    .filter((input) => input.playerCount === 6)
+  diagnosticInputs
+    .slice(0, blockAccounting.matchesInCompleteBlocks)
     .flatMap(diagnosticPlayerMappings)
     .forEach((mapping) =>
       mappingKeys(mapping).forEach((key) =>
@@ -539,8 +664,14 @@ export function aggregateStudy(
         ),
       ),
     );
-  const diagnosticInputs = matrix.filter((input) => input.playerCount === 6);
-  const completeRotationBlocks = diagnosticInputs.length % 36 === 0;
+  const completeBlocks = Array.from(
+    { length: blockAccounting.completeBlockCount },
+    (_, blockIndex) =>
+      diagnosticInputs.slice(
+        blockIndex * DIAGNOSTIC_ROTATION_BLOCK_SIZE,
+        (blockIndex + 1) * DIAGNOSTIC_ROTATION_BLOCK_SIZE,
+      ),
+  );
   const mappingValid =
     diagnosticInputs.every(
       (input) =>
@@ -553,7 +684,8 @@ export function aggregateStudy(
           `${input.worldSeed}:${input.seatRotation}:${input.assignmentRotation}`,
       ),
     ).size === diagnosticInputs.length &&
-    (!completeRotationBlocks || new Set(exposureCounts.values()).size <= 1);
+    completeBlocks.every(blockMappingValid) &&
+    new Set(exposureCounts.values()).size <= 1;
   const strongestFactor = [
     ['turn position', seatSpread],
     ['controller stream position', controllerStreamSpread],
@@ -565,9 +697,9 @@ export function aggregateStudy(
     string,
     number,
   ];
-  const factorAssessment = !mappingValid
+  let factorAssessment = !mappingValid
     ? 'Diagnostic mapping invalid; factor attribution is unavailable.'
-    : diagnosticRows.length < 36 || diagnosticRows.length % 36 !== 0
+    : blockAccounting.completeBlockCount === 0
       ? 'Insufficient sample size: complete a full 36-match rotation block.'
       : diagnosticVictories < thresholds.minimumSamples * 6
         ? `Insufficient sample size for factor classification: ${diagnosticVictories} decided victories; ${thresholds.minimumSamples * 6} required (${thresholds.minimumSamples} per factor position).`
@@ -597,6 +729,139 @@ export function aggregateStudy(
         decidedVictoryShare: count / Math.max(1, diagnosticVictories),
         confidenceInterval95: wilson95(count, diagnosticVictories),
       }));
+  const metricObservations = diagnosticRows.flatMap(({ input, result }) => {
+    const mappings = diagnosticPlayerMappings(input);
+    return (result.metrics.startingBoards ?? []).flatMap((metrics) => {
+      const mapping = mappings.find(
+        ({ logicalPlayerId }) => logicalPlayerId === metrics.playerId,
+      );
+      if (!mapping) return [];
+      const fixture = `${input.configurationId}:block:${Math.floor(input.index / DIAGNOSTIC_ROTATION_BLOCK_SIZE)}`;
+      return [{ input, result, metrics, mapping, fixture }];
+    });
+  });
+  const summariesFor = (
+    key: (row: (typeof metricObservations)[number]) => string,
+  ) =>
+    summarizeStartingBoards(
+      metricObservations.map((row) => ({
+        key: key(row),
+        metrics: row.metrics,
+      })),
+    );
+  const startingBoardSummaries = {
+    assignmentPosition: summariesFor(
+      ({ mapping }) => `assignment-${mapping.assignmentPosition}`,
+    ),
+    turnSeat: summariesFor(({ mapping }) => `seat-${mapping.turnSeat}`),
+    logicalPlayer: summariesFor(({ mapping }) => mapping.logicalPlayerId),
+    controllerStream: summariesFor(({ mapping }) => mapping.controllerStreamId),
+    worldFixture: summariesFor(({ fixture }) => fixture),
+    outcome: summariesFor(({ result, metrics }) =>
+      result.winnerPlayerId === metrics.playerId
+        ? 'winner'
+        : result.outcome === 'victory'
+          ? 'non-winner'
+          : 'unresolved',
+    ),
+  };
+  const exposureTables = Object.fromEntries(
+    ['logicalPlayer', 'turnSeat', 'controllerStream'].map((dimension) => {
+      const table: Record<string, number> = {};
+      diagnosticRows
+        .flatMap(({ input }) => diagnosticPlayerMappings(input))
+        .forEach((mapping) => {
+          const source =
+            dimension === 'logicalPlayer'
+              ? mapping.logicalPlayerId
+              : dimension === 'turnSeat'
+                ? `seat-${mapping.turnSeat}`
+                : mapping.controllerStreamId;
+          const key = `${source}->assignment-${mapping.assignmentPosition}`;
+          table[key] = (table[key] ?? 0) + 1;
+        });
+      return [dimension, table];
+    }),
+  );
+  const blockSummaries = completeBlocks.map((inputs, blockIndex) => {
+    const indices = new Set(inputs.map(({ index }) => index));
+    const rows = diagnosticRows.filter(({ input }) => indices.has(input.index));
+    const wins = Object.fromEntries(
+      Array.from({ length: 6 }, (_, index) => [`assignment-${index + 1}`, 0]),
+    );
+    rows.forEach(({ input, result }) => {
+      const winner = diagnosticPlayerMappings(input).find(
+        ({ logicalPlayerId }) => logicalPlayerId === result.winnerPlayerId,
+      );
+      if (winner) wins[`assignment-${winner.assignmentPosition}`] += 1;
+    });
+    const blockMetrics = metricObservations.filter(({ input }) =>
+      indices.has(input.index),
+    );
+    const decided = Object.values(wins).reduce((sum, value) => sum + value, 0);
+    const expected = decided / 6;
+    return {
+      blockId: `${inputs[0]!.configurationId}:block:${blockIndex}`,
+      worldSeed: inputs[0]!.worldSeed,
+      matchSeed: inputs[0]!.matchSeed,
+      ownershipVariant: inputs[0]!.ownershipVariant,
+      mappingValid: blockMappingValid(inputs),
+      winsByAssignmentPosition: wins,
+      unresolved: rows.length - decided,
+      startingBoardMetricsByAssignment: summarizeStartingBoards(
+        blockMetrics.map(({ mapping, metrics }) => ({
+          key: `assignment-${mapping.assignmentPosition}`,
+          metrics,
+        })),
+      ),
+      assignment5Outperformed: wins['assignment-5']! > expected,
+      assignment6Underperformed: wins['assignment-6']! < expected,
+    };
+  });
+  const factorAssessmentEvidence = [
+    `${blockAccounting.completeBlockCount} complete blocks (${blockAccounting.matchesInCompleteBlocks} matches) analyzed; ${blockAccounting.partialRemainder} remainder matches reported separately.`,
+    `${diagnosticVictories} decided victories in eligible complete blocks.`,
+    `Factor win spreads: seat ${seatSpread}, logical player ${playerSpread}, controller stream ${controllerStreamSpread}, assignment ${assignmentSpread}.`,
+  ];
+  const outcomeMetrics = Object.fromEntries(
+    startingBoardSummaries.outcome.map(({ key, metrics }) => [key, metrics]),
+  );
+  const winnerAdjacency = outcomeMetrics.winner?.friendlyAdjacencyEdges?.mean;
+  const nonWinnerAdjacency =
+    outcomeMetrics['non-winner']?.friendlyAdjacencyEdges?.mean;
+  if (
+    mappingValid &&
+    diagnosticVictories >= thresholds.minimumSamples * 6 &&
+    factorAssessment.startsWith('No clear correlation') &&
+    winnerAdjacency !== undefined &&
+    nonWinnerAdjacency !== undefined &&
+    Math.abs(winnerAdjacency - nonWinnerAdjacency) >= 0.25
+  ) {
+    factorAssessment = `Possible starting-geography correlation: winners began with ${winnerAdjacency.toFixed(2)} mean friendly adjacency edges versus ${nonWinnerAdjacency.toFixed(2)} for non-winners; exploratory association only, not independent causal proof.`;
+    factorAssessmentEvidence.push(
+      'Starting geography is measured before turn one; no composite score or gameplay tuning is applied.',
+    );
+  }
+  if (
+    mappingValid &&
+    diagnosticVictories >= thresholds.minimumSamples * 6 &&
+    strongestFactor[0] === 'assignment position'
+  ) {
+    const fifthBroad = blockSummaries.filter(
+      ({ assignment5Outperformed }) => assignment5Outperformed,
+    ).length;
+    const sixthBroad = blockSummaries.filter(
+      ({ assignment6Underperformed }) => assignment6Underperformed,
+    ).length;
+    const concentrated =
+      Math.max(fifthBroad, sixthBroad) <= Math.ceil(blockSummaries.length / 3);
+    factorAssessment = concentrated
+      ? `Assignment-position differences are concentrated in ${Math.max(fifthBroad, sixthBroad)} of ${blockSummaries.length} complete blocks; possible world-fixture concentration, with no broad assignment-order effect established.`
+      : `Possible assignment-position correlation across complete blocks: assignment 5 outperformed in ${fifthBroad} of ${blockSummaries.length} and assignment 6 underperformed in ${sixthBroad} of ${blockSummaries.length}; association only, not causal proof.`;
+    factorAssessmentEvidence.push(
+      `Assignment 5 exceeded its within-block decided-victory expectation in ${fifthBroad}/${blockSummaries.length} blocks; assignment 6 was below expectation in ${sixthBroad}/${blockSummaries.length}.`,
+    );
+  }
   const aggregate: StudyAggregate = {
     matchesRequested: matrix.length,
     matchesStarted: completed.length,
@@ -627,16 +892,18 @@ export function aggregateStudy(
           diagnostic: {
             rotationDesign:
               'Canonical six-seat fixtures cross six logical-player/turn rotations with six assignment-order rotations and balanced explicit controller streams while holding world and match seeds within each 36-match block.',
-            pairRotationCount: new Set(
-              matrix.map(
-                (item) =>
-                  `${item.worldSeed}:${item.seatRotation}:${item.assignmentRotation}`,
-              ),
-            ).size,
+            pairRotationCount: new Set(matrix.map((item) => item.worldSeed))
+              .size,
             logicalPlayerWins,
             assignmentPositionWins,
             controllerStreamWins,
             mappingValid,
+            blockAccounting,
+            factorMatchesAnalyzed: diagnosticRows.length,
+            exposureTables,
+            startingBoardSummaries,
+            blockSummaries,
+            factorAssessmentEvidence,
             logicalPlayerSummaries: factorSummaries(logicalPlayerWins),
             assignmentPositionSummaries: factorSummaries(
               assignmentPositionWins,
@@ -760,6 +1027,18 @@ export function aggregateStudy(
       code: 'overall-unresolved-rate',
       message: `${(unresolvedRate * 100).toFixed(1)}% of completed matches had no winner.`,
     });
+  if (aggregate.diagnostic && !aggregate.diagnostic.mappingValid)
+    findings.push({
+      classification: 'failure',
+      code: 'diagnostic-mapping-invalid',
+      message: aggregate.diagnostic.factorAssessment,
+    });
+  if (aggregate.diagnostic?.blockAccounting?.partialRemainder)
+    findings.push({
+      classification: 'warning',
+      code: 'partial-diagnostic-block',
+      message: `${aggregate.diagnostic.blockAccounting.partialRemainder} matches form a partial diagnostic block; factor assessment uses the ${aggregate.diagnostic.blockAccounting.matchesInCompleteBlocks} matches in complete blocks.`,
+    });
   if (aggregate.diagnostic && completed.length >= thresholds.minimumSamples) {
     const assessment = aggregate.diagnostic.factorAssessment;
     if (assessment.includes('player ID'))
@@ -774,16 +1053,25 @@ export function aggregateStudy(
         code: 'possible-controller-stream-correlation',
         message: assessment,
       });
-    if (assessment.includes('mapping invalid'))
-      findings.push({
-        classification: 'warning',
-        code: 'diagnostic-mapping-invalid',
-        message: assessment,
-      });
-    if (assessment.includes('assignment position'))
+    if (
+      assessment.includes('assignment position') ||
+      assessment.includes('assignment-position')
+    )
       findings.push({
         classification: 'warning',
         code: 'possible-assignment-position-correlation',
+        message: assessment,
+      });
+    if (assessment.includes('world-fixture concentration'))
+      findings.push({
+        classification: 'warning',
+        code: 'possible-world-fixture-concentration',
+        message: assessment,
+      });
+    if (assessment.includes('starting-geography correlation'))
+      findings.push({
+        classification: 'warning',
+        code: 'possible-starting-geography-correlation',
         message: assessment,
       });
   }

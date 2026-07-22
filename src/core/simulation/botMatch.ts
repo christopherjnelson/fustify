@@ -20,6 +20,10 @@ import {
   type SimulationViolation,
 } from './matchInvariants';
 import { BRAND } from '../../branding';
+import {
+  measureStartingBoards,
+  type StartingBoardMetrics,
+} from './startingBoardMetrics';
 
 export type HeadlessOutcome =
   'victory' | 'stalemate' | 'turn-cap' | 'command-cap' | 'engine-error';
@@ -82,6 +86,8 @@ export interface MatchTraceEntry {
 }
 
 export interface MatchMetrics {
+  /** Added additively; historical checkpoints may not contain this field. */
+  startingBoards?: StartingBoardMetrics[];
   attacksAttempted: number;
   territoriesCaptured: number;
   eliminations: number;
@@ -296,6 +302,7 @@ export async function runHeadlessMatch(
     players.map((player) => [player.id, new HeuristicController()]),
   );
   const emptyMetrics: MatchMetrics = {
+    startingBoards: [],
     attacksAttempted: 0,
     territoriesCaptured: 0,
     eliminations: 0,
@@ -317,6 +324,7 @@ export async function runHeadlessMatch(
   };
   let planet: PlanetDefinition;
   let state: MatchState;
+  let startingBoards: StartingBoardMetrics[] = [];
   try {
     planet = generatePlanet(options.worldSeed, options);
     const assignedSetup = createMatchSetup(
@@ -326,6 +334,10 @@ export async function runHeadlessMatch(
     );
     const setup = { ...assignedSetup, players };
     state = createMatch(planet, setup, { matchSeed: options.matchSeed });
+    startingBoards = measureStartingBoards(
+      planet,
+      assignedSetup.startingPosition.territories,
+    );
     deepFreeze(planet);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -358,6 +370,7 @@ export async function runHeadlessMatch(
     };
   }
   const metrics: MatchMetrics = {
+    startingBoards,
     attacksAttempted: 0,
     territoriesCaptured: 0,
     eliminations: 0,

@@ -21,8 +21,8 @@ pnpm study:balance --preset thorough
 
 For the focused six-seat investigation, dry-run first and then choose an
 explicit scale. Smoke is a deliberately incomplete 12-match mapping check;
-block is one complete 36-match implementation/debug fixture; standard is 600
-paired/rotated matches for normal local diagnosis; thorough is 1,800 matches
+block is one complete 36-match implementation/debug fixture; standard is 576
+paired/rotated matches (16 complete blocks) for normal local diagnosis; thorough is 1,800 matches
 for an explicit unattended run.
 
 ```bash
@@ -31,6 +31,7 @@ pnpm study:balance --diagnose six-seat --scale block --debug-block
 pnpm study:balance --diagnose six-seat --scale standard --dry-run
 pnpm study:balance --diagnose six-seat --scale standard
 pnpm study:balance --diagnose six-seat --scale thorough
+pnpm study:balance --diagnose assignment-position --block 0 --seat 0
 ```
 
 For implementation/debugging, use the `block` scale (one complete block) and
@@ -56,6 +57,43 @@ Factor classification additionally requires 180 decided victories (30 per
 factor position with the default threshold). A single complete block proves
 mapping and structural neutrality but is intentionally reported as insufficient
 for a correlation conclusion.
+
+Factor assessment uses only complete 36-match blocks because their exposure is
+exactly balanced. Overall outcomes still include every completed match, while
+the report separately records total matches, complete-block matches, and the
+partial remainder. New reports include assignment/seat/player/stream exposure
+tables, per-block wins and unresolved outcomes, and non-composite starting-board
+metric distributions. Historical schema-v1 reports remain readable and simply
+show these additive metrics as unavailable.
+
+The held-world assignment command keeps the selected block's world seed, match
+seed, ownership variant, controller type, controller stream rotation, and turn
+rotation fixed while running assignment rotations 0–5. Each comparison includes
+mapping, territory IDs, starting metrics, outcome, length, and a reproduction
+descriptor; add `--verbose` only to a single descriptor reproduction when a
+full command trace is needed.
+
+### Diagnostic seed chain
+
+The matrix derives `worldSeed` and `matchSeed` from
+`seedPrefix + configurationId + pair/block index`. A block uses one pair and
+`ownershipVariant = block index modulo configured variants`. World generation
+has its own PRNG. Starting ownership candidate `i` uses
+`planet.seed|v<generator>|starting|distributed|<variant>|<i>|player-01,…,player-06`;
+distribution, local improvement, and the `|armies` suffix create explicit
+seeded PRNGs. Those canonical slot tokens encode player count, not literal IDs.
+Assignment rotation maps the generated canonical slots onto rotated players;
+seat rotation determines authoritative turn order independently. Combat uses
+the explicit match seed. Controller tie breaking adds controller version,
+explicit `controller-1…6` stream, turn, phase, and decision index. No setup
+stream uses literal display labels, and assignment position receives the same
+candidate random stream within a held world; only its player mapping rotates.
+
+Assignment position means the one-based canonical slot in the generated
+starting position. Turn seat is authoritative play order. Logical player is a
+stable diagnostic label. Controller stream is the explicit deterministic bot
+choice slot. Starting geography describes the pre-turn graph and continent
+measurements and is exploratory evidence, not a causal score.
 
 `Ctrl+C` and `SIGTERM` finish the current match, atomically checkpoint it, and mark the study `interrupted`. Resume without repeating completed match indices:
 

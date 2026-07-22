@@ -6,6 +6,7 @@ import {
   createStudyMatrix,
   diagnosticPlayerMappings,
   diagnosticDebugRows,
+  diagnosticBlockAccounting,
   percentile,
   stableHash,
   SIX_SEAT_DIAGNOSTIC_PRESETS,
@@ -74,6 +75,52 @@ function completed(
 }
 
 describe('balance study configuration and aggregation', () => {
+  it.each([
+    [12, 0, 12],
+    [576, 16, 0],
+    [600, 16, 24],
+    [1_800, 50, 0],
+  ])(
+    'classifies %i diagnostic matches into complete blocks and remainder',
+    (total, blocks, remainder) => {
+      expect(diagnosticBlockAccounting(total)).toEqual({
+        matchesPerBlock: 36,
+        totalMatches: total,
+        completeBlockCount: blocks,
+        matchesInCompleteBlocks: blocks * 36,
+        partialRemainder: remainder,
+      });
+    },
+  );
+  it('aligns standard and thorough scales to exact blocks', () => {
+    expect(SIX_SEAT_DIAGNOSTIC_PRESETS.standard.matchesPerConfiguration).toBe(
+      576,
+    );
+    expect(SIX_SEAT_DIAGNOSTIC_PRESETS.thorough.matchesPerConfiguration).toBe(
+      1_800,
+    );
+  });
+  it('classifies the completed smoke subset as a warned partial block', () => {
+    const matrix = createStudyMatrix(SIX_SEAT_DIAGNOSTIC_PRESETS.smoke);
+    const result = aggregateStudy(
+      matrix,
+      matrix.map((input) => completed(input)),
+      1,
+      SIX_SEAT_DIAGNOSTIC_PRESETS.smoke.warningThresholds,
+    );
+    expect(result.aggregate.diagnostic?.blockAccounting).toMatchObject({
+      completeBlockCount: 0,
+      partialRemainder: 12,
+    });
+    expect(result.aggregate.diagnostic?.factorAssessment).toContain(
+      'complete a full 36-match rotation block',
+    );
+    expect(result.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'partial-diagnostic-block' }),
+      ]),
+    );
+  });
   it('runtime-validates presets and rejects invalid combinations', () => {
     expect(
       balanceStudyConfigSchema.parse(BALANCE_PRESETS.quick).configurations,
@@ -394,6 +441,45 @@ describe('balance study configuration and aggregation', () => {
     expect(result.aggregate.diagnostic?.mappingValid).toBe(false);
     expect(result.aggregate.diagnostic?.factorAssessment).toContain(
       'mapping invalid',
+    );
+    expect(result.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          classification: 'failure',
+          code: 'diagnostic-mapping-invalid',
+        }),
+      ]),
+    );
+  });
+
+  it('uses sixteen complete blocks and reports a 24-match remainder for 600 matches', () => {
+    const matrix = createStudyMatrix({
+      ...SIX_SEAT_DIAGNOSTIC_PRESETS.standard,
+      matchesPerConfiguration: 600,
+    });
+    const result = aggregateStudy(
+      matrix,
+      matrix.map((input) => completed(input)),
+      1,
+      SIX_SEAT_DIAGNOSTIC_PRESETS.standard.warningThresholds,
+    );
+    expect(result.aggregate.diagnostic).toMatchObject({
+      mappingValid: true,
+      factorMatchesAnalyzed: 576,
+      blockAccounting: {
+        completeBlockCount: 16,
+        matchesInCompleteBlocks: 576,
+        partialRemainder: 24,
+        totalMatches: 600,
+      },
+    });
+    expect(result.aggregate.diagnostic?.factorAssessment).not.toContain(
+      'complete a full',
+    );
+    expect(result.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'partial-diagnostic-block' }),
+      ]),
     );
   });
 });

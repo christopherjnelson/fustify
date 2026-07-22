@@ -293,6 +293,26 @@ function BalanceStudies({
               <h3>Six-seat diagnostic</h3>
               <p>{study.aggregate.diagnostic.rotationDesign}</p>
               <p>{study.aggregate.diagnostic.factorAssessment}</p>
+              {study.aggregate.diagnostic.blockAccounting && (
+                <p>
+                  Complete blocks{' '}
+                  {
+                    study.aggregate.diagnostic.blockAccounting
+                      .completeBlockCount
+                  }{' '}
+                  · analyzed{' '}
+                  {
+                    study.aggregate.diagnostic.blockAccounting
+                      .matchesInCompleteBlocks
+                  }{' '}
+                  matches · partial remainder{' '}
+                  {study.aggregate.diagnostic.blockAccounting.partialRemainder}{' '}
+                  · mapping{' '}
+                  {study.aggregate.diagnostic.mappingValid
+                    ? 'valid'
+                    : 'invalid'}
+                </p>
+              )}
               <p>
                 Logical-player wins{' '}
                 {JSON.stringify(study.aggregate.diagnostic.logicalPlayerWins)} ·
@@ -301,6 +321,25 @@ function BalanceStudies({
                   study.aggregate.diagnostic.assignmentPositionWins,
                 )}
               </p>
+              {study.aggregate.diagnostic.startingBoardSummaries && (
+                <details>
+                  <summary>Starting-board and block evidence</summary>
+                  <pre>
+                    {JSON.stringify(
+                      {
+                        assignmentPosition:
+                          study.aggregate.diagnostic.startingBoardSummaries
+                            .assignmentPosition,
+                        blocks: study.aggregate.diagnostic.blockSummaries,
+                        evidence:
+                          study.aggregate.diagnostic.factorAssessmentEvidence,
+                      },
+                      null,
+                      2,
+                    )}
+                  </pre>
+                </details>
+              )}
             </article>
           )}
           <details>

@@ -1,5 +1,23 @@
 # Fustify Handoff
 
+## Assignment-position diagnostics (July 2026)
+
+Branch `fix/assignment-position-diagnostics` starts at `e568c3e`. Diagnostic
+rotation blocks now use integer quotient/remainder accounting; factor inference
+uses only complete 36-match prefixes while overall outcomes retain every match.
+Standard is 576 (16 blocks) and thorough is 1,800 (50). New reports add exposure
+cross-tabs, pre-turn graph/continent metrics, per-block summaries, evidence, and
+held-world assignment reproductions. Report schema remains v1 additively and
+saves remain v4.
+
+The audit found no authoritative mapping or seed-chain correctness defect, so
+gameplay and assignment rules were not changed. Focused run
+`balance-2026-07-22T00-50-46-985Z-six-seat-diagnostic-block` completed 36/36:
+34 victories, 1 stalemate, 1 turn cap, 0 engine errors, valid mapping;
+assignment wins were 6/4/7/7/4/6. One fixture is intentionally insufficient
+for factor classification and does not resolve the historical 121-versus-61
+observation. Chris should run the documented 576-match standard diagnostic.
+
 > This handoff now also includes a local verification dashboard milestone.
 > Canonical operational details are in `VERIFICATION.md`; the historical
 > controller context below remains valid.
