@@ -12,6 +12,11 @@ const scenarios: Array<{
     heading: /Choose your world/i,
   },
   {
+    name: 'generated-world',
+    region: '.setup-panel',
+    heading: /Choose your world/i,
+  },
+  {
     name: 'generate-world-busy',
     region: '.setup-panel',
     heading: /Choose your world/i,
@@ -94,10 +99,25 @@ const scenarios: Array<{
   { name: 'bot-victory', region: '.hud', heading: /Match won/i },
   { name: 'attack-source', region: '.hud', heading: /Crimson League/i },
   { name: 'attack-target', region: '.hud', heading: /Crimson League/i },
+  {
+    name: 'attack-confirmation',
+    region: '.hud',
+    heading: /End attacking now/i,
+  },
   { name: 'combat-result', region: '.hud', heading: /Crimson League/i },
   { name: 'pending-capture', region: '.hud', heading: /Move armies in/i },
+  {
+    name: 'pending-capture-fixed',
+    region: '.hud',
+    heading: /Move armies in/i,
+  },
   { name: 'player-elimination', region: '.hud', heading: /Latest events/i },
   { name: 'fortification', region: '.hud', heading: /Crimson League/i },
+  {
+    name: 'fortification-fixed',
+    region: '.hud',
+    heading: /Crimson League/i,
+  },
   { name: 'game-over', region: '.hud', heading: /Match won/i },
   { name: 'navigator', region: '.hud', heading: /Crimson League/i },
   { name: 'event-log', region: '.hud', heading: /Latest events/i },
@@ -134,6 +154,9 @@ for (const scenario of scenarios) {
     if (scenario.name === 'navigator') {
       await page.getByRole('button', { name: /Territory list/i }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
+    }
+    if (scenario.name === 'attack-confirmation') {
+      await page.getByRole('button', { name: 'End attack phase' }).click();
     }
     if (scenario.name === 'event-log') {
       await page.locator('.hud').evaluate((element) => {

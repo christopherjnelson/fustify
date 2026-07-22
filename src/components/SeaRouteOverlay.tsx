@@ -1,19 +1,21 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { normalize } from '../core/geometry/sphericalMath';
 import { PLANET_RADIUS } from '../core/generation/constants';
 import type { PlanetDefinition } from '../core/types/planet';
 import type { TerritoryConnection } from '../core/types/surface';
+import { canonicalSeaRoutes } from '../presentation/seaRoutes';
 
 interface SeaRouteOverlayProps {
   planet: PlanetDefinition;
   selectedTerritoryId: string | null;
   debugView: boolean;
+  showNeutralPreviewRoutes: boolean;
 }
 
 function routeGeometry(
   routes: readonly TerritoryConnection[],
   planet: PlanetDefinition,
+  dotted = false,
 ): THREE.BufferGeometry {
   const positions: number[] = [];
   const territories = new Map(
@@ -22,18 +24,27 @@ function routeGeometry(
   for (const route of routes) {
     const from = territories.get(route.fromTerritoryId)!.center;
     const to = territories.get(route.toTerritoryId)!.center;
-    const middle = normalize([
-      from[0] + to[0],
-      from[1] + to[1],
-      from[2] + to[2],
-    ]);
-    const curve = new THREE.QuadraticBezierCurve3(
-      new THREE.Vector3(...from).multiplyScalar(PLANET_RADIUS * 1.025),
-      new THREE.Vector3(...middle).multiplyScalar(PLANET_RADIUS * 1.2),
-      new THREE.Vector3(...to).multiplyScalar(PLANET_RADIUS * 1.025),
-    );
-    const points = curve.getPoints(28);
+    const start = new THREE.Vector3(...from).normalize();
+    const end = new THREE.Vector3(...to).normalize();
+    const angle = start.angleTo(end);
+    const points = Array.from({ length: 29 }, (_, index) => {
+      const fraction = index / 28;
+      const sinAngle = Math.sin(angle);
+      const point =
+        sinAngle > 0.0001
+          ? start
+              .clone()
+              .multiplyScalar(Math.sin((1 - fraction) * angle) / sinAngle)
+              .add(
+                end
+                  .clone()
+                  .multiplyScalar(Math.sin(fraction * angle) / sinAngle),
+              )
+          : start.clone().lerp(end, fraction).normalize();
+      return point.multiplyScalar(PLANET_RADIUS * 1.035);
+    });
     for (let index = 1; index < points.length; index += 1) {
+      if (dotted && index % 2 === 0) continue;
       positions.push(
         ...points[index - 1]!.toArray(),
         ...points[index]!.toArray(),
@@ -76,11 +87,10 @@ export function SeaRouteOverlay({
   planet,
   selectedTerritoryId,
   debugView,
+  showNeutralPreviewRoutes,
 }: SeaRouteOverlayProps) {
   const routeGroups = useMemo(() => {
-    const routes = planet.connections.filter(
-      (connection) => connection.type === 'sea-route',
-    );
+    const routes = canonicalSeaRoutes(planet);
     const bridgePairs = new Set(
       planet.analysis.seaRouteBridgeConnections.map((connection) =>
         [connection.fromTerritoryId, connection.toTerritoryId].sort().join('|'),
@@ -123,6 +133,10 @@ export function SeaRouteOverlay({
     () => routeGeometry(routeGroups.selected, planet),
     [planet, routeGroups.selected],
   );
+  const previewGeometry = useMemo(
+    () => routeGeometry(routeGroups.routes, planet, true),
+    [planet, routeGroups.routes],
+  );
   const bridgeGeometry = useMemo(
     () => routeGeometry(routeGroups.bridges, planet),
     [planet, routeGroups.bridges],
@@ -138,6 +152,22 @@ export function SeaRouteOverlay({
 
   return (
     <>
+      {showNeutralPreviewRoutes && (
+        <lineSegments
+          geometry={previewGeometry}
+          renderOrder={4}
+          name="neutral-preview-sea-routes"
+          userData={{ decorative: true, routeCount: routeGroups.routes.length }}
+          raycast={() => undefined}
+        >
+          <lineBasicMaterial
+            color="#8dd9ec"
+            transparent
+            opacity={0.48}
+            depthWrite={false}
+          />
+        </lineSegments>
+      )}
       {debugView && (
         <>
           <lineSegments geometry={redundantGeometry} renderOrder={5}>

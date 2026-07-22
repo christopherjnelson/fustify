@@ -1,5 +1,24 @@
 # Fustify Handoff
 
+## Gameplay UX and study-liveness polish (July 2026)
+
+Branch `feat/gameplay-ux-heartbeat-polish` starts at
+`467ba01ccf98d0ea20d19bf495a0bad010fde24c`. Balance studies now use an atomic,
+rate-limited heartbeat sidecar driven from bounded headless command-loop
+progress opportunities. `/admin` distinguishes current, delayed, and stale
+runner heartbeats from completed matches and checkpoints while continuing to
+parse historical reports without heartbeat data.
+
+Neutral world selection shows subtle dotted globe routes sourced directly from
+canonical sea-route connections; Start Game restores contextual gameplay-only
+route visibility. End Attack is separated from combat controls and confirms
+only while legal attacks remain. The shared movement amount presentation omits
+the slider when capture or fortification has exactly one legal value.
+
+The right-panel work is intentionally limited to the new phase-actions section,
+confirmation overlay, spacing, and fixed-value display. A broader panel
+information-architecture or mobile HUD redesign remains deferred.
+
 ## Assignment-position diagnostics (July 2026)
 
 Branch `fix/assignment-position-diagnostics` starts at `e568c3e`. Diagnostic

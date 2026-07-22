@@ -1,5 +1,26 @@
 # Balance study runbook
 
+## Runner liveness and checkpoints
+
+An active CLI run writes a small atomic heartbeat sidecar under
+`.fustify/reports/studies/heartbeats/`. This is separate from the latest
+completed match, the checkpoint timestamp, and the full report modification
+time. The headless command loop offers progress every 100 commands or five
+seconds of monotonic elapsed time; the sidecar writer rate-limits disk writes to
+one per five seconds. It therefore continues during one slow match without
+depending on a Node timer firing.
+
+The development-only `/admin` endpoint merges a valid sidecar into an active
+report. Heartbeats under 20 seconds old show Running, 20–60 seconds show
+Running, heartbeat delayed, and 60 seconds or more show Interrupted / resumable.
+This is a conservative twelve-interval stale grace. Completed, failed, and
+interrupted report states always override heartbeat age. Finalization removes
+the sidecar; a crashed process leaves one that ages into resumable state.
+
+Schema-v1 reports without heartbeat data remain valid and use `updatedAt` only
+as the historical fallback. Resume checkpoints and all study calculations are
+unchanged.
+
 The balance-study runner is a self-service, unattended research tool. It builds a deterministic multi-configuration matrix and sends every match through canonical world generation, random territory assignment, `balanced-v1`, the authoritative reducer, invariant checks, and the existing headless match runner. It does not tune rules or bot weights.
 
 ## Operator workflow

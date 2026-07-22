@@ -736,6 +736,62 @@ select:focus-visible {
   background: rgba(3, 10, 18, 0.62);
 }
 
+.phase-actions {
+  margin: 16px 0 10px;
+  padding: 13px 14px;
+  border-top: 1px solid rgba(134, 181, 216, 0.25);
+  border-bottom: 1px solid rgba(134, 181, 216, 0.12);
+  background: rgba(8, 18, 29, 0.72);
+}
+
+.phase-actions .secondary-action {
+  min-height: 42px;
+}
+
+.phase-confirmation {
+  position: absolute;
+  z-index: 20;
+  inset: 12px;
+  display: grid;
+  align-content: center;
+  padding: 22px;
+  border: 1px solid rgba(247, 182, 95, 0.42);
+  border-radius: 14px;
+  background: rgba(5, 12, 20, 0.97);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+
+.phase-confirmation h2,
+.phase-confirmation p {
+  margin: 0 0 12px;
+}
+
+.phase-confirmation p {
+  color: #a8bac9;
+  font-size: 0.72rem;
+}
+
+.confirmation-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.confirmation-actions button {
+  min-height: 44px;
+  color: #eef7ff;
+  border: 1px solid rgba(134, 204, 238, 0.32);
+  border-radius: 8px;
+  background: #2876a8;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.confirmation-actions button:first-child {
+  color: #ffd8cf;
+  border-color: rgba(244, 115, 91, 0.42);
+  background: rgba(123, 42, 36, 0.72);
+}
+
 .phase-heading {
   display: flex;
   align-items: center;
@@ -869,6 +925,24 @@ button:disabled {
 .amount-control strong {
   color: #f1f7fc;
   text-align: right;
+}
+
+.fixed-amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 11px 0;
+  padding: 10px 12px;
+  color: #9aafc2;
+  border: 1px solid rgba(153, 190, 224, 0.14);
+  border-radius: 8px;
+  background: rgba(12, 25, 37, 0.55);
+  font-size: 0.68rem;
+}
+
+.fixed-amount strong {
+  color: #f1f7fc;
+  font-size: 1rem;
 }
 
 .route-label {

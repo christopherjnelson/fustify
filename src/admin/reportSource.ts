@@ -91,6 +91,12 @@ export function fixtureAdminReportSource(name: string): AdminReportSource {
           : {
               ...balanceStudyFixtures.running,
               updatedAt: new Date().toISOString(),
+              heartbeat: balanceStudyFixtures.running.heartbeat
+                ? {
+                    ...balanceStudyFixtures.running.heartbeat,
+                    writtenAt: new Date().toISOString(),
+                  }
+                : undefined,
               checkpoint: {
                 ...balanceStudyFixtures.running.checkpoint,
                 lastWrittenAt: new Date().toISOString(),
@@ -103,6 +109,9 @@ export function fixtureAdminReportSource(name: string): AdminReportSource {
         ? {
             ...report,
             updatedAt: new Date().toISOString(),
+            heartbeat: report.heartbeat
+              ? { ...report.heartbeat, writtenAt: new Date().toISOString() }
+              : undefined,
             checkpoint: {
               ...report.checkpoint,
               lastWrittenAt: new Date().toISOString(),

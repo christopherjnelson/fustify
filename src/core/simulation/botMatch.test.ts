@@ -18,6 +18,21 @@ const focused = {
 };
 
 describe('headless heuristic matches', () => {
+  it('offers heartbeat progress during a single long match', async () => {
+    const progress: number[] = [];
+    const result = await runHeadlessMatch({
+      ...focused,
+      maxCommands: 12,
+      progressCommandInterval: 2,
+      onProgress: ({ commandCount }) => {
+        progress.push(commandCount);
+      },
+    });
+    expect(progress.length).toBeGreaterThan(1);
+    expect(progress).toEqual([...progress].sort((a, b) => a - b));
+    expect(progress.at(-1)!).toBeLessThanOrEqual(result.commandsApplied);
+  });
+
   it(
     'replays identical configuration to identical authoritative results',
     { timeout: 120_000 },

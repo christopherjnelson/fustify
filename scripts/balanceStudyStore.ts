@@ -16,6 +16,7 @@ import {
   type BalanceStudyConfig,
   type CompletedStudyMatch,
 } from '../src/core/simulation/balanceStudy';
+import { STUDY_HEARTBEAT_INTERVAL_MS } from '../src/admin/studyLiveness';
 
 export const STUDY_ROOT = resolve('.fustify', 'reports', 'studies');
 export function studyPaths(directory = STUDY_ROOT) {
@@ -26,7 +27,60 @@ export function studyPaths(directory = STUDY_ROOT) {
     history: resolve(root, 'history'),
     checkpoints: resolve(root, 'checkpoints'),
     traces: resolve(root, 'traces'),
+    heartbeats: resolve(root, 'heartbeats'),
   };
+}
+export interface StudyHeartbeat {
+  runId: string;
+  processId: number;
+  writtenAt: string;
+  commandCount: number;
+  matchIndex?: number;
+}
+
+export function createStudyHeartbeatWriter({
+  runId,
+  processId = process.pid,
+  directory = STUDY_ROOT,
+  now = () => Date.now(),
+  write = atomicStudyWrite,
+}: {
+  runId: string;
+  processId?: number;
+  directory?: string;
+  now?: () => number;
+  write?: typeof atomicStudyWrite;
+}) {
+  let lastWrittenAt = Number.NEGATIVE_INFINITY;
+  const path = resolve(studyPaths(directory).heartbeats, `${runId}.json`);
+  return async (
+    progress: { commandCount: number; matchIndex?: number },
+    force = false,
+  ) => {
+    const current = now();
+    if (!force && current - lastWrittenAt < STUDY_HEARTBEAT_INTERVAL_MS)
+      return false;
+    const heartbeat: StudyHeartbeat = {
+      runId,
+      processId,
+      writtenAt: new Date(current).toISOString(),
+      ...progress,
+    };
+    await write(path, heartbeat);
+    lastWrittenAt = current;
+    return true;
+  };
+}
+
+export async function removeStudyHeartbeat(
+  runId: string,
+  directory = STUDY_ROOT,
+) {
+  try {
+    await unlink(resolve(studyPaths(directory).heartbeats, `${runId}.json`));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
 }
 export async function atomicStudyWrite(path: string, value: unknown) {
   await mkdir(resolve(path, '..'), { recursive: true });
@@ -70,6 +124,7 @@ export async function finalizeStudy(
   const parsed = parseBalanceStudyReport(report);
   await atomicStudyWrite(paths.latest, parsed);
   await atomicStudyWrite(resolve(paths.history, `${report.id}.json`), parsed);
+  await removeStudyHeartbeat(report.id, directory);
   const files = (await readdir(paths.history))
     .filter((name) => name.endsWith('.json'))
     .sort()

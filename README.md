@@ -13,6 +13,7 @@ The prototype currently provides:
 - Four recommended editable seats (one Local Human and three Heuristic Bots), expandable to six; custom two- and three-seat tables remain supported
 - Five- and six-seat tables are supported expanded matches and generally run substantially longer; every seat independently supports Human or Bot
 - A randomly named neutral world on fresh launch, before any player ownership exists
+- Subtle dotted canonical sea routes on the 3D globe while choosing a neutral world
 - Curated readable names that are also canonical deterministic world seeds
 - Random distributed assignment or a complete local round-robin territory draft
 - A deterministic 32-candidate random starting-position generator with balance preview and assignment rerolls
@@ -210,6 +211,13 @@ Each player turn follows these phases:
 4. **Fortify:** move armies once between owned territories connected by any owned path, or skip.
 5. **End turn:** explicitly hand off to the next non-eliminated local player, who begins in Reinforce.
 
+End Attack is isolated in a separate phase-actions section. When any legal
+attack remains it opens a keyboard-operable confirmation; Escape or Continue
+Attacking returns focus to the phase action. When no attack is possible, the
+phase ends directly. Capture and fortification show a noninteractive fixed
+amount when their legal minimum and maximum are equal, and retain the range
+control whenever a real choice exists.
+
 Reinforcements use `max(3, floor(owned territories / 3))` plus the generated placeholder bonus for every fully owned gameplay continent. The HUD shows the base and continent portions separately.
 
 The attacker may roll one die with two armies, two with three armies, and three with four or more armies. The defender rolls up to two dice based on its army count. Rolls are sorted high-to-low, compared in pairs, and the defender wins ties. Combat never calls `Math.random()`: each battle gets a deterministic RNG stream derived from the match seed and combat sequence, and the event log records both dice arrays and casualties.
@@ -238,6 +246,12 @@ Visible focus rings apply to buttons, inputs, and selects. The modal traps focus
 The compact flat map is a secondary overview; the 3D globe remains the authoritative board and the only spatial gameplay surface. It renders the current `PlanetDefinition.surfaceCells`, territory metadata, canonical connections, setup ownership, and live `MatchState` ownership. It never regenerates from the seed, owns no territory identifiers, dispatches no game commands, and provides no selection, draft, combat, zoom, pan, or camera-navigation controls.
 
 Projection is equirectangular: longitude maps left-to-right and latitude maps north-to-south. Canonical icosphere cells become grouped SVG territory paths, shared cell edges become coast/territory/continent lines, and canonical sea routes become sampled great-circle polylines. Polygons are unwrapped and clipped into longitude bands at `-180°/+180°`; lines and routes are split at the crossing. Every fragment retains its canonical territory or route association, so a seam never creates another logical territory or a full-width false edge. Polar distortion is accepted, while near-polar cells remain visible.
+
+The globe filters the same canonical `PlanetDefinition.connections` used by
+the minimap. During world selection every sea route is rendered as a subtle,
+decorative dotted great-circle path with no pointer handlers. Start Game removes
+that global preview; active play keeps the existing selected/contextual route
+highlighting, which remains visually stronger.
 
 Projected geometry and SVG path data are cached by the canonical `PlanetDefinition`. A regenerated or loaded world rebuilds them; assignment and gameplay only update fills, and globe motion only updates the crosshair. The crosshair is derived one-way from the globe camera direction, uses both a ring and crosshair shape, and honors reduced-motion styling. The visualization is a single labeled, non-focusable overview rather than thousands of screen-reader polygons. On narrow screens the setup panel becomes shorter and independently scrollable so the minimap remains visible without covering its controls.
 

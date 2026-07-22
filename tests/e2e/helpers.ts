@@ -2,6 +2,7 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 
 export type Scenario =
   | 'world-setup'
+  | 'generated-world'
   | 'generate-world-busy'
   | 'pregame'
   | 'pregame-random-ready'
@@ -25,10 +26,14 @@ export type Scenario =
   | 'bot-victory'
   | 'attack-source'
   | 'attack-target'
+  | 'attack-confirmation'
+  | 'attack-no-legal'
   | 'combat-result'
   | 'pending-capture'
+  | 'pending-capture-fixed'
   | 'player-elimination'
   | 'fortification'
+  | 'fortification-fixed'
   | 'game-over'
   | 'navigator'
   | 'event-log'

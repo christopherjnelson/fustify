@@ -243,6 +243,14 @@ function variant(status: BalanceStudyReport['status']): BalanceStudyReport {
       (_, i) => i,
     );
     report.checkpoint.resumable = true;
+    if (status === 'running')
+      report.heartbeat = {
+        runId: report.id,
+        processId: 4321,
+        writtenAt: report.updatedAt,
+        commandCount: 800,
+        matchIndex: 17,
+      };
   }
   if (status === 'failed') {
     report.aggregate.outcomes.engineError = 1;

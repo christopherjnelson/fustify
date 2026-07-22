@@ -8,6 +8,8 @@ import {
 } from 'react';
 import {
   calculateReinforcements,
+  getAttackSources,
+  getAttackTargets,
   getFullyOwnedContinents,
   getOwnedTerritories,
   getValidAttackDice,
@@ -32,6 +34,42 @@ const VIEW_MODES: { id: PlanetViewMode; label: string }[] = [
   { id: 'continents', label: 'Continents' },
   { id: 'terrain', label: 'Terrain' },
 ];
+
+function ArmyAmountControl({
+  label,
+  minimum,
+  maximum,
+  value,
+  onChange,
+}: {
+  label: string;
+  minimum: number;
+  maximum: number;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  if (minimum === maximum)
+    return (
+      <p className="fixed-amount" aria-label={`${label}: ${value}`}>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </p>
+    );
+  return (
+    <label className="amount-control">
+      <span>{label}</span>
+      <input
+        aria-label={label}
+        type="range"
+        min={minimum}
+        max={maximum}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      <strong>{value}</strong>
+    </label>
+  );
+}
 
 export function TerritoryHud() {
   const planet = useGameStore((state) => state.planet);
@@ -64,11 +102,14 @@ export function TerritoryHud() {
   const [moveAmount, setMoveAmount] = useState(1);
   const [fortifyAmount, setFortifyAmount] = useState(1);
   const [reviewingGameOver, setReviewingGameOver] = useState(false);
+  const [confirmingEndAttack, setConfirmingEndAttack] = useState(false);
   const [navigatorOpen, dispatchNavigator] = useReducer(
     territoryDrawerReducer,
     false,
   );
   const navigatorTriggerRef = useRef<HTMLButtonElement>(null);
+  const endAttackTriggerRef = useRef<HTMLButtonElement>(null);
+  const endAttackConfirmRef = useRef<HTMLButtonElement>(null);
 
   const closeNavigator = () => {
     dispatchNavigator('close');
@@ -140,6 +181,22 @@ export function TerritoryHud() {
     fortifyMax,
     Math.max(1, fortifyAmount),
   );
+  const legalAttackRemains = getAttackSources(match).some(
+    (territoryId) => getAttackTargets(planet, match, territoryId).length > 0,
+  );
+
+  useEffect(() => {
+    if (!confirmingEndAttack) return;
+    endAttackConfirmRef.current?.focus();
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setConfirmingEndAttack(false);
+      window.requestAnimationFrame(() => endAttackTriggerRef.current?.focus());
+    };
+    window.addEventListener('keydown', cancel);
+    return () => window.removeEventListener('keydown', cancel);
+  }, [confirmingEndAttack]);
 
   return (
     <>
@@ -317,13 +374,58 @@ export function TerritoryHud() {
                 {latestCombat.attackerLosses}:{latestCombat.defenderLosses}
               </p>
             )}
+          </section>
+        )}
+
+        {!botControlled && match.phase === 'attack' && (
+          <section className="phase-actions" aria-label="Attack phase actions">
+            <span className="eyebrow">Phase actions</span>
             <button
+              ref={endAttackTriggerRef}
               type="button"
               className="wide secondary-action"
-              onClick={() => dispatch({ type: 'END_ATTACK_PHASE' })}
+              onClick={() => {
+                if (legalAttackRemains) setConfirmingEndAttack(true);
+                else dispatch({ type: 'END_ATTACK_PHASE' });
+              }}
             >
               End attack phase
             </button>
+          </section>
+        )}
+
+        {confirmingEndAttack && match.phase === 'attack' && (
+          <section
+            className="phase-confirmation"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="end-attack-title"
+          >
+            <h2 id="end-attack-title">End attacking now?</h2>
+            <p>Legal attacks remain. You cannot return to this phase.</p>
+            <div className="confirmation-actions">
+              <button
+                ref={endAttackConfirmRef}
+                type="button"
+                onClick={() => {
+                  setConfirmingEndAttack(false);
+                  dispatch({ type: 'END_ATTACK_PHASE' });
+                }}
+              >
+                End attack phase
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmingEndAttack(false);
+                  window.requestAnimationFrame(() =>
+                    endAttackTriggerRef.current?.focus(),
+                  );
+                }}
+              >
+                Continue attacking
+              </button>
+            </div>
           </section>
         )}
 
@@ -335,17 +437,13 @@ export function TerritoryHud() {
               Move at least {pending.minimumArmies}; the source must keep one
               army.
             </p>
-            <label className="amount-control">
-              <span>Armies</span>
-              <input
-                type="range"
-                min={pending.minimumArmies}
-                max={captureMax}
-                value={effectiveMoveAmount}
-                onChange={(event) => setMoveAmount(Number(event.target.value))}
-              />
-              <strong>{effectiveMoveAmount}</strong>
-            </label>
+            <ArmyAmountControl
+              label="Armies to move"
+              minimum={pending.minimumArmies}
+              maximum={captureMax}
+              value={effectiveMoveAmount}
+              onChange={setMoveAmount}
+            />
             <button
               type="button"
               className="wide"
@@ -375,19 +473,13 @@ export function TerritoryHud() {
                 <strong className="route-label">
                   {source.name} → {target.name}
                 </strong>
-                <label className="amount-control">
-                  <span>Armies</span>
-                  <input
-                    type="range"
-                    min={1}
-                    max={fortifyMax}
-                    value={effectiveFortifyAmount}
-                    onChange={(event) =>
-                      setFortifyAmount(Number(event.target.value))
-                    }
-                  />
-                  <strong>{effectiveFortifyAmount}</strong>
-                </label>
+                <ArmyAmountControl
+                  label="Armies to move"
+                  minimum={1}
+                  maximum={fortifyMax}
+                  value={effectiveFortifyAmount}
+                  onChange={setFortifyAmount}
+                />
                 <button
                   type="button"
                   className="wide"

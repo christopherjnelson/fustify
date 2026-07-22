@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AdminReportSource } from './reportSource';
 import type { VerificationRun } from './reportContract';
 import type { BalanceStudyReport } from './balanceStudyContract';
+import { classifyStudyRunner } from './studyLiveness';
 
 function duration(ms?: number) {
   if (ms === undefined) return '—';
@@ -47,10 +48,19 @@ function BalanceStudies({
   const failures =
     study?.findings.filter((item) => item.classification === 'failure')
       .length ?? 0;
-  const stale =
-    study?.status === 'running' &&
-    checkedAt !== null &&
-    checkedAt.getTime() - Date.parse(study.updatedAt) > 30_000;
+  const runner = study
+    ? classifyStudyRunner(
+        study,
+        checkedAt?.getTime() ?? Date.parse(study.updatedAt),
+      )
+    : null;
+  const runnerLabel = runner
+    ? runner.state === 'heartbeat-delayed'
+      ? 'Running, heartbeat delayed'
+      : runner.state === 'resumable'
+        ? 'Interrupted / resumable'
+        : label(runner.state)
+    : '';
   return (
     <section className="study-section" aria-labelledby="balance-studies">
       <div className="study-title">
@@ -97,7 +107,7 @@ function BalanceStudies({
           <article className={`study-overview status-${study.status}`}>
             <div>
               <p className="status-label" data-study-status>
-                {stale ? 'Abandoned / resumable' : label(study.status)}
+                {runnerLabel}
               </p>
               <h3>{study.id}</h3>
               <p>
@@ -146,6 +156,18 @@ function BalanceStudies({
                 <dd>
                   {warnings} / {failures}
                 </dd>
+              </div>
+              <div>
+                <dt>Runner heartbeat</dt>
+                <dd>
+                  {study.heartbeat
+                    ? timestamp(study.heartbeat.writtenAt)
+                    : 'Not recorded (legacy report)'}
+                </dd>
+              </div>
+              <div>
+                <dt>Heartbeat age</dt>
+                <dd>{duration(runner?.heartbeatAgeMs)}</dd>
               </div>
               <div>
                 <dt>Checkpoint</dt>

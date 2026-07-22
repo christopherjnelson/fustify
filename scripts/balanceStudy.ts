@@ -23,6 +23,8 @@ import {
 } from '../src/core/simulation/balanceStudy';
 import {
   finalizeStudy,
+  createStudyHeartbeatWriter,
+  removeStudyHeartbeat,
   readCheckpoint,
   readCompletedStudies,
   readStudy,
@@ -464,6 +466,8 @@ async function execute(
     runtimeMs,
     completed,
   });
+  const heartbeat = createStudyHeartbeatWriter({ runId });
+  await heartbeat({ commandCount: 0 }, true);
   await writeStudyProgress(buildReport('running'), checkpoint());
   process.stdout.write(
     `Run ID: ${runId}\n${planText(config, preset, await readCompletedStudies())}\n`,
@@ -473,7 +477,11 @@ async function execute(
     if (completedIndices.has(input.index)) continue;
     if (interrupted) break;
     const started = performance.now();
-    const result = await runHeadlessMatch(input);
+    const result = await runHeadlessMatch({
+      ...input,
+      onProgress: ({ commandCount }) =>
+        heartbeat({ commandCount, matchIndex: input.index }),
+    });
     runtimeMs += performance.now() - started;
     const { finalState, trace, ...stored } = result;
     void finalState;
@@ -505,8 +513,10 @@ async function execute(
     process.stdout.write(
       `${JSON.stringify({ diagnosticDebug: diagnosticDebugRows(completed) }, null, 2)}\n`,
     );
-  if (status === 'interrupted') await writeStudyProgress(report, checkpoint());
-  else await finalizeStudy(report);
+  if (status === 'interrupted') {
+    await writeStudyProgress(report, checkpoint());
+    await removeStudyHeartbeat(runId);
+  } else await finalizeStudy(report);
   process.stdout.write(
     `${status === 'interrupted' ? 'Interrupted safely; resume' : 'Study finished'}: ${runId} · ${completed.length}/${matrix.length} matches · report ${studyPaths().latest}\n`,
   );

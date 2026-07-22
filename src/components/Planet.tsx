@@ -291,6 +291,10 @@ export function Planet({ planet }: PlanetProps) {
         planet={planet}
         selectedTerritoryId={match?.selectedSourceTerritoryId ?? null}
         debugView={debugView}
+        showNeutralPreviewRoutes={
+          applicationMode === 'world-setup' &&
+          matchSetup.setupPhase === 'neutral-preview'
+        }
       />
       {gameplayActive && match && (
         <ArmyMarkers

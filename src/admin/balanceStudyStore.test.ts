@@ -1,4 +1,4 @@
-import { mkdtemp, readdir } from 'node:fs/promises';
+import { access, mkdtemp, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -11,6 +11,7 @@ import {
 } from '../core/simulation/balanceStudy';
 import {
   finalizeStudy,
+  createStudyHeartbeatWriter,
   readCheckpoint,
   readStudy,
   studyPaths,
@@ -66,5 +67,41 @@ describe('balance study report and checkpoint store', () => {
     delete legacy.plan.rotationDesign;
     delete legacy.plan.pairRotationCount;
     expect(parseBalanceStudyReport(legacy).id).toBe(legacy.id);
+  });
+  it('rate-limits atomic heartbeat writes and cleans them up on finalize', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'fustify-heartbeat-'));
+    let clock = Date.parse('2026-07-21T12:00:00.000Z');
+    let writes = 0;
+    const heartbeat = createStudyHeartbeatWriter({
+      runId: balanceStudyFixtures.running.id,
+      directory: root,
+      now: () => clock,
+      write: async (path, value) => {
+        writes += 1;
+        const { atomicStudyWrite } =
+          await import('../../scripts/balanceStudyStore');
+        await atomicStudyWrite(path, value);
+      },
+    });
+    expect(await heartbeat({ commandCount: 0 }, true)).toBe(true);
+    clock += 1_000;
+    expect(await heartbeat({ commandCount: 100 })).toBe(false);
+    clock += 4_000;
+    expect(await heartbeat({ commandCount: 200 })).toBe(true);
+    expect(writes).toBe(2);
+    expect(
+      (await readdir(studyPaths(root).heartbeats)).some((name) =>
+        name.endsWith('.tmp'),
+      ),
+    ).toBe(false);
+    await finalizeStudy(balanceStudyFixtures.completed, 20, root);
+    await expect(
+      access(
+        resolve(
+          studyPaths(root).heartbeats,
+          `${balanceStudyFixtures.completed.id}.json`,
+        ),
+      ),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });

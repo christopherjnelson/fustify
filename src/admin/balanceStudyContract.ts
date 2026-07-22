@@ -241,6 +241,15 @@ export const balanceStudyReportSchema = z.object({
   updatedAt: z.string().datetime(),
   completedAt: z.string().datetime().optional(),
   processId: z.number().int().positive().optional(),
+  heartbeat: z
+    .object({
+      runId: z.string(),
+      processId: z.number().int().positive(),
+      writtenAt: z.string().datetime(),
+      commandCount: z.number().int().nonnegative(),
+      matchIndex: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
   repository: z.object({
     branch: z.string().max(500),
     commit: z.string().regex(/^[a-f0-9]{7,64}$/),

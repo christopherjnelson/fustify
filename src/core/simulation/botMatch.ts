@@ -43,6 +43,13 @@ export interface HeadlessMatchOptions {
   assignmentRotation?: number;
   controllerStreamRotation?: number;
   playerIds?: string[];
+  /** Optional runner liveness hook; never influences canonical decisions. */
+  onProgress?: (progress: {
+    commandCount: number;
+    turnNumber: number;
+  }) => void | Promise<void>;
+  progressCommandInterval?: number;
+  progressElapsedIntervalMs?: number;
 }
 
 export interface ReproductionDescriptor {
@@ -399,6 +406,9 @@ export async function runHeadlessMatch(
   let turnsWithoutCapture = 0;
   let turnStartOwnership = ownershipSignature(state);
   let leader = leadingPlayer(state);
+  let lastProgressAt = performance.now();
+  const progressCommandInterval = options.progressCommandInterval ?? 100;
+  const progressElapsedIntervalMs = options.progressElapsedIntervalMs ?? 5_000;
 
   while (true) {
     if (state.phase === 'game-over') {
@@ -475,6 +485,18 @@ export async function runHeadlessMatch(
     }
 
     const before = state;
+    const progressNow = performance.now();
+    if (
+      options.onProgress &&
+      (commandsApplied % progressCommandInterval === 0 ||
+        progressNow - lastProgressAt >= progressElapsedIntervalMs)
+    ) {
+      await options.onProgress({
+        commandCount: commandsApplied,
+        turnNumber: state.turnNumber,
+      });
+      lastProgressAt = progressNow;
+    }
     const legal = getLegalGameCommands(planet, before);
     const observation = createGameObservation(planet, before);
     const decisionIndex = commandsApplied;

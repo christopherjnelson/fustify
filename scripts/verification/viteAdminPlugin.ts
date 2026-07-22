@@ -10,6 +10,27 @@ import { balanceStudyReportSchema } from '../../src/admin/balanceStudyContract';
 import { studyPaths } from '../balanceStudyStore';
 import type { z } from 'zod';
 
+async function withStudyHeartbeat(
+  result: Awaited<ReturnType<typeof validatedFile>>,
+  heartbeats: string,
+) {
+  if (result.status !== 200) return result;
+  const report = result.body as { id: string; status: string };
+  if (report.status !== 'running') return result;
+  try {
+    const heartbeat = JSON.parse(
+      await readFile(resolve(heartbeats, `${report.id}.json`), 'utf8'),
+    ) as Record<string, unknown>;
+    const merged = balanceStudyReportSchema.safeParse({
+      ...report,
+      heartbeat,
+    });
+    return merged.success ? { status: 200, body: merged.data } : result;
+  } catch {
+    return result;
+  }
+}
+
 function send(
   response: import('node:http').ServerResponse,
   status: number,
@@ -65,10 +86,13 @@ export function fustifyAdminReportsPlugin(directory?: string): Plugin {
           if (request.method !== 'GET')
             return send(response, 405, { error: 'Read-only endpoint' });
           if (url.pathname === `${studyPrefix}/latest`) {
-            const result = await validatedFile(
-              studies.latest,
-              balanceStudyReportSchema,
-              'balance study report',
+            const result = await withStudyHeartbeat(
+              await validatedFile(
+                studies.latest,
+                balanceStudyReportSchema,
+                'balance study report',
+              ),
+              studies.heartbeats,
             );
             return send(response, result.status, result.body);
           }
@@ -100,10 +124,13 @@ export function fustifyAdminReportsPlugin(directory?: string): Plugin {
               .sort()
               .reverse()
               .slice(0, limit)) {
-              const result = await validatedFile(
-                resolve(studies.history, name),
-                balanceStudyReportSchema,
-                'balance study report',
+              const result = await withStudyHeartbeat(
+                await validatedFile(
+                  resolve(studies.history, name),
+                  balanceStudyReportSchema,
+                  'balance study report',
+                ),
+                studies.heartbeats,
               );
               if (result.status === 200) reports.push(result.body);
               else
@@ -128,16 +155,22 @@ export function fustifyAdminReportsPlugin(directory?: string): Plugin {
           }
           if (!isSafeRunId(id))
             return send(response, 400, { error: 'Invalid run ID' });
-          const result = await validatedFile(
-            resolve(studies.history, `${id}.json`),
-            balanceStudyReportSchema,
-            'balance study report',
-          );
-          if (result.status === 404) {
-            const latest = await validatedFile(
-              studies.latest,
+          const result = await withStudyHeartbeat(
+            await validatedFile(
+              resolve(studies.history, `${id}.json`),
               balanceStudyReportSchema,
               'balance study report',
+            ),
+            studies.heartbeats,
+          );
+          if (result.status === 404) {
+            const latest = await withStudyHeartbeat(
+              await validatedFile(
+                studies.latest,
+                balanceStudyReportSchema,
+                'balance study report',
+              ),
+              studies.heartbeats,
             );
             if (
               latest.status === 200 &&

@@ -342,6 +342,13 @@ test('Generate World repeats on the neutral world-selection screen before Start 
     page.getByRole('button', { name: 'Generate World' }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start Game' })).toBeVisible();
+  const previewRoutes = page.getByTestId('globe-neutral-sea-routes');
+  await expect(previewRoutes).toHaveAttribute('data-visible', 'true');
+  expect(Number(await previewRoutes.getAttribute('data-route-count'))).toBe(
+    (await stateSnapshot(page)).planet.connections.filter(
+      (connection) => connection.type === 'sea-route',
+    ).length,
+  );
   await expect(
     page.getByRole('button', { name: 'Randomize World' }),
   ).toHaveCount(0);
@@ -380,6 +387,7 @@ test('Generate World repeats on the neutral world-selection screen before Start 
     .locator('.minimap-territories')
     .innerHTML();
   expect(after.setupPhase).toBe('neutral-preview');
+  await expect(previewRoutes).toHaveAttribute('data-visible', 'true');
   expect(after.hasMatch).toBe(false);
   expect(after.planet.seed).not.toBe(before.planet.seed);
   expect(afterMinimap).not.toBe(beforeMinimap);
@@ -425,6 +433,7 @@ test('Generate World repeats on the neutral world-selection screen before Start 
     page.getByRole('heading', { name: 'Preview and assign territories' }),
   ).toBeVisible();
   const setup = await stateSnapshot(page);
+  await expect(previewRoutes).toHaveAttribute('data-visible', 'false');
   expect(setup.planet.seed).toBe(selectedWorld.planet.seed);
   expect(setup.planet.territories).toHaveLength(
     selectedWorld.planet.territories.length,
@@ -723,6 +732,82 @@ test('attack source and target scenarios expose legal phase controls', async ({
   await expect(
     page.getByRole('button', { name: 'Attack', exact: true }),
   ).toBeEnabled();
+});
+
+test('ending attack is separated and requires deliberate accessible confirmation', async ({
+  page,
+}) => {
+  await openScenario(page, 'attack-target');
+  const dice = page.getByLabel('Attack dice');
+  const end = page.getByRole('button', { name: 'End attack phase' });
+  const diceSection = await dice.evaluate(
+    (element) => element.closest('section')?.className,
+  );
+  const endSection = await end.evaluate(
+    (element) => element.closest('section')?.className,
+  );
+  expect(diceSection).not.toBe(endSection);
+  await dice.selectOption('1');
+  expect((await stateSnapshot(page)).phase).toBe('attack');
+  await end.click();
+  const dialog = page.getByRole('dialog', { name: 'End attacking now?' });
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'End attack phase' }),
+  ).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(end).toBeFocused();
+  expect((await stateSnapshot(page)).phase).toBe('attack');
+  await end.click();
+  await dialog.getByRole('button', { name: 'Continue attacking' }).click();
+  expect((await stateSnapshot(page)).phase).toBe('attack');
+  await end.click();
+  await page.keyboard.press('Enter');
+  expect((await stateSnapshot(page)).phase).toBe('fortify');
+});
+
+test('ending attack skips confirmation when no legal attack remains', async ({
+  page,
+}) => {
+  await openScenario(page, 'attack-no-legal');
+  await page.getByRole('button', { name: 'End attack phase' }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'End attacking now?' }),
+  ).toHaveCount(0);
+  expect((await stateSnapshot(page)).phase).toBe('fortify');
+});
+
+test('single legal movement values are text while real choices remain sliders', async ({
+  page,
+}) => {
+  await openScenario(page, 'pending-capture-fixed');
+  await expect(page.getByLabel('Armies to move: 1')).toBeVisible();
+  await expect(
+    page.getByRole('slider', { name: 'Armies to move' }),
+  ).toHaveCount(0);
+  await page
+    .getByRole('button', { name: 'Complete capture move' })
+    .press('Enter');
+  expect((await stateSnapshot(page)).phase).toBe('attack');
+
+  await openScenario(page, 'pending-capture');
+  await expect(
+    page.getByRole('slider', { name: 'Armies to move' }),
+  ).toBeVisible();
+
+  await openScenario(page, 'fortification-fixed');
+  await expect(page.getByLabel('Armies to move: 1')).toBeVisible();
+  await expect(
+    page.getByRole('slider', { name: 'Armies to move' }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Fortify' }).press('Enter');
+  expect((await stateSnapshot(page)).phase).toBe('turn-end');
+
+  await openScenario(page, 'fortification');
+  await expect(
+    page.getByRole('slider', { name: 'Armies to move' }),
+  ).toBeVisible();
 });
 
 test('land-border and sea-route combat use dice controls and reducer state', async ({

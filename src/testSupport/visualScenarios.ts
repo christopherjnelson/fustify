@@ -22,6 +22,7 @@ import { useGameStore } from '../state/useGameStore';
 
 export type VisualScenario =
   | 'world-setup'
+  | 'generated-world'
   | 'generate-world-busy'
   | 'pregame'
   | 'pregame-random-ready'
@@ -45,10 +46,14 @@ export type VisualScenario =
   | 'bot-victory'
   | 'attack-source'
   | 'attack-target'
+  | 'attack-confirmation'
+  | 'attack-no-legal'
   | 'combat-result'
   | 'pending-capture'
+  | 'pending-capture-fixed'
   | 'player-elimination'
   | 'fortification'
+  | 'fortification-fixed'
   | 'game-over'
   | 'navigator'
   | 'event-log'
@@ -123,10 +128,21 @@ function winningDice() {
   };
 }
 
+function oneDieWinningDice() {
+  let roll = 0;
+  return {
+    integer(min: number, max: number) {
+      roll += 1;
+      return roll === 1 ? max : min;
+    },
+  };
+}
+
 function pendingCapture(
   match: MatchState,
   planet: ReturnType<typeof generatePlanet>,
   eliminateTargetOwner = false,
+  fixedAmount = false,
 ): MatchState {
   const attack = advanceToAttack(match, planet);
   const { sourceId, targetId } = borderPair(attack, planet);
@@ -145,7 +161,10 @@ function pendingCapture(
     ...attack,
     territories: {
       ...preparedTerritories,
-      [sourceId]: { ...preparedTerritories[sourceId]!, armyCount: 12 },
+      [sourceId]: {
+        ...preparedTerritories[sourceId]!,
+        armyCount: fixedAmount ? 2 : 12,
+      },
       [targetId]: { ...preparedTerritories[targetId]!, armyCount: 1 },
     },
   };
@@ -156,9 +175,9 @@ function pendingCapture(
       type: 'ATTACK',
       fromTerritoryId: sourceId,
       toTerritoryId: targetId,
-      attackDice: 3,
+      attackDice: fixedAmount ? 1 : 3,
     },
-    { createCombatRng: winningDice },
+    { createCombatRng: fixedAmount ? oneDieWinningDice : winningDice },
   ).state;
 }
 
@@ -238,9 +257,11 @@ function applyScenario(scenario: VisualScenario) {
   const scenarioSetup =
     scenario === 'minimap-seam'
       ? { ...FIXED_SETUP, seed: 'minimap-fixture-0' }
-      : scenario === 'pregame-six-seats'
-        ? { ...FIXED_SETUP, playerCount: 6 }
-        : FIXED_SETUP;
+      : scenario === 'generated-world'
+        ? { ...FIXED_SETUP, seed: 'visual-review-generated-world' }
+        : scenario === 'pregame-six-seats'
+          ? { ...FIXED_SETUP, playerCount: 6 }
+          : FIXED_SETUP;
   const fixed = fixedWorld(scenarioSetup);
   const { planet } = fixed;
   let matchSetup: MatchSetup = fixed.matchSetup;
@@ -279,6 +300,7 @@ function applyScenario(scenario: VisualScenario) {
 
   if (
     scenario !== 'world-setup' &&
+    scenario !== 'generated-world' &&
     scenario !== 'generate-world-busy' &&
     scenario !== 'saved-resume'
   ) {
@@ -286,6 +308,18 @@ function applyScenario(scenario: VisualScenario) {
       scenario.startsWith('pregame') || scenario.startsWith('draft')
         ? 'pregame'
         : 'playing';
+  }
+  if (scenario === 'attack-no-legal') {
+    const attack = advanceToAttack(match, planet);
+    scenarioMatch = {
+      ...attack,
+      territories: Object.fromEntries(
+        Object.entries(attack.territories).map(([id, territory]) => [
+          id,
+          { ...territory, ownerId: attack.activePlayerId },
+        ]),
+      ),
+    };
   }
   if (
     scenario === 'human-vs-bot-setup' ||
@@ -431,14 +465,18 @@ function applyScenario(scenario: VisualScenario) {
       };
     }
   }
-  if (scenario === 'attack-source' || scenario === 'attack-target') {
+  if (
+    scenario === 'attack-source' ||
+    scenario === 'attack-target' ||
+    scenario === 'attack-confirmation'
+  ) {
     scenarioMatch = advanceToAttack(match, planet);
     const { sourceId, targetId } = borderPair(scenarioMatch, planet);
     scenarioMatch = gameReducer(planet, scenarioMatch, {
       type: 'SELECT_TERRITORY',
       territoryId: sourceId,
     }).state;
-    if (scenario === 'attack-target') {
+    if (scenario === 'attack-target' || scenario === 'attack-confirmation') {
       scenarioMatch = gameReducer(planet, scenarioMatch, {
         type: 'SELECT_TERRITORY',
         territoryId: targetId,
@@ -451,13 +489,41 @@ function applyScenario(scenario: VisualScenario) {
   if (scenario === 'pending-capture') {
     scenarioMatch = pendingCapture(match, planet);
   }
+  if (scenario === 'pending-capture-fixed') {
+    scenarioMatch = pendingCapture(match, planet, false, true);
+  }
   if (scenario === 'player-elimination') {
     scenarioMatch = pendingCapture(match, planet, true);
     eventLogOpen = true;
   }
-  if (scenario === 'fortification') {
+  if (scenario === 'fortification' || scenario === 'fortification-fixed') {
     scenarioMatch = gameReducer(planet, advanceToAttack(match, planet), {
       type: 'END_ATTACK_PHASE',
+    }).state;
+    const ownedConnection = planet.connections.find(
+      (connection) =>
+        scenarioMatch!.territories[connection.fromTerritoryId]!.ownerId ===
+          scenarioMatch!.activePlayerId &&
+        scenarioMatch!.territories[connection.toTerritoryId]!.ownerId ===
+          scenarioMatch!.activePlayerId,
+    )!;
+    scenarioMatch = {
+      ...scenarioMatch,
+      territories: {
+        ...scenarioMatch.territories,
+        [ownedConnection.fromTerritoryId]: {
+          ...scenarioMatch.territories[ownedConnection.fromTerritoryId]!,
+          armyCount: scenario === 'fortification-fixed' ? 2 : 4,
+        },
+      },
+    };
+    scenarioMatch = gameReducer(planet, scenarioMatch, {
+      type: 'SELECT_TERRITORY',
+      territoryId: ownedConnection.fromTerritoryId,
+    }).state;
+    scenarioMatch = gameReducer(planet, scenarioMatch, {
+      type: 'SELECT_TERRITORY',
+      territoryId: ownedConnection.toTerritoryId,
     }).state;
   }
   if (scenario === 'game-over') {
