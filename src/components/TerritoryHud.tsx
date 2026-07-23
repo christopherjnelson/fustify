@@ -22,6 +22,7 @@ import { territoryDrawerReducer } from '../core/navigation/territoryNavigator';
 import { playerColorValue } from '../core/setup/playerConfig';
 import { TERRITORY_NAVIGATOR_SHORTCUT } from '../core/input/controlBindings';
 import { MatchDock } from './MatchDock';
+import { TurnSoundToggle } from './TurnNotificationController';
 
 const PHASE_LABELS = {
   reinforce: 'Reinforce',
@@ -676,64 +677,68 @@ export function TerritoryHud() {
             navigatorTriggerRef={navigatorTriggerRef}
             onOpenNavigator={() => dispatchNavigator('open')}
           >
-            {!multiplayerSession && (
-              <details className="game-menu">
-                <summary>Game</summary>
-                <div>
-                  <button type="button" onClick={saveMatch}>
-                    Save match
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          'Restart with the same world and ownership?',
+            <details className="game-menu">
+              <summary>Game</summary>
+              <div>
+                <TurnSoundToggle />
+                {!multiplayerSession && (
+                  <>
+                    <div className="game-menu-separator" />
+                    <button type="button" onClick={saveMatch}>
+                      Save match
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            'Restart with the same world and ownership?',
+                          )
                         )
-                      )
-                        resetMatch();
-                    }}
-                  >
-                    Same ownership rematch
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          'Return to pregame with a new ownership layout?',
+                          resetMatch();
+                      }}
+                    >
+                      Same ownership rematch
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            'Return to pregame with a new ownership layout?',
+                          )
                         )
-                      )
-                        rematchNewOwnership();
-                    }}
-                  >
-                    {assignmentMode === 'random'
-                      ? 'Reroll ownership'
-                      : 'Restart player draft'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          'Leave this match for world setup? The local save will remain.',
+                          rematchNewOwnership();
+                      }}
+                    >
+                      {assignmentMode === 'random'
+                        ? 'Reroll ownership'
+                        : 'Restart player draft'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            'Leave this match for world setup? The local save will remain.',
+                          )
                         )
-                      )
-                        backToWorldSetup();
-                    }}
-                  >
-                    Different world
-                  </button>
-                  <button
-                    type="button"
-                    className="danger"
-                    onClick={deleteSavedMatch}
-                  >
-                    Delete local save
-                  </button>
-                </div>
-              </details>
-            )}
+                          backToWorldSetup();
+                      }}
+                    >
+                      Different world
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={deleteSavedMatch}
+                    >
+                      Delete local save
+                    </button>
+                  </>
+                )}
+              </div>
+            </details>
           </HudUtilityRow>
 
           {!multiplayerSession && (saveMessage || saveError || savedAt) && (

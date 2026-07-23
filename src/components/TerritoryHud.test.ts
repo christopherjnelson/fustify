@@ -11,12 +11,9 @@ afterEach(() => {
 });
 
 describe('active-match HUD utilities', () => {
-  it.each([
-    ['local', true],
-    ['authoritative multiplayer', false],
-  ])(
-    'omits debug access for %s play while retaining neighboring player controls',
-    (_, showGameMenu) => {
+  it.each(['local', 'authoritative multiplayer'])(
+    'omits debug access for %s play while retaining player utilities',
+    () => {
       const markup = renderToStaticMarkup(
         createElement(
           HudUtilityRow,
@@ -25,20 +22,18 @@ describe('active-match HUD utilities', () => {
             navigatorTriggerRef: createRef<HTMLButtonElement>(),
             onOpenNavigator: () => undefined,
           },
-          showGameMenu
-            ? createElement(
-                'details',
-                { className: 'game-menu' },
-                createElement('summary', null, 'Game'),
-              )
-            : undefined,
+          createElement(
+            'details',
+            { className: 'game-menu' },
+            createElement('summary', null, 'Game'),
+          ),
         ),
       );
 
       expect(markup).not.toMatch(/>\s*Debug\s*</);
       expect(markup).not.toContain('aria-pressed=');
       expect(markup).toContain('Territory list');
-      expect(markup.includes('<summary>Game</summary>')).toBe(showGameMenu);
+      expect(markup).toContain('<summary>Game</summary>');
     },
   );
 

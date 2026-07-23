@@ -49,6 +49,7 @@ import { isMatchState } from './gameProtocol';
 import { ReadonlyMinimap } from './ReadonlyWorld';
 import { RoomCodeCopyButton } from './RoomCodeCopyButton';
 import { generateRoomPreviewPlanet, withFreshRoomSeed } from './roomWorld';
+import { TurnNotificationController } from '../components/TurnNotificationController';
 
 type Route =
   | { kind: 'lobby' }
@@ -729,6 +730,7 @@ export function MultiplayerGameScene({
       <GlobeScene />
       <Minimap />
       <ControlLegend />
+      <TurnNotificationController />
       <TerritoryHud />
       <div className="multiplayer-game-connection">
         <ConnectionBadge status={connection} />

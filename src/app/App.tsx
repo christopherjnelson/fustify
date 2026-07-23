@@ -9,6 +9,7 @@ import { ControlLegend } from '../components/ControlLegend';
 import { useGameStore } from '../state/useGameStore';
 import { useBotTurnRunner } from './useBotTurnRunner';
 import { BRAND } from '../branding';
+import { TurnNotificationController } from '../components/TurnNotificationController';
 
 export function App() {
   useBotTurnRunner();
@@ -26,6 +27,7 @@ export function App() {
       <GlobeScene />
       <Minimap />
       <ControlLegend />
+      <TurnNotificationController />
       {mode === 'world-setup' && <WorldSetupPanel />}
       {mode === 'pregame' && <PregamePanel />}
       {(mode === 'playing' || mode === 'game-over') && <TerritoryHud />}
