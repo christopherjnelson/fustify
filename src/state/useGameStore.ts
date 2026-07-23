@@ -242,6 +242,7 @@ export interface GameState {
   toggleDebugView: () => void;
   setViewMode: (mode: PlanetViewMode) => void;
   toggleEventLog: () => void;
+  requestTerritoryFocus: (territoryId: string) => void;
   focusSelectedTerritory: () => void;
   cancelTerritoryFocus: () => void;
   setGlobeFocus: (focus: GeographicPoint) => void;
@@ -1164,16 +1165,23 @@ export const useGameStore = create<GameState>((set, get) => {
     setViewMode: (viewMode) => set({ viewMode }),
     toggleEventLog: () =>
       set((state) => ({ eventLogOpen: !state.eventLogOpen })),
-    focusSelectedTerritory: () =>
-      set((state) => {
-        const territoryId = selectedTerritory(state);
-        return territoryId === null
+    requestTerritoryFocus: (territoryId) =>
+      set((state) =>
+        state.applicationMode !== 'playing' ||
+        !state.planet.territories.some(
+          (territory) => territory.id === territoryId,
+        )
           ? state
           : {
               focusTargetTerritoryId: territoryId,
               focusSequence: state.focusSequence + 1,
-            };
-      }),
+            },
+      ),
+    focusSelectedTerritory: () => {
+      const state = get();
+      const territoryId = selectedTerritory(state);
+      if (territoryId !== null) state.requestTerritoryFocus(territoryId);
+    },
     cancelTerritoryFocus: () =>
       set((state) =>
         state.focusTargetTerritoryId === null

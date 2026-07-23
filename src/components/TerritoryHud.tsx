@@ -19,7 +19,7 @@ import { TerritoryNavigator } from './TerritoryNavigator';
 import { territoryDrawerReducer } from '../core/navigation/territoryNavigator';
 import { playerColorValue } from '../core/setup/playerConfig';
 import { TERRITORY_NAVIGATOR_SHORTCUT } from '../core/input/controlBindings';
-import { formatMatchEvent } from '../core/game/eventFormatter';
+import { EventLog } from './EventLog';
 
 const PHASE_LABELS = {
   reinforce: 'Reinforce',
@@ -100,6 +100,9 @@ export function TerritoryHud() {
   const toggleEventLog = useGameStore((state) => state.toggleEventLog);
   const setViewMode = useGameStore((state) => state.setViewMode);
   const focusSelected = useGameStore((state) => state.focusSelectedTerritory);
+  const requestTerritoryFocus = useGameStore(
+    (state) => state.requestTerritoryFocus,
+  );
   const [attackDice, setAttackDice] = useState(1);
   const [moveAmount, setMoveAmount] = useState(1);
   const [fortifyAmount, setFortifyAmount] = useState(1);
@@ -734,23 +737,12 @@ export function TerritoryHud() {
         )}
 
         {eventLogOpen && (
-          <section className="event-log">
-            <span className="eyebrow">Latest events</span>
-            <ol>
-              {[...match.events]
-                .reverse()
-                .slice(0, 40)
-                .map((event) => (
-                  <li key={event.id}>
-                    <span>T{event.turnNumber}</span>
-                    {formatMatchEvent(event, {
-                      planet,
-                      players: configuredPlayers,
-                    })}
-                  </li>
-                ))}
-            </ol>
-          </section>
+          <EventLog
+            events={match.events}
+            planet={planet}
+            players={configuredPlayers}
+            onFocusTerritory={requestTerritoryFocus}
+          />
         )}
 
         {debugView && (

@@ -1461,7 +1461,8 @@ button:disabled {
 
 .event-log li {
   display: grid;
-  grid-template-columns: 25px 1fr;
+  grid-template-columns: 25px minmax(0, 1fr) auto;
+  align-items: start;
   gap: 7px;
   padding: 6px 0;
   color: #a7b9c9;
@@ -1470,8 +1471,24 @@ button:disabled {
   line-height: 1.35;
 }
 
-.event-log li span {
+.event-log .event-turn {
   color: #5f819d;
+  font-weight: 700;
+}
+
+.event-log .event-description {
+  color: inherit;
+  font-weight: inherit;
+}
+
+.event-focus-button {
+  padding: 2px 6px;
+  color: #a9cce4;
+  border: 1px solid rgba(124, 190, 229, 0.22);
+  border-radius: 5px;
+  background: rgba(38, 102, 143, 0.22);
+  cursor: pointer;
+  font: inherit;
   font-weight: 700;
 }
 
