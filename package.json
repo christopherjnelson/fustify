@@ -21,7 +21,7 @@
     "simulate:bots": "tsx scripts/simulateBots.ts",
     "study:balance": "node --import tsx scripts/balanceStudy.ts",
     "test:e2e": "playwright test tests/e2e/interactions.spec.ts tests/e2e/admin.spec.ts",
-    "test:e2e:multiplayer": "playwright test tests/e2e/multiplayer.spec.ts --project=desktop-1920 && playwright test tests/e2e/multiplayer.mobile.spec.ts --project=mobile-390",
+    "test:e2e:multiplayer": "playwright test tests/e2e/multiplayer.spec.ts tests/e2e/multiplayer-lobby-layout.spec.ts --project=desktop-1920 && playwright test tests/e2e/multiplayer.mobile.spec.ts --project=mobile-390",
     "test:visual:multiplayer": "playwright test tests/e2e/multiplayer.visual.spec.ts",
     "test:visual:multiplayer:update": "playwright test tests/e2e/multiplayer.visual.spec.ts --update-snapshots",
     "test:visual": "playwright test tests/e2e/visual.spec.ts",

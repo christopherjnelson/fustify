@@ -44,8 +44,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  max-width: 1180px;
-  margin: 0 auto 20px;
+  max-width: 1420px;
+  margin: 0 auto 12px;
 }
 
 .multiplayer-header h1,
@@ -163,19 +163,49 @@
 
 .multiplayer-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 0.7fr) minmax(360px, 1.3fr);
+  grid-template-columns: minmax(360px, 2fr) minmax(0, 3fr);
+  align-items: start;
   gap: 18px;
-  max-width: 1180px;
+  max-width: 1420px;
   margin: 0 auto;
 }
 
-.room-code-card strong {
-  display: block;
-  margin: 10px 0 14px;
+.room-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  max-width: 1420px;
+  margin: 0 auto 18px;
+  padding: 12px 16px;
+}
+
+.room-summary-code,
+.room-summary-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.room-summary-code strong {
   color: #dff6ff;
   font-family: 'Space Grotesk', monospace;
-  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  font-size: 1.45rem;
   letter-spacing: 0.1em;
+}
+
+.room-summary-status {
+  color: #a5b7c8;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.multiplayer-player-column {
+  display: grid;
+  align-items: start;
+  gap: 18px;
 }
 
 .multiplayer-seat-list,
@@ -222,6 +252,18 @@
   gap: 0 12px;
 }
 
+.multiplayer-world-setup {
+  display: grid;
+  align-items: start;
+  gap: 18px;
+}
+
+@media (min-width: 721px) {
+  .multiplayer-world-setup {
+    grid-template-columns: minmax(260px, 0.82fr) minmax(320px, 1.18fr);
+  }
+}
+
 .multiplayer-seed-setting {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -244,18 +286,20 @@
 
 .minimap-panel.multiplayer-lobby-world-preview {
   position: static;
-  width: min(420px, 100%);
+  width: 100%;
   min-width: 0;
-  margin-top: 16px;
+  margin-top: 12px;
   background: rgba(11, 25, 40, 0.72);
 }
 
 .multiplayer-actions {
   display: flex;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 10px;
-  max-width: 1180px;
+  max-width: 1420px;
   margin: 18px auto 0;
+  padding: 14px 16px;
 }
 
 .multiplayer-actions > div {

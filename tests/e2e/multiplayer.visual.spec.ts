@@ -30,7 +30,9 @@ test('multiplayer lobby visual', async ({ browser }, testInfo) => {
     const initialSeed = await seedInput.inputValue();
     expect(initialSeed).toMatch(/^[a-z]+-[a-z]+-\d{3}$/);
     expect(initialSeed).not.toBe('atlas-prime');
-    const revisionLabel = page.locator('.multiplayer-header .eyebrow');
+    const revisionLabel = page.locator(
+      '.room-summary-status > span:first-child',
+    );
     const initialRevision = await revisionLabel.textContent();
     await page.getByRole('button', { name: 'Generate World' }).click();
     await expect(revisionLabel).not.toHaveText(initialRevision!);
@@ -53,29 +55,16 @@ test('multiplayer lobby visual', async ({ browser }, testInfo) => {
       preview.locator('button, input, select, a, [tabindex]'),
     ).toHaveCount(0);
 
+    await page.screenshot({
+      fullPage: true,
+      path: `test-results/ui-review/${testInfo.project.name}/multiplayer-lobby-visual.png`,
+    });
     await expect(page.locator('.multiplayer-shell')).toHaveScreenshot(
       `multiplayer-lobby-${testInfo.project.name}.png`,
       {
         mask: [page.getByTestId('room-code'), page.getByLabel('Seed')],
       },
     );
-    await page.screenshot({
-      fullPage: true,
-      path: `test-results/ui-review/${testInfo.project.name}/multiplayer-lobby-visual.png`,
-    });
-    if (testInfo.project.name === 'desktop-1920') {
-      await page.setViewportSize({ width: 390, height: 844 });
-      await expect(page.locator('.multiplayer-shell')).toHaveScreenshot(
-        'multiplayer-lobby-mobile-390.png',
-        {
-          mask: [page.getByTestId('room-code'), page.getByLabel('Seed')],
-        },
-      );
-      await page.screenshot({
-        fullPage: true,
-        path: 'test-results/ui-review/mobile-390/multiplayer-lobby-visual.png',
-      });
-    }
   } finally {
     await page.evaluate(async (id) => {
       const { getSupabaseClient } =

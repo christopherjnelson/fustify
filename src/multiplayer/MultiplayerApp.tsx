@@ -378,102 +378,110 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     <main className="multiplayer-shell">
       <header className="multiplayer-header">
         <div>
-          <span className="eyebrow">
-            Private room · {state.room.status} · revision {state.room.revision}
-          </span>
+          <span className="eyebrow">Private multiplayer room</span>
           <h1>Multiplayer lobby</h1>
         </div>
-        <ConnectionBadge status={connection} />
       </header>
 
-      <div className="multiplayer-layout">
-        <section
-          className="multiplayer-card room-code-card"
-          aria-label="Private room code"
-        >
-          <span>Share this code</span>
+      <section
+        className="multiplayer-card room-summary"
+        aria-label="Private room summary"
+      >
+        <div className="room-summary-code">
+          <span>Room</span>
           <strong data-testid="room-code">
             {formatRoomCode(state.room.join_code)}
           </strong>
           <RoomCodeCopyButton roomCode={formatRoomCode(state.room.join_code)} />
-        </section>
+        </div>
+        <div className="room-summary-status">
+          <span>
+            {state.room.status === 'waiting' ? 'Waiting' : state.room.status} ·
+            Revision {state.room.revision}
+          </span>
+          <ConnectionBadge status={connection} />
+        </div>
+      </section>
 
-        <section
-          className="multiplayer-card seat-card"
-          aria-labelledby="seat-list-title"
-        >
-          <h2 id="seat-list-title">Seats</h2>
-          <ol className="multiplayer-seat-list">
-            {state.seats.map((seat) => {
-              const occupant = seat.occupant_user_id
-                ? memberById.get(seat.occupant_user_id)
-                : null;
-              return (
-                <li
-                  key={seat.seat_index}
-                  data-testid={`seat-${seat.seat_index}`}
-                >
-                  <span>
-                    <b>Seat {seat.seat_index + 1}</b>
-                    {occupant ? (
-                      <small>
-                        {occupant.display_name}
-                        {occupant.role === 'host' ? ' · Host' : ''}
-                      </small>
+      <div className="multiplayer-layout">
+        <div className="multiplayer-player-column">
+          <section
+            className="multiplayer-card seat-card"
+            aria-labelledby="seat-list-title"
+          >
+            <h2 id="seat-list-title">Seats</h2>
+            <ol className="multiplayer-seat-list">
+              {state.seats.map((seat) => {
+                const occupant = seat.occupant_user_id
+                  ? memberById.get(seat.occupant_user_id)
+                  : null;
+                return (
+                  <li
+                    key={seat.seat_index}
+                    data-testid={`seat-${seat.seat_index}`}
+                  >
+                    <span>
+                      <b>Seat {seat.seat_index + 1}</b>
+                      {occupant ? (
+                        <small>
+                          {occupant.display_name}
+                          {occupant.role === 'host' ? ' · Host' : ''}
+                        </small>
+                      ) : (
+                        <small>Open</small>
+                      )}
+                    </span>
+                    {seat.occupant_user_id === userId ? (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy !== null || !waiting}
+                        onClick={() =>
+                          void act('release', () => releaseSeat(client, roomId))
+                        }
+                      >
+                        Release
+                      </button>
                     ) : (
-                      <small>Open</small>
+                      <button
+                        type="button"
+                        disabled={
+                          busy !== null ||
+                          !waiting ||
+                          occupant !== null ||
+                          ownSeat !== undefined
+                        }
+                        onClick={() =>
+                          void act('claim', () =>
+                            claimSeat(client, roomId, seat.seat_index),
+                          )
+                        }
+                      >
+                        Claim
+                      </button>
                     )}
-                  </span>
-                  {seat.occupant_user_id === userId ? (
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy !== null || !waiting}
-                      onClick={() =>
-                        void act('release', () => releaseSeat(client, roomId))
-                      }
-                    >
-                      Release
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={
-                        busy !== null ||
-                        !waiting ||
-                        occupant !== null ||
-                        ownSeat !== undefined
-                      }
-                      onClick={() =>
-                        void act('claim', () =>
-                          claimSeat(client, roomId, seat.seat_index),
-                        )
-                      }
-                    >
-                      Claim
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        </section>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
 
-        <section
-          className="multiplayer-card member-card"
-          aria-labelledby="member-list-title"
-        >
-          <h2 id="member-list-title">Members</h2>
-          <ul>
-            {state.members.map((member) => (
-              <li key={member.user_id}>
-                {member.display_name}
-                {member.role === 'host' && <span>Host</span>}
-                {member.user_id === userId && <span>You</span>}
-              </li>
-            ))}
-          </ul>
-        </section>
+          <section
+            className="multiplayer-card member-card"
+            aria-labelledby="member-list-title"
+          >
+            <h2 id="member-list-title">Members</h2>
+            <ul>
+              {state.members.map((member) => (
+                <li key={member.user_id}>
+                  {member.display_name}
+                  {member.role === 'host' && <span>Host</span>}
+                  {member.user_id === userId && <span>You</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
 
         <form
           className="multiplayer-card settings-card"
@@ -488,119 +496,125 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
         >
           <h2 id="room-settings-title">World settings</h2>
           {!host && <p>Only the host can change room settings.</p>}
-          <div className="multiplayer-seed-setting">
-            <label>
-              Seed
-              <input
-                value={settings.seed}
-                maxLength={64}
-                disabled={!host || !waiting || busy !== null}
-                onChange={(event) => {
-                  settingsDirty.current = true;
-                  setSettings({ ...settings, seed: event.target.value });
-                }}
-              />
-            </label>
-            {host && (
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy !== null || !waiting}
-                aria-busy={busy === 'generate-world'}
-                onClick={() => {
-                  if (busyRef.current !== null) return;
-                  const generatedSettings = withFreshRoomSeed(settings);
-                  settingsDirty.current = true;
-                  setSettings(generatedSettings);
-                  void act('generate-world', async () => {
-                    await updateRoomSettings(client, generatedSettings);
-                    settingsDirty.current = false;
-                  });
-                }}
-              >
-                {busy === 'generate-world' ? 'Generating…' : 'Generate World'}
-              </button>
-            )}
+          <div className="multiplayer-world-setup">
+            <div className="multiplayer-settings-controls">
+              <div className="multiplayer-seed-setting">
+                <label>
+                  Seed
+                  <input
+                    value={settings.seed}
+                    maxLength={64}
+                    disabled={!host || !waiting || busy !== null}
+                    onChange={(event) => {
+                      settingsDirty.current = true;
+                      setSettings({ ...settings, seed: event.target.value });
+                    }}
+                  />
+                </label>
+                {host && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy !== null || !waiting}
+                    aria-busy={busy === 'generate-world'}
+                    onClick={() => {
+                      if (busyRef.current !== null) return;
+                      const generatedSettings = withFreshRoomSeed(settings);
+                      settingsDirty.current = true;
+                      setSettings(generatedSettings);
+                      void act('generate-world', async () => {
+                        await updateRoomSettings(client, generatedSettings);
+                        settingsDirty.current = false;
+                      });
+                    }}
+                  >
+                    {busy === 'generate-world'
+                      ? 'Generating…'
+                      : 'Generate World'}
+                  </button>
+                )}
+              </div>
+              <div className="multiplayer-setting-grid">
+                <label>
+                  Territories
+                  <input
+                    type="number"
+                    min={12}
+                    max={48}
+                    value={settings.territory_count}
+                    disabled={!host || !waiting || busy !== null}
+                    onChange={(event) => {
+                      settingsDirty.current = true;
+                      setSettings({
+                        ...settings,
+                        territory_count: Number(event.target.value),
+                      });
+                    }}
+                  />
+                </label>
+                <label>
+                  Continents
+                  <input
+                    type="number"
+                    min={2}
+                    max={5}
+                    value={settings.continent_count}
+                    disabled={!host || !waiting || busy !== null}
+                    onChange={(event) => {
+                      settingsDirty.current = true;
+                      setSettings({
+                        ...settings,
+                        continent_count: Number(event.target.value),
+                      });
+                    }}
+                  />
+                </label>
+                <label>
+                  Seats
+                  <input
+                    type="number"
+                    min={2}
+                    max={5}
+                    value={settings.max_seats}
+                    disabled={!host || !waiting || busy !== null}
+                    onChange={(event) => {
+                      settingsDirty.current = true;
+                      setSettings({
+                        ...settings,
+                        max_seats: Number(event.target.value),
+                      });
+                    }}
+                  />
+                </label>
+                <label>
+                  Assignment
+                  <select
+                    value={settings.assignment_mode}
+                    disabled={!host || !waiting || busy !== null}
+                    onChange={(event) => {
+                      settingsDirty.current = true;
+                      setSettings({
+                        ...settings,
+                        assignment_mode: event.target.value,
+                      });
+                    }}
+                  >
+                    <option value="random">Random</option>
+                    <option value="player-draft" disabled>
+                      Player draft (local only)
+                    </option>
+                  </select>
+                  <small>Player draft remains available in local play.</small>
+                </label>
+              </div>
+              {host && (
+                <button type="submit" disabled={busy !== null || !waiting}>
+                  {busy === 'settings' ? 'Saving…' : 'Save settings'}
+                </button>
+              )}
+            </div>
+            <RoomWorldPreview room={state.room} />
           </div>
-          <div className="multiplayer-setting-grid">
-            <label>
-              Territories
-              <input
-                type="number"
-                min={12}
-                max={48}
-                value={settings.territory_count}
-                disabled={!host || !waiting || busy !== null}
-                onChange={(event) => {
-                  settingsDirty.current = true;
-                  setSettings({
-                    ...settings,
-                    territory_count: Number(event.target.value),
-                  });
-                }}
-              />
-            </label>
-            <label>
-              Continents
-              <input
-                type="number"
-                min={2}
-                max={5}
-                value={settings.continent_count}
-                disabled={!host || !waiting || busy !== null}
-                onChange={(event) => {
-                  settingsDirty.current = true;
-                  setSettings({
-                    ...settings,
-                    continent_count: Number(event.target.value),
-                  });
-                }}
-              />
-            </label>
-            <label>
-              Seats
-              <input
-                type="number"
-                min={2}
-                max={5}
-                value={settings.max_seats}
-                disabled={!host || !waiting || busy !== null}
-                onChange={(event) => {
-                  settingsDirty.current = true;
-                  setSettings({
-                    ...settings,
-                    max_seats: Number(event.target.value),
-                  });
-                }}
-              />
-            </label>
-            <label>
-              Assignment
-              <select
-                value={settings.assignment_mode}
-                disabled={!host || !waiting || busy !== null}
-                onChange={(event) => {
-                  settingsDirty.current = true;
-                  setSettings({
-                    ...settings,
-                    assignment_mode: event.target.value,
-                  });
-                }}
-              >
-                <option value="random">Random</option>
-                <option value="player-draft" disabled>
-                  Player draft (local only)
-                </option>
-              </select>
-              <small>Player draft remains available in local play.</small>
-            </label>
-          </div>
-          {host && (
-            <button type="submit" disabled={busy !== null || !waiting}>
-              {busy === 'settings' ? 'Saving…' : 'Save settings'}
-            </button>
-          )}
-          <RoomWorldPreview room={state.room} />
         </form>
       </div>
 
@@ -609,7 +623,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
           {error}
         </p>
       )}
-      <footer className="multiplayer-actions">
+      <footer className="multiplayer-card multiplayer-actions">
         {host && waiting && (
           <div>
             <button
