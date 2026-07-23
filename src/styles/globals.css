@@ -1715,13 +1715,43 @@ button[aria-busy='true']::before {
   pointer-events: none;
 }
 
+.minimap-map[data-interactive='true'] {
+  pointer-events: auto;
+}
+
 .minimap-ocean {
   fill: #102d43;
+  pointer-events: none;
 }
 
 .minimap-territories path {
   stroke-width: 0.26;
   stroke-linejoin: round;
+}
+
+.minimap-map[data-interactive='true'] .minimap-territories path {
+  cursor: pointer;
+  pointer-events: visiblePainted;
+  transition:
+    filter 120ms ease,
+    stroke-width 120ms ease;
+}
+
+.minimap-map[data-interactive='true'] .minimap-territories path:hover,
+.minimap-map[data-interactive='true'] .minimap-territories path:focus-visible {
+  stroke: #f4fbff;
+  stroke-width: 1.1;
+  filter: brightness(1.08);
+  outline: none;
+}
+
+.minimap-map[data-interactive='true'] .minimap-territories path:focus-visible {
+  filter: brightness(1.14) drop-shadow(0 0 1.5px #06101c);
+}
+
+.minimap-routes,
+.minimap-focus {
+  pointer-events: none;
 }
 
 .minimap-routes path {

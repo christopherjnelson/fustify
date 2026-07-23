@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, type CSSProperties, type KeyboardEvent } from 'react';
 import {
   getProjectedWorldGeometry,
   projectGeographicPoint,
@@ -31,11 +31,61 @@ function linePath(fragments: readonly ProjectedPoint[][]) {
     .join(' ');
 }
 
+export function InteractiveTerritoryPath({
+  territoryId,
+  territoryName,
+  path,
+  fill,
+  continentId,
+  ownerId,
+  fragmentCount,
+  active,
+  onActivate,
+}: {
+  territoryId: string;
+  territoryName: string;
+  path: string;
+  fill: string;
+  continentId: string;
+  ownerId: string | null;
+  fragmentCount: number;
+  active: boolean;
+  onActivate: (territoryId: string) => void;
+}) {
+  const activate = () => onActivate(territoryId);
+  const handleKeyDown = (event: KeyboardEvent<SVGPathElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    activate();
+  };
+
+  return (
+    <path
+      d={path}
+      fill={fill}
+      stroke={fill}
+      role="button"
+      tabIndex={0}
+      aria-label={`Focus ${territoryName || `Territory ${territoryId}`}`}
+      onClick={activate}
+      onKeyDown={handleKeyDown}
+      data-territory-id={territoryId}
+      data-continent-id={continentId}
+      data-owner-id={ownerId ?? ''}
+      data-fragment-count={fragmentCount}
+      data-active={active ? 'true' : 'false'}
+    />
+  );
+}
+
 export function Minimap() {
   const planet = useGameStore((state) => state.planet);
   const matchSetup = useGameStore((state) => state.matchSetup);
   const match = useGameStore((state) => state.match);
   const focus = useGameStore((state) => state.globeFocus);
+  const requestTerritoryFocus = useGameStore(
+    (state) => state.requestTerritoryFocus,
+  );
   const geometry = useMemo(() => getProjectedWorldGeometry(planet), [planet]);
   const styles = useMemo(
     () => minimapTerritoryStyles(planet, matchSetup, match),
@@ -87,6 +137,12 @@ export function Minimap() {
   const activePlayer = match
     ? matchSetup.players.find((player) => player.id === match.activePlayerId)
     : null;
+  const territoryById = useMemo(
+    () =>
+      new Map(planet.territories.map((territory) => [territory.id, territory])),
+    [planet.territories],
+  );
+  const interactive = match !== null;
 
   return (
     <section
@@ -117,22 +173,40 @@ export function Minimap() {
         )}
       </header>
       <p id="minimap-description" className="sr-only">
-        Read-only equirectangular overview of {planet.territoryCount} canonical
-        territories. {assignedCount} territories currently have player owners.
-        The crosshair marks the point centered on the globe.
+        {interactive ? 'Interactive' : 'Read-only'} equirectangular overview of{' '}
+        {planet.territoryCount} canonical territories. {assignedCount}{' '}
+        territories currently have player owners. The crosshair marks the point
+        centered on the globe.
       </p>
       <svg
         className="minimap-map"
         viewBox={`0 0 ${geometry.width} ${geometry.height}`}
         preserveAspectRatio="xMidYMid meet"
-        aria-hidden="true"
-        focusable="false"
+        aria-hidden={interactive ? undefined : true}
+        aria-labelledby={interactive ? 'minimap-title' : undefined}
+        aria-describedby={interactive ? 'minimap-description' : undefined}
+        data-interactive={interactive ? 'true' : 'false'}
       >
         <rect className="minimap-ocean" width="360" height="180" rx="3" />
         <g className="minimap-territories">
           {geometry.territories.map((territory) => {
             const style = styleByTerritory.get(territory.territoryId)!;
-            return (
+            return interactive ? (
+              <InteractiveTerritoryPath
+                key={territory.territoryId}
+                territoryId={territory.territoryId}
+                territoryName={
+                  territoryById.get(territory.territoryId)?.name ?? ''
+                }
+                path={territoryPaths.get(territory.territoryId)!}
+                fill={style.fill}
+                continentId={territory.continentId}
+                ownerId={style.ownerId}
+                fragmentCount={territory.fragments.length}
+                active={style.active}
+                onActivate={requestTerritoryFocus}
+              />
+            ) : (
               <path
                 key={territory.territoryId}
                 d={territoryPaths.get(territory.territoryId)}
