@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { generatePlanet } from '../core/generation/generatePlanet';
 import { ReadonlyMinimap } from '../multiplayer/ReadonlyWorld';
-import { InteractiveTerritoryPath } from './Minimap';
+import { InteractiveTerritoryPath, Minimap } from './Minimap';
 
 function interactivePath(onActivate = vi.fn()) {
   return InteractiveTerritoryPath({
@@ -61,18 +61,27 @@ describe('interactive minimap territory', () => {
   });
 
   it('keeps the multiplayer lobby minimap read-only', () => {
-    const markup = renderToStaticMarkup(
+    const planet = generatePlanet('readonly-minimap-test', {
+      territoryCount: 12,
+      continentCount: 3,
+      playerCount: 2,
+    });
+    const readonlyMarkup = renderToStaticMarkup(
       createElement(ReadonlyMinimap, {
-        planet: generatePlanet('readonly-minimap-test', {
-          territoryCount: 12,
-          continentCount: 3,
-          playerCount: 2,
-        }),
+        planet,
       }),
     );
+    const sharedRendererMarkup = renderToStaticMarkup(createElement(Minimap));
 
-    expect(markup).toContain('data-testid="multiplayer-minimap"');
-    expect(markup).not.toContain('role="button"');
-    expect(markup).not.toContain('tabindex=');
+    expect(readonlyMarkup).toContain('data-testid="multiplayer-minimap"');
+    expect(readonlyMarkup).not.toContain('role="button"');
+    expect(readonlyMarkup).not.toContain('tabindex=');
+    expect(readonlyMarkup.match(/data-continent-label=/g)).toHaveLength(
+      planet.continents.length,
+    );
+    expect(sharedRendererMarkup).toContain('data-continent-label=');
+    expect(sharedRendererMarkup).toContain(
+      'class="minimap-continent-labels" aria-hidden="true"',
+    );
   });
 });

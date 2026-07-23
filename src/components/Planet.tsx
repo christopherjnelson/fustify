@@ -22,6 +22,7 @@ import {
 import { PLANET_ROTATION } from '../presentation/globeOrientation';
 import { useGameStore } from '../state/useGameStore';
 import { ArmyMarkers } from './ArmyMarkers';
+import { ContinentGlobeLabels } from './ContinentGlobeLabels';
 import { GraphDebugOverlay } from './GraphDebugOverlay';
 import { SeaRouteOverlay } from './SeaRouteOverlay';
 import { TerritoryOverlay } from './TerritoryOverlay';
@@ -300,6 +301,7 @@ export function Planet({ planet }: PlanetProps) {
           matchSetup.setupPhase === 'neutral-preview'
         }
       />
+      <ContinentGlobeLabels planet={planet} />
       {gameplayActive && match && (
         <ArmyMarkers
           planet={planet}

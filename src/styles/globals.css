@@ -1891,8 +1891,25 @@ button[aria-busy='true']::before {
 }
 
 .minimap-routes,
-.minimap-focus {
+.minimap-focus,
+.minimap-continent-labels {
   pointer-events: none;
+}
+
+.minimap-continent-labels text {
+  fill: #f4fbff;
+  font-family: 'Space Grotesk', Manrope, sans-serif;
+  font-weight: 650;
+  letter-spacing: 0.16px;
+  paint-order: stroke fill;
+  stroke: rgba(3, 9, 16, 0.94);
+  stroke-linejoin: round;
+  stroke-width: 2.2px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  filter: drop-shadow(0 0 1px rgba(3, 9, 16, 0.9));
+  pointer-events: none;
+  user-select: none;
 }
 
 .minimap-routes path {

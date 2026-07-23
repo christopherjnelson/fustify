@@ -17,6 +17,8 @@ import { PLANET_ROTATION } from '../presentation/globeOrientation';
 import { territoryFillColor } from '../presentation/territoryVisuals';
 import { SeaRouteOverlay } from '../components/SeaRouteOverlay';
 import { TerritoryOverlay } from '../components/TerritoryOverlay';
+import { ContinentGlobeLabels } from '../components/ContinentGlobeLabels';
+import { MinimapContinentLabels } from '../components/MinimapContinentLabels';
 
 const NO_LEGAL_ROUTE_TARGETS = new Set<string>();
 
@@ -117,6 +119,7 @@ function ReadonlyPlanet({ planet }: { planet: PlanetDefinition }) {
         debugView={false}
         showNeutralPreviewRoutes
       />
+      <ContinentGlobeLabels planet={planet} />
       <mesh scale={1.045}>
         <sphereGeometry args={[PLANET_RADIUS, 48, 32]} />
         <meshBasicMaterial
@@ -224,6 +227,7 @@ export function ReadonlyMinimap({
           d={boundaryPath('continent')}
         />
         <path className="minimap-coastlines" d={boundaryPath('coastline')} />
+        <MinimapContinentLabels planet={planet} />
       </svg>
     </section>
   );

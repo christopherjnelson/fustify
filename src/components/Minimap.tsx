@@ -8,6 +8,7 @@ import {
 import { playerColorValue } from '../core/setup/playerConfig';
 import { minimapTerritoryStyles } from '../presentation/territoryVisuals';
 import { useGameStore } from '../state/useGameStore';
+import { MinimapContinentLabels } from './MinimapContinentLabels';
 
 function format(value: number) {
   return Number(value.toFixed(3));
@@ -245,6 +246,7 @@ export function Minimap() {
           className="minimap-coastlines"
           d={boundaryPaths.get('coastline')}
         />
+        <MinimapContinentLabels planet={planet} />
         <g
           className="minimap-focus"
           transform={`translate(${format(focusPoint.x)} ${format(focusPoint.y)})`}
