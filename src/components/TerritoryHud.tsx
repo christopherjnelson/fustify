@@ -5,6 +5,8 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
+  type RefObject,
 } from 'react';
 import {
   calculateReinforcements,
@@ -35,6 +37,34 @@ const VIEW_MODES: { id: PlanetViewMode; label: string }[] = [
   { id: 'continents', label: 'Continents' },
   { id: 'terrain', label: 'Terrain' },
 ];
+
+export function HudUtilityRow({
+  navigatorOpen,
+  navigatorTriggerRef,
+  onOpenNavigator,
+  children,
+}: {
+  navigatorOpen: boolean;
+  navigatorTriggerRef: RefObject<HTMLButtonElement | null>;
+  onOpenNavigator: () => void;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="utility-row">
+      <button
+        type="button"
+        ref={navigatorTriggerRef}
+        className="icon-button territory-list-trigger"
+        onClick={onOpenNavigator}
+        aria-haspopup="dialog"
+        aria-expanded={navigatorOpen}
+      >
+        Territory list <kbd>⌘/Ctrl K</kbd>
+      </button>
+      {children}
+    </div>
+  );
+}
 
 function ArmyAmountControl({
   label,
@@ -95,7 +125,6 @@ export function TerritoryHud() {
   const savedAt = useGameStore((state) => state.savedAt);
   const saveMessage = useGameStore((state) => state.saveMessage);
   const saveError = useGameStore((state) => state.saveError);
-  const toggleDebug = useGameStore((state) => state.toggleDebugView);
   const setViewMode = useGameStore((state) => state.setViewMode);
   const focusSelected = useGameStore((state) => state.focusSelectedTerritory);
   const requestTerritoryFocus = useGameStore(
@@ -642,25 +671,11 @@ export function TerritoryHud() {
             </section>
           )}
 
-          <div className="utility-row">
-            <button
-              type="button"
-              ref={navigatorTriggerRef}
-              className="icon-button territory-list-trigger"
-              onClick={() => dispatchNavigator('open')}
-              aria-haspopup="dialog"
-              aria-expanded={navigatorOpen}
-            >
-              Territory list <kbd>⌘/Ctrl K</kbd>
-            </button>
-            <button
-              type="button"
-              className={`icon-button ${debugView ? 'active' : ''}`}
-              onClick={toggleDebug}
-              aria-pressed={debugView}
-            >
-              Debug
-            </button>
+          <HudUtilityRow
+            navigatorOpen={navigatorOpen}
+            navigatorTriggerRef={navigatorTriggerRef}
+            onOpenNavigator={() => dispatchNavigator('open')}
+          >
             {!multiplayerSession && (
               <details className="game-menu">
                 <summary>Game</summary>
@@ -719,7 +734,7 @@ export function TerritoryHud() {
                 </div>
               </details>
             )}
-          </div>
+          </HudUtilityRow>
 
           {!multiplayerSession && (saveMessage || saveError || savedAt) && (
             <p
