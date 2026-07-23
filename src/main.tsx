@@ -1,15 +1,32 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/globals.css';
-import { isAdminRoute, isMultiplayerRoute } from './browser/routes';
+import {
+  hasLocalSetupParameters,
+  isAdminRoute,
+  isMultiplayerRoute,
+} from './browser/routes';
 
 const isAdmin = isAdminRoute(window.location.pathname);
 const isMultiplayer = isMultiplayerRoute(window.location.pathname);
+const isLegacyLocalSetup =
+  window.location.pathname === '/' &&
+  (hasLocalSetupParameters(window.location.search) ||
+    (import.meta.env.DEV &&
+      new URLSearchParams(window.location.search).get('visual-review') ===
+        '1'));
+const isHome = window.location.pathname === '/' && !isLegacyLocalSetup;
 const isMultiplayerMatch = window.location.pathname.startsWith(
   '/multiplayer/match/',
 );
 document.documentElement.classList.add(
-  isAdmin ? 'admin-route' : isMultiplayer ? 'multiplayer-route' : 'game-route',
+  isAdmin
+    ? 'admin-route'
+    : isMultiplayer
+      ? 'multiplayer-route'
+      : isHome
+        ? 'home-route'
+        : 'game-route',
 );
 if (isMultiplayerMatch) {
   document.documentElement.classList.add('multiplayer-match-route');
@@ -61,6 +78,16 @@ async function bootstrap() {
     return;
   }
 
+  if (isHome) {
+    const { Home } = await import('./home/Home');
+    root.render(
+      <StrictMode>
+        <Home />
+      </StrictMode>,
+    );
+    return;
+  }
+
   const { App } = await import('./app/App');
   root.render(
     <StrictMode>
@@ -74,6 +101,7 @@ void bootstrap();
 if (
   !isAdmin &&
   !isMultiplayer &&
+  !isHome &&
   import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get('visual-review') === '1'
 ) {

@@ -10,3 +10,17 @@ export function isMultiplayerRoute(pathname: string): boolean {
     pathname.startsWith('/multiplayer/match/')
   );
 }
+
+const LOCAL_SETUP_QUERY_KEYS = [
+  'v',
+  'seed',
+  'territories',
+  'continents',
+  'players',
+  'assignment',
+] as const;
+
+export function hasLocalSetupParameters(search: string): boolean {
+  const params = new URLSearchParams(search);
+  return LOCAL_SETUP_QUERY_KEYS.some((key) => params.has(key));
+}

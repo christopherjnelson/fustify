@@ -14,11 +14,11 @@ test('shows the Fustify application brand and browser title', async ({
   );
 });
 
-test('fresh root launch creates one readable URL-stable neutral world', async ({
+test('fresh local launch creates one readable URL-stable neutral world', async ({
   page,
 }) => {
   await page.addInitScript(() => window.localStorage.clear());
-  await page.goto('/');
+  await page.goto('/local');
   const seedInput = page.getByLabel('Planet seed');
   await expect(seedInput).toHaveValue(/^[a-z]+-[a-z]+-[1-9][0-9]{2}$/);
   const seed = await seedInput.inputValue();

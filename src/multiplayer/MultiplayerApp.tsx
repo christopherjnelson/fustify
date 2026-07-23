@@ -99,7 +99,7 @@ function StatusScreen({ title, message }: { title: string; message: string }) {
         <span className="eyebrow">Authoritative multiplayer beta</span>
         <h1>{title}</h1>
         <p>{message}</p>
-        <a href="/">Return to local game</a>
+        <a href="/local">Return to local game</a>
       </section>
     </main>
   );
@@ -204,7 +204,7 @@ function Lobby({ userId }: { userId: string }) {
         <p className="multiplayer-session-note">
           Anonymous session ready · player {userId.slice(0, 8)}
         </p>
-        <a href="/">Return to local game</a>
+        <a href="/local">Return to local game</a>
       </section>
     </main>
   );

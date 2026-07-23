@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('local and admin routes remain isolated from multiplayer', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/local');
   await expect(
     page.getByRole('heading', { name: 'Choose your world' }),
   ).toBeVisible();

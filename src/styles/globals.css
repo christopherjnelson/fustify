@@ -23,6 +23,98 @@
   }
 }
 
+.home-shell {
+  display: grid;
+  min-height: 100vh;
+  padding: 64px 32px;
+  place-items: center;
+  background:
+    radial-gradient(
+      circle at 50% 0%,
+      rgba(38, 111, 149, 0.22),
+      transparent 42%
+    ),
+    #050914;
+}
+
+.home-content {
+  width: min(1040px, 100%);
+}
+
+.home-brand {
+  margin-bottom: 38px;
+  text-align: center;
+}
+
+.home-brand h1 {
+  margin: 6px 0 4px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(3rem, 7vw, 5.4rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.home-brand p {
+  margin: 0;
+  color: #a5b7c8;
+  font-size: 1.05rem;
+}
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.mode-card {
+  display: flex;
+  min-height: 280px;
+  padding: 30px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 30px;
+  border: 1px solid rgba(155, 187, 219, 0.2);
+  border-radius: 18px;
+  background: rgba(8, 16, 29, 0.92);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+}
+
+.mode-card h2 {
+  margin: 7px 0 12px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.75rem;
+}
+
+.mode-card p {
+  max-width: 40ch;
+  margin: 0;
+  color: #a5b7c8;
+  line-height: 1.65;
+}
+
+.mode-action {
+  display: inline-flex;
+  min-height: 44px;
+  padding: 10px 16px;
+  align-items: center;
+  color: #eef7ff;
+  border: 1px solid rgba(122, 202, 234, 0.28);
+  border-radius: 9px;
+  background: #126b91;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.mode-action:hover {
+  background: #1680aa;
+}
+
+.mode-action:focus-visible {
+  outline: 3px solid #8bd8ff;
+  outline-offset: 3px;
+}
+
 .multiplayer-shell {
   min-height: 100vh;
   padding: 28px;
@@ -458,6 +550,13 @@ html.game-route,
 html.game-route body,
 html.game-route #root {
   overflow: hidden;
+}
+
+html.home-route,
+html.home-route body,
+html.home-route #root {
+  min-height: 100%;
+  overflow-x: hidden;
 }
 
 html.admin-route,
