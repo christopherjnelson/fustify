@@ -1,6 +1,7 @@
 import { writeLocalMatchSave } from '../browser/localSave';
 import type { ApplicationMode } from '../core/appFlow';
 import { createMatch } from '../core/game/createMatch';
+import { makeEvent } from '../core/game/events';
 import { gameReducer } from '../core/game/gameReducer';
 import type { MatchState } from '../core/game/types';
 import { GENERATOR_VERSION } from '../core/generation/constants';
@@ -59,6 +60,7 @@ export type VisualScenario =
   | 'game-over'
   | 'navigator'
   | 'event-log'
+  | 'activity-dock'
   | 'saved-resume'
   | 'minimap-seam'
   | 'minimap-focus-east'
@@ -254,6 +256,41 @@ function wonMatch(
   }).state;
 }
 
+function withLongActivityHistory(
+  match: MatchState,
+  planet: ReturnType<typeof generatePlanet>,
+): MatchState {
+  const next = { ...match, events: [...match.events] };
+  const playerIds = Object.keys(match.players);
+  const [source, target] = planet.territories;
+  const types = [
+    'armies-placed',
+    'combat',
+    'territory-captured',
+    'capture-move',
+    'fortification-completed',
+    'turn-ended',
+  ] as const;
+
+  for (let index = 0; index < 48; index += 1) {
+    const type = types[index % types.length]!;
+    next.events.push(
+      makeEvent(next, type, `Activity fixture event ${index + 1}.`, {
+        actingPlayerId: playerIds[index % playerIds.length],
+        defenderPlayerId: playerIds[(index + 1) % playerIds.length],
+        previousOwnerId: playerIds[(index + 1) % playerIds.length],
+        sourceTerritoryId: source!.id,
+        targetTerritoryId: target!.id,
+        primaryTerritoryId: target!.id,
+        armyCount: 2,
+        attackerLosses: 1,
+        defenderLosses: 1,
+      }),
+    );
+  }
+  return next;
+}
+
 export function applyScenario(scenario: VisualScenario) {
   window.localStorage.clear();
   const scenarioSetup =
@@ -270,7 +307,6 @@ export function applyScenario(scenario: VisualScenario) {
   let match = fixed.match;
   let applicationMode: ApplicationMode = 'world-setup';
   let scenarioMatch: MatchState | null = match;
-  let eventLogOpen = false;
   let assignmentFeedback: string | null = null;
   let botExecution = useGameStore.getState().botExecution;
   const scenarioFocus =
@@ -501,7 +537,6 @@ export function applyScenario(scenario: VisualScenario) {
   }
   if (scenario === 'player-elimination') {
     scenarioMatch = pendingCapture(match, planet, true);
-    eventLogOpen = true;
   }
   if (scenario === 'fortification' || scenario === 'fortification-fixed') {
     scenarioMatch = gameReducer(planet, advanceToAttack(match, planet), {
@@ -551,9 +586,9 @@ export function applyScenario(scenario: VisualScenario) {
       })),
     };
   }
-  if (scenario === 'event-log') {
+  if (scenario === 'event-log' || scenario === 'activity-dock') {
     applicationMode = 'playing';
-    eventLogOpen = true;
+    scenarioMatch = withLongActivityHistory(match, planet);
   }
   if (scenario === 'saved-resume') {
     const savedAt = '2026-07-17T12:00:00.000Z';
@@ -585,7 +620,6 @@ export function applyScenario(scenario: VisualScenario) {
     matchSetup,
     match: scenarioMatch,
     handoffSummary: { previousTurn: null, messages: [] },
-    eventLogOpen,
     hoveredTerritoryId: null,
     lastActionError: null,
     focusTargetTerritoryId,
@@ -633,6 +667,8 @@ declare global {
       dispatch: (action: Parameters<typeof gameReducer>[2]) => void;
       save: () => void;
       prepareAttack: (type: 'land-border' | 'sea-route') => void;
+      appendActivityEvents: (count?: number) => void;
+      reconcileActivityEvents: () => void;
       orientGlobe: (
         longitude: number,
         latitude?: number,
@@ -671,6 +707,38 @@ window.__WORLDSEED_VISUAL__ = {
   },
   dispatch: (action) => useGameStore.getState().dispatchGameAction(action),
   save: () => useGameStore.getState().saveMatch(),
+  appendActivityEvents: (count = 1) => {
+    const store = useGameStore.getState();
+    const match = store.match!;
+    const territory = store.planet.territories[0]!;
+    const events = [...match.events];
+    for (let index = 0; index < count; index += 1) {
+      const stateWithEvents = { ...match, events };
+      events.push(
+        makeEvent(
+          stateWithEvents,
+          'armies-placed',
+          'Appended activity fixture.',
+          {
+            actingPlayerId: match.activePlayerId,
+            primaryTerritoryId: territory.id,
+            armyCount: 1,
+          },
+        ),
+      );
+    }
+    useGameStore.setState({ match: { ...match, events } });
+  },
+  reconcileActivityEvents: () => {
+    const store = useGameStore.getState();
+    if (!store.match) return;
+    useGameStore.setState({
+      match: {
+        ...store.match,
+        events: store.match.events.map((event) => ({ ...event })),
+      },
+    });
+  },
   orientGlobe: (longitude, latitude = 12, distance = 5.2) => {
     window.dispatchEvent(
       new CustomEvent('fustify:orient-globe', {

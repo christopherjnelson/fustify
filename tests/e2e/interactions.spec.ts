@@ -1129,13 +1129,21 @@ test('turn completion, next-player handoff, and both rematch modes retain intend
     .toBe(originalVariant + 1);
 });
 
-test('event log and saved resume controls are operable', async ({ page }) => {
+test('Activity dock and saved resume controls are operable', async ({
+  page,
+}) => {
   await openScenario(page, 'reinforcement');
-  const logButton = page.getByRole('button', { name: /Event log/i });
-  await logButton.click();
-  await expect(page.getByText('Latest events')).toBeVisible();
-  await page.getByRole('button', { name: 'Hide log' }).click();
-  await expect(page.getByText('Latest events')).toBeHidden();
+  await expect(
+    page.getByRole('region', { name: 'Activity', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Collapse Activity' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Open Activity' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Open Activity' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Activity', exact: true }),
+  ).toBeVisible();
 
   await openScenario(page, 'saved-resume');
   await expect(page.getByText('Local session available')).toBeVisible();

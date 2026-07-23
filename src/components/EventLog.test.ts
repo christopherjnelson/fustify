@@ -5,6 +5,8 @@ import { generatePlanet } from '../core/generation/generatePlanet';
 import { eventFocusTerritoryId } from '../core/game/eventFocus';
 import type { MatchEvent } from '../core/game/types';
 import { EventLogEntry } from './EventLog';
+import { MatchEventIcon } from './MatchEventIcon';
+import { matchEventIconName } from './matchEventIconName';
 
 const planet = generatePlanet('event-log-focus-test', {
   territoryCount: 12,
@@ -109,5 +111,43 @@ describe('event log territory focus', () => {
     expect(locationFree).not.toContain('<button');
     expect(invalid).not.toContain('<button');
     expect(onFocusTerritory).not.toHaveBeenCalled();
+  });
+});
+
+describe('match event icons', () => {
+  it('maps structured event types and renders a generic legacy fallback', () => {
+    const mappings = [
+      ['reinforcements-received', 'reinforcement'],
+      ['armies-placed', 'reinforcement'],
+      ['combat', 'combat'],
+      ['territory-captured', 'capture'],
+      ['capture-move', 'movement'],
+      ['fortification-completed', 'fortification'],
+      ['fortification-skipped', 'fortification'],
+      ['turn-started', 'turn'],
+      ['attack-phase-ended', 'turn'],
+      ['turn-ended', 'turn'],
+      ['match-won', 'victory'],
+      ['player-eliminated', 'elimination'],
+    ] satisfies [MatchEvent['type'], ReturnType<typeof matchEventIconName>][];
+
+    for (const [type, icon] of mappings) {
+      const structured = event(type);
+      expect(matchEventIconName(structured)).toBe(icon);
+      expect(
+        renderToStaticMarkup(
+          createElement(MatchEventIcon, { event: structured }),
+        ),
+      ).toContain(`data-event-icon="${icon}"`);
+    }
+
+    const legacy = {
+      ...event('turn-ended'),
+      type: 'legacy-event',
+    } as unknown as MatchEvent;
+    expect(matchEventIconName(legacy)).toBe('generic');
+    expect(
+      renderToStaticMarkup(createElement(MatchEventIcon, { event: legacy })),
+    ).toContain('data-event-icon="generic"');
   });
 });

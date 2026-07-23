@@ -116,7 +116,11 @@ const scenarios: Array<{
     region: '.hud',
     heading: /Move armies in/i,
   },
-  { name: 'player-elimination', region: '.hud', heading: /Latest events/i },
+  {
+    name: 'player-elimination',
+    region: '.activity-panel',
+    heading: /Activity/i,
+  },
   { name: 'fortification', region: '.hud', heading: /Crimson League/i },
   {
     name: 'fortification-fixed',
@@ -125,7 +129,7 @@ const scenarios: Array<{
   },
   { name: 'game-over', region: '.hud', heading: /Match won/i },
   { name: 'navigator', region: '.hud', heading: /Crimson League/i },
-  { name: 'event-log', region: '.hud', heading: /Latest events/i },
+  { name: 'event-log', region: '.activity-panel', heading: /Activity/i },
   {
     name: 'saved-resume',
     region: '.setup-panel',
@@ -164,12 +168,12 @@ for (const scenario of scenarios) {
       await page.getByRole('button', { name: 'End attack phase' }).click();
     }
     if (scenario.name === 'event-log') {
-      await page.locator('.hud').evaluate((element) => {
+      await page.locator('.event-log ol').evaluate((element) => {
         element.scrollTop = element.scrollHeight;
       });
     }
     if (scenario.name === 'player-elimination') {
-      await page.locator('.hud').evaluate((element) => {
+      await page.locator('.event-log ol').evaluate((element) => {
         element.scrollTop = element.scrollHeight;
       });
     }

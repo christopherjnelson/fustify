@@ -192,7 +192,6 @@ export interface GameState {
   hoveredTerritoryId: string | null;
   debugView: boolean;
   viewMode: PlanetViewMode;
-  eventLogOpen: boolean;
   lastActionError: GameError | null;
   focusTargetTerritoryId: string | null;
   focusSequence: number;
@@ -241,7 +240,6 @@ export interface GameState {
   selectAndFocusTerritory: (id: string) => void;
   toggleDebugView: () => void;
   setViewMode: (mode: PlanetViewMode) => void;
-  toggleEventLog: () => void;
   requestTerritoryFocus: (territoryId: string) => void;
   focusSelectedTerritory: () => void;
   cancelTerritoryFocus: () => void;
@@ -431,7 +429,6 @@ export const useGameStore = create<GameState>((set, get) => {
     hoveredTerritoryId: null,
     debugView: false,
     viewMode: 'ownership',
-    eventLogOpen: false,
     lastActionError: null,
     focusTargetTerritoryId: null,
     focusSequence: 0,
@@ -1163,8 +1160,6 @@ export const useGameStore = create<GameState>((set, get) => {
     },
     toggleDebugView: () => set((state) => ({ debugView: !state.debugView })),
     setViewMode: (viewMode) => set({ viewMode }),
-    toggleEventLog: () =>
-      set((state) => ({ eventLogOpen: !state.eventLogOpen })),
     requestTerritoryFocus: (territoryId) =>
       set((state) =>
         state.applicationMode !== 'playing' ||

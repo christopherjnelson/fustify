@@ -38,6 +38,7 @@ export type Scenario =
   | 'game-over'
   | 'navigator'
   | 'event-log'
+  | 'activity-dock'
   | 'saved-resume'
   | 'minimap-seam'
   | 'minimap-focus-east'

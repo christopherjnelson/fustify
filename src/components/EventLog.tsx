@@ -1,9 +1,10 @@
-import type { MouseEvent } from 'react';
+import type { MouseEvent, RefObject, UIEventHandler } from 'react';
 import { formatMatchEvent } from '../core/game/eventFormatter';
 import { eventFocusTerritoryId } from '../core/game/eventFocus';
 import type { MatchEvent } from '../core/game/types';
 import type { PlanetDefinition } from '../core/types/planet';
 import type { LocalPlayerConfig } from '../core/setup/playerConfig';
+import { MatchEventIcon } from './MatchEventIcon';
 
 interface EventLogEntryProps {
   event: MatchEvent;
@@ -30,9 +31,12 @@ export function EventLogEntry({
 
   return (
     <li>
-      <span className="event-turn">T{event.turnNumber}</span>
-      <span className="event-description">
-        {formatMatchEvent(event, { planet, players })}
+      <MatchEventIcon event={event} />
+      <span className="event-copy">
+        <span className="event-turn">T{event.turnNumber}</span>
+        <span className="event-description">
+          {formatMatchEvent(event, { planet, players })}
+        </span>
       </span>
       {focusTerritory && (
         <button
@@ -53,28 +57,28 @@ export function EventLog({
   planet,
   players,
   onFocusTerritory,
+  listRef,
+  onScroll,
 }: {
   events: MatchEvent[];
   planet: PlanetDefinition;
   players: LocalPlayerConfig[];
   onFocusTerritory: (territoryId: string) => void;
+  listRef?: RefObject<HTMLOListElement | null>;
+  onScroll?: UIEventHandler<HTMLOListElement>;
 }) {
   return (
-    <section className="event-log">
-      <span className="eyebrow">Latest events</span>
-      <ol>
-        {[...events]
-          .reverse()
-          .slice(0, 40)
-          .map((event) => (
-            <EventLogEntry
-              key={event.id}
-              event={event}
-              planet={planet}
-              players={players}
-              onFocusTerritory={onFocusTerritory}
-            />
-          ))}
+    <section className="event-log" aria-label="Match activity">
+      <ol ref={listRef} onScroll={onScroll} tabIndex={0}>
+        {events.map((event) => (
+          <EventLogEntry
+            key={event.id}
+            event={event}
+            planet={planet}
+            players={players}
+            onFocusTerritory={onFocusTerritory}
+          />
+        ))}
       </ol>
     </section>
   );
