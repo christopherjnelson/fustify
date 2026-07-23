@@ -156,6 +156,29 @@ describe('setup and match store integration', () => {
     expect(useGameStore.getState().focusSequence).toBe(initialSequence + 2);
   });
 
+  it('cancels a territory focus for manual camera control and allows refocusing', async () => {
+    const started = await startRandomMatch();
+    started.beginTurn();
+    const state = useGameStore.getState();
+    const territory = state.planet.territories.find(
+      (item) =>
+        state.match!.territories[item.id]?.ownerId ===
+        state.match!.activePlayerId,
+    )!;
+    const initialSequence = state.focusSequence;
+
+    state.selectAndFocusTerritory(territory.id);
+    expect(useGameStore.getState().focusTargetTerritoryId).toBe(territory.id);
+
+    useGameStore.getState().cancelTerritoryFocus();
+    expect(useGameStore.getState().focusTargetTerritoryId).toBeNull();
+    expect(useGameStore.getState().focusSequence).toBe(initialSequence + 1);
+
+    useGameStore.getState().focusSelectedTerritory();
+    expect(useGameStore.getState().focusTargetTerritoryId).toBe(territory.id);
+    expect(useGameStore.getState().focusSequence).toBe(initialSequence + 2);
+  });
+
   it('keeps multiplayer selection local and deduplicates confirmed commands', async () => {
     const started = await startRandomMatch();
     started.beginTurn();

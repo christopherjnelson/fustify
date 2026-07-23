@@ -22,6 +22,9 @@ export function CameraController() {
     (state) => state.focusTargetTerritoryId,
   );
   const focusSequence = useGameStore((state) => state.focusSequence);
+  const cancelTerritoryFocus = useGameStore(
+    (state) => state.cancelTerritoryFocus,
+  );
   const setGlobeFocus = useGameStore((state) => state.setGlobeFocus);
   const publishFocus = useCallback(() => {
     setGlobeFocus(
@@ -135,6 +138,7 @@ export function CameraController() {
       maxDistance={8}
       rotateSpeed={0.55}
       zoomSpeed={0.75}
+      onStart={cancelTerritoryFocus}
       onChange={publishFocus}
     />
   );

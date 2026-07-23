@@ -242,6 +242,7 @@ export interface GameState {
   setViewMode: (mode: PlanetViewMode) => void;
   toggleEventLog: () => void;
   focusSelectedTerritory: () => void;
+  cancelTerritoryFocus: () => void;
   setGlobeFocus: (focus: GeographicPoint) => void;
 }
 
@@ -1160,6 +1161,12 @@ export const useGameStore = create<GameState>((set, get) => {
               focusSequence: state.focusSequence + 1,
             };
       }),
+    cancelTerritoryFocus: () =>
+      set((state) =>
+        state.focusTargetTerritoryId === null
+          ? state
+          : { focusTargetTerritoryId: null },
+      ),
     setGlobeFocus: (globeFocus) =>
       set((state) =>
         Math.abs(state.globeFocus.longitude - globeFocus.longitude) < 0.01 &&
