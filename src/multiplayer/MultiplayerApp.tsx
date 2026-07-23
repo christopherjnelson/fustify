@@ -46,6 +46,7 @@ import {
   readMultiplayerConfiguration,
 } from './supabaseClient';
 import { isMatchState } from './gameProtocol';
+import { RoomCodeCopyButton } from './RoomCodeCopyButton';
 
 type Route =
   | { kind: 'lobby' }
@@ -368,17 +369,9 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
           <strong data-testid="room-code">
             {formatRoomCode(state.room.join_code)}
           </strong>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() =>
-              void navigator.clipboard.writeText(
-                formatRoomCode(state.room.join_code),
-              )
-            }
-          >
-            Copy room code
-          </button>
+          <RoomCodeCopyButton
+            roomCode={formatRoomCode(state.room.join_code)}
+          />
         </section>
 
         <section
