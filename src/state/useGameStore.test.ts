@@ -156,6 +156,55 @@ describe('setup and match store integration', () => {
     expect(useGameStore.getState().focusSequence).toBe(initialSequence + 2);
   });
 
+  it('keeps multiplayer selection local and deduplicates confirmed commands', async () => {
+    const started = await startRandomMatch();
+    started.beginTurn();
+    const playing = useGameStore.getState();
+    const target = playing.planet.territories.find(
+      (territory) =>
+        playing.match!.territories[territory.id]?.ownerId ===
+        playing.match!.activePlayerId,
+    )!;
+    let finishCommand!: () => void;
+    const authoritativeDispatch = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCommand = resolve;
+        }),
+    );
+    useGameStore.setState({
+      multiplayerSession: {
+        ownPlayerId: playing.match!.activePlayerId,
+        revision: 4,
+        stateFingerprint: 'test-fingerprint',
+        connection: 'SUBSCRIBED',
+        pending: false,
+        dispatch: authoritativeDispatch,
+      },
+    });
+
+    useGameStore.getState().selectTerritory(target.id);
+    expect(useGameStore.getState().match?.selectedSourceTerritoryId).toBe(
+      target.id,
+    );
+    expect(authoritativeDispatch).not.toHaveBeenCalled();
+
+    const command = {
+      type: 'PLACE_REINFORCEMENT' as const,
+      territoryId: target.id,
+      amount: 1,
+    };
+    useGameStore.getState().dispatchGameAction(command);
+    useGameStore.getState().dispatchGameAction(command);
+    expect(authoritativeDispatch).toHaveBeenCalledOnce();
+    expect(useGameStore.getState().multiplayerSession?.pending).toBe(true);
+
+    finishCommand();
+    await vi.waitFor(() =>
+      expect(useGameStore.getState().multiplayerSession?.pending).toBe(false),
+    );
+  });
+
   it('blocks actions during handoff and begins without recalculating reinforcements', async () => {
     const state = await startRandomMatch();
     const before = state.match!.remainingReinforcements;

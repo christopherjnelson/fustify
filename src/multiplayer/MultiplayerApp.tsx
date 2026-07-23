@@ -16,7 +16,10 @@ import type { MatchState } from '../core/game/types';
 import type { PlanetDefinition } from '../core/types/planet';
 import type { LocalPlayerConfig } from '../core/setup/playerConfig';
 import { createNeutralMatchSetup } from '../core/setup/startingPositions';
-import { useGameStore } from '../state/useGameStore';
+import {
+  reconcileMultiplayerSelection,
+  useGameStore,
+} from '../state/useGameStore';
 import {
   claimSeat,
   closeRoom,
@@ -700,7 +703,11 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
         applicationMode:
           snapshots.state.phase === 'game-over' ? 'game-over' : 'playing',
         planet: snapshots.planet,
-        match: snapshots.state,
+        match: reconcileMultiplayerSelection(
+          snapshots.planet,
+          snapshots.state,
+          current.match,
+        ),
         matchSetup: createNeutralMatchSetup(snapshots.players, 'random'),
         setup: {
           ...current.setup,

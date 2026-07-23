@@ -75,8 +75,7 @@ export function Planet({ planet }: PlanetProps) {
       applicationMode !== 'playing' ||
       activeController === 'heuristic-bot' ||
       (multiplayerSession !== null &&
-        (multiplayerSession.pending ||
-          multiplayerSession.ownPlayerId !== match.activePlayerId))
+        multiplayerSession.ownPlayerId !== match.activePlayerId)
     ) {
       return {
         sources: new Set<string>(),

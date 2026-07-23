@@ -254,6 +254,45 @@ export interface MultiplayerStoreSession {
   dispatch: (action: GameAction) => Promise<void>;
 }
 
+export function reconcileMultiplayerSelection(
+  planet: PlanetDefinition,
+  canonical: MatchState,
+  local: MatchState | null,
+): MatchState {
+  if (!['reinforce', 'attack', 'fortify'].includes(canonical.phase)) {
+    return canonical;
+  }
+  const cleared: MatchState = {
+    ...canonical,
+    selectedSourceTerritoryId: null,
+    selectedTargetTerritoryId: null,
+  };
+  if (
+    !local ||
+    local.matchId !== canonical.matchId ||
+    local.phase !== canonical.phase ||
+    local.activePlayerId !== canonical.activePlayerId ||
+    local.winnerId !== canonical.winnerId
+  ) {
+    return cleared;
+  }
+
+  let reconciled = cleared;
+  for (const territoryId of [
+    local.selectedSourceTerritoryId,
+    local.selectedTargetTerritoryId,
+  ]) {
+    if (!territoryId) continue;
+    const transition = gameReducer(planet, reconciled, {
+      type: 'SELECT_TERRITORY',
+      territoryId,
+    });
+    if (transition.error) break;
+    reconciled = transition.state;
+  }
+  return reconciled;
+}
+
 function allowBusyStateToPaint(): Promise<void> {
   if (typeof window === 'undefined' || !window.requestAnimationFrame) {
     return new Promise((resolve) => setTimeout(resolve, 0));
@@ -852,6 +891,14 @@ export const useGameStore = create<GameState>((set, get) => {
           return;
         }
         if (state.multiplayerSession.pending) return;
+        if (action.type === 'SELECT_TERRITORY') {
+          const transition = gameReducer(state.planet, state.match, action);
+          set({
+            match: transition.state,
+            lastActionError: transition.error,
+          });
+          return;
+        }
         const dispatch = state.multiplayerSession.dispatch;
         set({
           multiplayerSession: { ...state.multiplayerSession, pending: true },

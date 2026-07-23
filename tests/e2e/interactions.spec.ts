@@ -932,6 +932,126 @@ test('valid and invalid fortification follow owned connectivity', async ({
   expect((await stateSnapshot(page)).phase).toBe('turn-end');
 });
 
+test('multiplayer territory intent stays immediate while confirmation is delayed', async ({
+  page,
+}) => {
+  await openScenario(page, 'fortification');
+  const selection = await page.evaluate(async () => {
+    const { useGameStore } = await import('/src/state/useGameStore.ts');
+    const { getFortifyTargets } =
+      await import('/src/core/game/legalActions.ts');
+    const state = useGameStore.getState();
+    const sourceId = state.match!.selectedSourceTerritoryId!;
+    const targetId = getFortifyTargets(
+      state.planet,
+      state.match!,
+      sourceId,
+    )[0]!;
+    const sourceName = state.planet.territories.find(
+      (territory) => territory.id === sourceId,
+    )!.name;
+    const targetName = state.planet.territories.find(
+      (territory) => territory.id === targetId,
+    )!.name;
+    let commandCount = 0;
+    Object.assign(window, {
+      __MULTIPLAYER_SELECTION_COMMAND_COUNT__: () => commandCount,
+    });
+    useGameStore.setState({
+      multiplayerSession: {
+        ownPlayerId: state.match!.activePlayerId,
+        revision: 9,
+        stateFingerprint: 'focused-selection-test',
+        connection: 'SUBSCRIBED',
+        pending: false,
+        dispatch: async () => {
+          commandCount += 1;
+          await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+        },
+      },
+    });
+    useGameStore.getState().selectTerritory(null);
+    return { sourceId, targetId, sourceName, targetName };
+  });
+
+  await page.getByRole('button', { name: /Territory list/i }).click();
+  const navigator = page.getByRole('dialog', { name: 'Territory navigator' });
+  await navigator.getByRole('button', { name: 'All territories' }).click();
+  await navigator
+    .getByRole('button', { name: new RegExp(`^${selection.sourceName}\\.`) })
+    .click();
+  await navigator
+    .getByRole('button', { name: new RegExp(`^${selection.targetName}\\.`) })
+    .click();
+
+  expect((await stateSnapshot(page)).match).toMatchObject({
+    selectedSourceTerritoryId: selection.sourceId,
+    selectedTargetTerritoryId: selection.targetId,
+  });
+  expect(
+    await page.evaluate(() =>
+      (
+        window as typeof window & {
+          __MULTIPLAYER_SELECTION_COMMAND_COUNT__: () => number;
+        }
+      ).__MULTIPLAYER_SELECTION_COMMAND_COUNT__(),
+    ),
+  ).toBe(0);
+  await navigator.getByRole('button', { name: 'Close and view globe' }).click();
+  const fortify = page.getByRole('button', { name: 'Fortify', exact: true });
+  await expect(fortify).toBeEnabled();
+  await fortify.evaluate((button: HTMLButtonElement) => {
+    button.click();
+    button.click();
+  });
+  await expect(page.getByText('Submitting command…')).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      (
+        window as typeof window & {
+          __MULTIPLAYER_SELECTION_COMMAND_COUNT__: () => number;
+        }
+      ).__MULTIPLAYER_SELECTION_COMMAND_COUNT__(),
+    ),
+  ).toBe(1);
+  expect((await stateSnapshot(page)).match).toMatchObject({
+    selectedSourceTerritoryId: selection.sourceId,
+    selectedTargetTerritoryId: selection.targetId,
+  });
+
+  await openScenario(page, 'attack-source');
+  const attack = await page.evaluate(async () => {
+    const { useGameStore } = await import('/src/state/useGameStore.ts');
+    const { getAttackTargets } = await import('/src/core/game/legalActions.ts');
+    const state = useGameStore.getState();
+    const sourceId = state.match!.selectedSourceTerritoryId!;
+    const targetId = getAttackTargets(state.planet, state.match!, sourceId)[0]!;
+    useGameStore.setState({
+      multiplayerSession: {
+        ownPlayerId: state.match!.activePlayerId,
+        revision: 10,
+        stateFingerprint: 'attack-selection-test',
+        connection: 'SUBSCRIBED',
+        pending: false,
+        dispatch: async () => {
+          throw new Error('Selection must not dispatch.');
+        },
+      },
+    });
+    useGameStore.getState().selectTerritory(null);
+    useGameStore.getState().selectTerritory(sourceId);
+    useGameStore.getState().selectTerritory(targetId);
+    return { sourceId, targetId };
+  });
+  expect((await stateSnapshot(page)).match).toMatchObject({
+    selectedSourceTerritoryId: attack.sourceId,
+    selectedTargetTerritoryId: attack.targetId,
+  });
+  await expect(
+    page.getByRole('button', { name: 'Attack', exact: true }),
+  ).toBeEnabled();
+});
+
 for (const scenario of [
   'reinforcement',
   'attack-source',
