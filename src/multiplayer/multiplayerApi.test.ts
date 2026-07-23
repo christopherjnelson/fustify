@@ -1,7 +1,27 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { Database } from './database.types';
-import { ensureAnonymousSession, multiplayerError } from './multiplayerApi';
+import {
+  createRoom,
+  ensureAnonymousSession,
+  multiplayerError,
+} from './multiplayerApi';
+
+describe('multiplayer room creation', () => {
+  it('persists one freshly generated readable seed during room creation', async () => {
+    const room = { id: 'room-id', seed: 'quiet-harbor-321' };
+    const rpc = vi.fn(async () => ({ data: room, error: null }));
+    const generateSeed = vi.fn(() => 'quiet-harbor-321');
+    const client = { rpc } as unknown as SupabaseClient<Database>;
+
+    await expect(createRoom(client, 'Host', generateSeed)).resolves.toBe(room);
+    expect(generateSeed).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('create_room', {
+      display_name: 'Host',
+      seed: 'quiet-harbor-321',
+    });
+  });
+});
 
 describe('multiplayer anonymous session', () => {
   it('deduplicates concurrent anonymous sign-in attempts for one client', async () => {

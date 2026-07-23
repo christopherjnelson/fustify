@@ -26,6 +26,33 @@ test('multiplayer lobby visual', async ({ browser }, testInfo) => {
   const roomId = page.url().split('/').at(-1)!;
 
   try {
+    const seedInput = page.getByLabel('Seed');
+    const initialSeed = await seedInput.inputValue();
+    expect(initialSeed).toMatch(/^[a-z]+-[a-z]+-\d{3}$/);
+    expect(initialSeed).not.toBe('atlas-prime');
+    const revisionLabel = page.locator('.multiplayer-header .eyebrow');
+    const initialRevision = await revisionLabel.textContent();
+    await page.getByRole('button', { name: 'Generate World' }).click();
+    await expect(revisionLabel).not.toHaveText(initialRevision!);
+    const generatedSeed = await seedInput.inputValue();
+    expect(generatedSeed).not.toBe(initialSeed);
+    await page.reload();
+    await expect(seedInput).toHaveValue(generatedSeed);
+
+    const deterministicSeed = `multiplayer-visual-${testInfo.project.name}`;
+    const generatedRevision = await revisionLabel.textContent();
+    await seedInput.fill(deterministicSeed);
+    await page.getByRole('button', { name: 'Save settings' }).click();
+    await expect(revisionLabel).not.toHaveText(generatedRevision!);
+    await page.reload();
+    await expect(seedInput).toHaveValue(deterministicSeed);
+    const preview = page.getByTestId('multiplayer-minimap');
+    await expect(preview).toBeVisible();
+    await expect(preview.locator('.minimap-territories path')).toHaveCount(42);
+    await expect(
+      preview.locator('button, input, select, a, [tabindex]'),
+    ).toHaveCount(0);
+
     await expect(page.locator('.multiplayer-shell')).toHaveScreenshot(
       `multiplayer-lobby-${testInfo.project.name}.png`,
       {

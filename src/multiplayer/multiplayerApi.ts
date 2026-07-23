@@ -1,5 +1,6 @@
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import type { GameAction } from '../core/game/types';
+import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
 import type { Database, Tables } from './database.types';
 import type { AuthoritativeCommandResult } from './gameProtocol';
 
@@ -158,9 +159,11 @@ export async function fetchMatch(
 export async function createRoom(
   client: SupabaseClient<Database>,
   displayName: string,
+  generateSeed: () => string = generateReadableWorldSeed,
 ): Promise<Room> {
   const { data, error } = await client.rpc('create_room', {
     display_name: displayName,
+    seed: generateSeed(),
   });
   if (error) throw multiplayerError(error);
   return data;

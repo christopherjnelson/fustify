@@ -46,7 +46,9 @@ import {
   readMultiplayerConfiguration,
 } from './supabaseClient';
 import { isMatchState } from './gameProtocol';
+import { ReadonlyMinimap } from './ReadonlyWorld';
 import { RoomCodeCopyButton } from './RoomCodeCopyButton';
+import { generateRoomPreviewPlanet, withFreshRoomSeed } from './roomWorld';
 
 type Route =
   | { kind: 'lobby' }
@@ -225,6 +227,26 @@ function ConnectionBadge({ status }: { status: string }) {
   );
 }
 
+function RoomWorldPreview({ room }: { room: Room }) {
+  const { seed, territory_count, continent_count, max_seats } = room;
+  const planet = useMemo(
+    () =>
+      generateRoomPreviewPlanet({
+        seed,
+        territory_count,
+        continent_count,
+        max_seats,
+      }),
+    [seed, territory_count, continent_count, max_seats],
+  );
+  return (
+    <ReadonlyMinimap
+      planet={planet}
+      className="multiplayer-lobby-world-preview"
+    />
+  );
+}
+
 function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   const client = useMemo(() => getSupabaseClient(), []);
   const [state, setState] = useState<RoomState | null>(null);
@@ -235,6 +257,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   const requestSequence = useRef(0);
   const realtimeEventCount = useRef(0);
   const settingsDirty = useRef(false);
+  const busyRef = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     const sequence = ++requestSequence.current;
@@ -314,6 +337,8 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   }, [state?.match]);
 
   const act = async (name: string, action: () => Promise<void>) => {
+    if (busyRef.current !== null) return;
+    busyRef.current = name;
     setBusy(name);
     setError(null);
     try {
@@ -322,6 +347,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     } catch (requestError) {
       setError(multiplayerError(requestError).message);
     } finally {
+      busyRef.current = null;
       setBusy(null);
     }
   };
@@ -369,9 +395,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
           <strong data-testid="room-code">
             {formatRoomCode(state.room.join_code)}
           </strong>
-          <RoomCodeCopyButton
-            roomCode={formatRoomCode(state.room.join_code)}
-          />
+          <RoomCodeCopyButton roomCode={formatRoomCode(state.room.join_code)} />
         </section>
 
         <section
@@ -464,18 +488,40 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
         >
           <h2 id="room-settings-title">World settings</h2>
           {!host && <p>Only the host can change room settings.</p>}
-          <label>
-            Seed
-            <input
-              value={settings.seed}
-              maxLength={64}
-              disabled={!host || !waiting || busy !== null}
-              onChange={(event) => {
-                settingsDirty.current = true;
-                setSettings({ ...settings, seed: event.target.value });
-              }}
-            />
-          </label>
+          <div className="multiplayer-seed-setting">
+            <label>
+              Seed
+              <input
+                value={settings.seed}
+                maxLength={64}
+                disabled={!host || !waiting || busy !== null}
+                onChange={(event) => {
+                  settingsDirty.current = true;
+                  setSettings({ ...settings, seed: event.target.value });
+                }}
+              />
+            </label>
+            {host && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy !== null || !waiting}
+                aria-busy={busy === 'generate-world'}
+                onClick={() => {
+                  if (busyRef.current !== null) return;
+                  const generatedSettings = withFreshRoomSeed(settings);
+                  settingsDirty.current = true;
+                  setSettings(generatedSettings);
+                  void act('generate-world', async () => {
+                    await updateRoomSettings(client, generatedSettings);
+                    settingsDirty.current = false;
+                  });
+                }}
+              >
+                {busy === 'generate-world' ? 'Generating…' : 'Generate World'}
+              </button>
+            )}
+          </div>
           <div className="multiplayer-setting-grid">
             <label>
               Territories
@@ -551,9 +597,10 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
           </div>
           {host && (
             <button type="submit" disabled={busy !== null || !waiting}>
-              Save settings
+              {busy === 'settings' ? 'Saving…' : 'Save settings'}
             </button>
           )}
+          <RoomWorldPreview room={state.room} />
         </form>
       </div>
 

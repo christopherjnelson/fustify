@@ -160,7 +160,13 @@ export function ReadonlyGlobe({ planet }: { planet: PlanetDefinition }) {
   );
 }
 
-export function ReadonlyMinimap({ planet }: { planet: PlanetDefinition }) {
+export function ReadonlyMinimap({
+  planet,
+  className = '',
+}: {
+  planet: PlanetDefinition;
+  className?: string;
+}) {
   const geometry = useMemo(() => getProjectedWorldGeometry(planet), [planet]);
   const territoryById = useMemo(
     () =>
@@ -175,7 +181,7 @@ export function ReadonlyMinimap({ planet }: { planet: PlanetDefinition }) {
     );
   return (
     <section
-      className="minimap-panel multiplayer-minimap"
+      className={`minimap-panel multiplayer-minimap ${className}`.trim()}
       aria-labelledby="multiplayer-minimap-title"
       data-testid="multiplayer-minimap"
     >
