@@ -293,6 +293,7 @@ export function Planet({ planet }: PlanetProps) {
       <SeaRouteOverlay
         planet={planet}
         selectedTerritoryId={match?.selectedSourceTerritoryId ?? null}
+        legalTargetIds={legal.targets}
         debugView={debugView}
         showNeutralPreviewRoutes={
           applicationMode === 'world-setup' &&

@@ -3,11 +3,15 @@ import * as THREE from 'three';
 import { PLANET_RADIUS } from '../core/generation/constants';
 import type { PlanetDefinition } from '../core/types/planet';
 import type { TerritoryConnection } from '../core/types/surface';
-import { canonicalSeaRoutes } from '../presentation/seaRoutes';
+import {
+  canonicalSeaRoutes,
+  getSeaRouteVisualState,
+} from '../presentation/seaRoutes';
 
 interface SeaRouteOverlayProps {
   planet: PlanetDefinition;
   selectedTerritoryId: string | null;
+  legalTargetIds: ReadonlySet<string>;
   debugView: boolean;
   showNeutralPreviewRoutes: boolean;
 }
@@ -86,6 +90,7 @@ function endpointGeometry(
 export function SeaRouteOverlay({
   planet,
   selectedTerritoryId,
+  legalTargetIds,
   debugView,
   showNeutralPreviewRoutes,
 }: SeaRouteOverlayProps) {
@@ -96,46 +101,49 @@ export function SeaRouteOverlay({
         [connection.fromTerritoryId, connection.toTerritoryId].sort().join('|'),
       ),
     );
-    const selected = routes.filter(
+    const emphasized = routes.filter(
       (route) =>
-        selectedTerritoryId !== null &&
-        (route.fromTerritoryId === selectedTerritoryId ||
-          route.toTerritoryId === selectedTerritoryId),
+        getSeaRouteVisualState({
+          route,
+          selectedSourceId: selectedTerritoryId,
+          legalTargetIds,
+        }) === 'emphasized',
     );
-    const selectedPairs = new Set(
-      selected.map((route) =>
+    const emphasizedPairs = new Set(
+      emphasized.map((route) =>
         [route.fromTerritoryId, route.toTerritoryId].sort().join('|'),
       ),
     );
-    const unselected = routes.filter(
+    const baseline = routes.filter(
       (route) =>
-        !selectedPairs.has(
+        !emphasizedPairs.has(
           [route.fromTerritoryId, route.toTerritoryId].sort().join('|'),
         ),
     );
     return {
       routes,
-      selected,
-      bridges: unselected.filter((route) =>
+      emphasized,
+      baseline,
+      bridges: baseline.filter((route) =>
         bridgePairs.has(
           [route.fromTerritoryId, route.toTerritoryId].sort().join('|'),
         ),
       ),
-      redundant: unselected.filter(
+      redundant: baseline.filter(
         (route) =>
           !bridgePairs.has(
             [route.fromTerritoryId, route.toTerritoryId].sort().join('|'),
           ),
       ),
     };
-  }, [planet, selectedTerritoryId]);
-  const selectedGeometry = useMemo(
-    () => routeGeometry(routeGroups.selected, planet),
-    [planet, routeGroups.selected],
+  }, [legalTargetIds, planet, selectedTerritoryId]);
+  const emphasizedGeometry = useMemo(
+    () => routeGeometry(routeGroups.emphasized, planet),
+    [planet, routeGroups.emphasized],
   );
-  const previewGeometry = useMemo(
-    () => routeGeometry(routeGroups.routes, planet, true),
-    [planet, routeGroups.routes],
+  const baselineGeometry = useMemo(
+    () => routeGeometry(routeGroups.baseline, planet, true),
+    [planet, routeGroups.baseline],
   );
   const bridgeGeometry = useMemo(
     () => routeGeometry(routeGroups.bridges, planet),
@@ -152,25 +160,36 @@ export function SeaRouteOverlay({
 
   return (
     <>
-      {showNeutralPreviewRoutes && (
-        <lineSegments
-          geometry={previewGeometry}
-          renderOrder={4}
-          name="neutral-preview-sea-routes"
-          userData={{ decorative: true, routeCount: routeGroups.routes.length }}
-          raycast={() => undefined}
-        >
-          <lineBasicMaterial
-            color="#8dd9ec"
-            transparent
-            opacity={0.48}
-            depthWrite={false}
-          />
-        </lineSegments>
-      )}
+      <lineSegments
+        geometry={baselineGeometry}
+        renderOrder={4}
+        name={
+          showNeutralPreviewRoutes
+            ? 'neutral-preview-sea-routes'
+            : 'baseline-sea-routes'
+        }
+        userData={{
+          decorative: true,
+          interactive: false,
+          routeCount: routeGroups.baseline.length,
+          visualState: 'baseline',
+        }}
+        raycast={() => undefined}
+      >
+        <lineBasicMaterial
+          color="#8dd9ec"
+          transparent
+          opacity={0.58}
+          depthWrite={false}
+        />
+      </lineSegments>
       {debugView && (
         <>
-          <lineSegments geometry={redundantGeometry} renderOrder={5}>
+          <lineSegments
+            geometry={redundantGeometry}
+            renderOrder={5}
+            raycast={() => undefined}
+          >
             <lineBasicMaterial
               color="#72cfea"
               transparent
@@ -178,7 +197,11 @@ export function SeaRouteOverlay({
               depthWrite={false}
             />
           </lineSegments>
-          <lineSegments geometry={bridgeGeometry} renderOrder={6}>
+          <lineSegments
+            geometry={bridgeGeometry}
+            renderOrder={6}
+            raycast={() => undefined}
+          >
             <lineBasicMaterial
               color="#ff8c64"
               transparent
@@ -186,7 +209,11 @@ export function SeaRouteOverlay({
               depthWrite={false}
             />
           </lineSegments>
-          <points geometry={endpoints} renderOrder={7}>
+          <points
+            geometry={endpoints}
+            renderOrder={7}
+            raycast={() => undefined}
+          >
             <pointsMaterial
               color="#e8f8ff"
               size={0.07}
@@ -196,15 +223,44 @@ export function SeaRouteOverlay({
           </points>
         </>
       )}
-      {routeGroups.selected.length > 0 && (
-        <lineSegments geometry={selectedGeometry} renderOrder={8}>
-          <lineBasicMaterial
-            color="#ffe16b"
-            transparent
-            opacity={1}
-            depthWrite={false}
-          />
-        </lineSegments>
+      {routeGroups.emphasized.length > 0 && (
+        <>
+          <lineSegments
+            geometry={emphasizedGeometry}
+            renderOrder={8}
+            name="emphasized-sea-routes"
+            userData={{
+              decorative: true,
+              interactive: false,
+              routeCount: routeGroups.emphasized.length,
+              visualState: 'emphasized',
+            }}
+            raycast={() => undefined}
+          >
+            <lineBasicMaterial
+              color="#fff3a3"
+              transparent
+              opacity={1}
+              depthWrite={false}
+            />
+          </lineSegments>
+          <lineSegments
+            geometry={emphasizedGeometry}
+            scale={1.002}
+            renderOrder={7}
+            name="emphasized-sea-route-glow"
+            userData={{ decorative: true, interactive: false }}
+            raycast={() => undefined}
+          >
+            <lineBasicMaterial
+              color="#61dfff"
+              transparent
+              opacity={0.36}
+              depthWrite={false}
+              blending={THREE.AdditiveBlending}
+            />
+          </lineSegments>
+        </>
       )}
     </>
   );

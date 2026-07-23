@@ -18,6 +18,8 @@ import { territoryFillColor } from '../presentation/territoryVisuals';
 import { SeaRouteOverlay } from '../components/SeaRouteOverlay';
 import { TerritoryOverlay } from '../components/TerritoryOverlay';
 
+const NO_LEGAL_ROUTE_TARGETS = new Set<string>();
+
 function format(value: number): number {
   return Number(value.toFixed(3));
 }
@@ -111,6 +113,7 @@ function ReadonlyPlanet({ planet }: { planet: PlanetDefinition }) {
       <SeaRouteOverlay
         planet={planet}
         selectedTerritoryId={null}
+        legalTargetIds={NO_LEGAL_ROUTE_TARGETS}
         debugView={false}
         showNeutralPreviewRoutes
       />
