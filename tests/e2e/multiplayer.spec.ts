@@ -277,7 +277,7 @@ test('two remote browsers complete one authoritative match and agree on the winn
     await pageA.getByRole('button', { name: 'Save settings' }).click();
     await pageA
       .getByTestId('seat-0')
-      .getByRole('button', { name: 'Claim' })
+      .getByRole('button', { name: 'Claim Seat 1' })
       .click();
     await expect(
       pageA.getByRole('button', { name: 'Start Match' }),
@@ -306,7 +306,7 @@ test('two remote browsers complete one authoritative match and agree on the winn
     await pageB.getByRole('button', { name: 'Join room' }).click();
     await pageB
       .getByTestId('seat-1')
-      .getByRole('button', { name: 'Claim' })
+      .getByRole('button', { name: 'Claim Seat 2' })
       .click();
     await expect(pageA.getByTestId('seat-1')).toContainText('Bravo');
     await expect(

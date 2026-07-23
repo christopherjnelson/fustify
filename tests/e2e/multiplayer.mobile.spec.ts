@@ -79,7 +79,7 @@ test('mobile restores an authoritative active match without clipping controls', 
     await host.getByRole('button', { name: 'Save settings' }).click();
     await host
       .getByTestId('seat-0')
-      .getByRole('button', { name: 'Claim' })
+      .getByRole('button', { name: 'Claim Seat 1' })
       .click();
     const code = await host.getByTestId('room-code').innerText();
 
@@ -96,7 +96,7 @@ test('mobile restores an authoritative active match without clipping controls', 
     await guest.getByRole('button', { name: 'Join room' }).click();
     await guest
       .getByTestId('seat-1')
-      .getByRole('button', { name: 'Claim' })
+      .getByRole('button', { name: 'Claim Seat 2' })
       .click();
     await expect(
       host.getByRole('button', { name: 'Start Match' }),

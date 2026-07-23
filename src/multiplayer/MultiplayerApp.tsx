@@ -50,6 +50,14 @@ import { ReadonlyMinimap } from './ReadonlyWorld';
 import { RoomCodeCopyButton } from './RoomCodeCopyButton';
 import { generateRoomPreviewPlanet, withFreshRoomSeed } from './roomWorld';
 import { TurnNotificationController } from '../components/TurnNotificationController';
+import {
+  GameSetupShell,
+  SetupActionBar,
+  SetupSummary,
+  SetupWorldPanel,
+} from '../components/setup/GameSetup';
+import { MultiplayerRoomRoster } from './MultiplayerRoomRoster';
+import { buildMultiplayerRosterDisplay } from './multiplayerRoomRosterViewModel';
 
 type Route =
   | { kind: 'lobby' }
@@ -364,10 +372,12 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
 
   const host = state.room.host_user_id === userId;
   const waiting = state.room.status === 'waiting';
-  const memberById = new Map(
-    state.members.map((member) => [member.user_id, member]),
-  );
   const ownSeat = state.seats.find((seat) => seat.occupant_user_id === userId);
+  const roster = buildMultiplayerRosterDisplay(
+    state.seats,
+    state.members,
+    userId,
+  );
   const claimedHumanSeats = state.seats.filter(
     (seat) =>
       seat.occupant_user_id !== null && seat.controller_type === 'human',
@@ -376,117 +386,47 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     claimedHumanSeats >= 2 && state.room.assignment_mode === 'random';
 
   return (
-    <main className="multiplayer-shell">
-      <header className="multiplayer-header">
-        <div>
-          <span className="eyebrow">Private multiplayer room</span>
-          <h1>Multiplayer lobby</h1>
-        </div>
-      </header>
-
-      <section
-        className="multiplayer-card room-summary"
-        aria-label="Private room summary"
-      >
-        <div className="room-summary-code">
-          <span>Room</span>
-          <strong data-testid="room-code">
-            {formatRoomCode(state.room.join_code)}
-          </strong>
-          <RoomCodeCopyButton roomCode={formatRoomCode(state.room.join_code)} />
-        </div>
-        <div className="room-summary-status">
-          <span>
-            {state.room.status === 'waiting' ? 'Waiting' : state.room.status} ·
-            Revision {state.room.revision}
-          </span>
-          <ConnectionBadge status={connection} />
-        </div>
-      </section>
-
-      <div className="multiplayer-layout">
-        <div className="multiplayer-player-column">
-          <section
-            className="multiplayer-card seat-card"
-            aria-labelledby="seat-list-title"
-          >
-            <h2 id="seat-list-title">Seats</h2>
-            <ol className="multiplayer-seat-list">
-              {state.seats.map((seat) => {
-                const occupant = seat.occupant_user_id
-                  ? memberById.get(seat.occupant_user_id)
-                  : null;
-                return (
-                  <li
-                    key={seat.seat_index}
-                    data-testid={`seat-${seat.seat_index}`}
-                  >
-                    <span>
-                      <b>Seat {seat.seat_index + 1}</b>
-                      {occupant ? (
-                        <small>
-                          {occupant.display_name}
-                          {occupant.role === 'host' ? ' · Host' : ''}
-                        </small>
-                      ) : (
-                        <small>Open</small>
-                      )}
-                    </span>
-                    {seat.occupant_user_id === userId ? (
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={busy !== null || !waiting}
-                        onClick={() =>
-                          void act('release', () => releaseSeat(client, roomId))
-                        }
-                      >
-                        Release
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={
-                          busy !== null ||
-                          !waiting ||
-                          occupant !== null ||
-                          ownSeat !== undefined
-                        }
-                        onClick={() =>
-                          void act('claim', () =>
-                            claimSeat(client, roomId, seat.seat_index),
-                          )
-                        }
-                      >
-                        Claim
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-
-          <section
-            className="multiplayer-card member-card"
-            aria-labelledby="member-list-title"
-          >
-            <h2 id="member-list-title">Members</h2>
-            <ul>
-              {state.members.map((member) => (
-                <li key={member.user_id}>
-                  {member.display_name}
-                  {member.role === 'host' && <span>Host</span>}
-                  {member.user_id === userId && <span>You</span>}
-                </li>
-              ))}
-            </ul>
-          </section>
-        </div>
-
-        <form
-          className="multiplayer-card settings-card"
-          aria-labelledby="room-settings-title"
+    <GameSetupShell
+      eyebrow="Private multiplayer room"
+      title="Multiplayer lobby"
+      summary={
+        <SetupSummary label="Private room summary">
+          <div className="room-summary-code">
+            <span>Room</span>
+            <strong data-testid="room-code">
+              {formatRoomCode(state.room.join_code)}
+            </strong>
+            <RoomCodeCopyButton
+              roomCode={formatRoomCode(state.room.join_code)}
+            />
+          </div>
+          <div className="room-summary-status">
+            <span>
+              {state.room.status === 'waiting' ? 'Waiting' : state.room.status}{' '}
+              · Revision {state.room.revision}
+            </span>
+            <ConnectionBadge status={connection} />
+          </div>
+        </SetupSummary>
+      }
+      roster={
+        <MultiplayerRoomRoster
+          roster={roster}
+          busy={busy !== null}
+          waiting={waiting}
+          ownSeatIndex={ownSeat?.seat_index ?? null}
+          onClaim={(seatIndex) =>
+            void act('claim', () => claimSeat(client, roomId, seatIndex))
+          }
+          onRelease={() =>
+            void act('release', () => releaseSeat(client, roomId))
+          }
+        />
+      }
+      world={
+        <SetupWorldPanel
+          title="World settings"
+          notice={!host && <p>Only the host can change room settings.</p>}
           onSubmit={(event) => {
             event.preventDefault();
             void act('settings', async () => {
@@ -494,11 +434,8 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
               settingsDirty.current = false;
             });
           }}
-        >
-          <h2 id="room-settings-title">World settings</h2>
-          {!host && <p>Only the host can change room settings.</p>}
-          <div className="multiplayer-world-setup">
-            <div className="multiplayer-settings-controls">
+          controls={
+            <>
               <div className="multiplayer-seed-setting">
                 <label>
                   Seed
@@ -601,11 +538,8 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                     }}
                   >
                     <option value="random">Random</option>
-                    <option value="player-draft" disabled>
-                      Player draft (local only)
-                    </option>
                   </select>
-                  <small>Player draft remains available in local play.</small>
+                  <small>Random assignment only in multiplayer.</small>
                 </label>
               </div>
               {host && (
@@ -613,70 +547,86 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                   {busy === 'settings' ? 'Saving…' : 'Save settings'}
                 </button>
               )}
-            </div>
-            <RoomWorldPreview room={state.room} />
-          </div>
-        </form>
-      </div>
-
-      {error && (
-        <p role="alert" className="multiplayer-error multiplayer-page-error">
-          {error}
-        </p>
-      )}
-      <footer className="multiplayer-card multiplayer-actions">
-        {host && waiting && (
-          <div>
-            <button
-              type="button"
-              disabled={busy !== null || !canStart}
-              onClick={() =>
-                void act('start', async () => {
-                  const match = await startMatch(client, roomId);
-                  navigate(`/multiplayer/match/${match.id}`, true);
-                })
-              }
-            >
-              {busy === 'start' ? 'Starting…' : 'Start Match'}
-            </button>
-            {claimedHumanSeats < 2 && (
-              <p className="multiplayer-start-helper">
-                At least 2 players must claim seats before starting.
-              </p>
-            )}
-            {state.room.assignment_mode !== 'random' && (
-              <p className="multiplayer-start-helper">
-                Multiplayer player draft is not supported. Choose random
-                assignment.
-              </p>
-            )}
-          </div>
-        )}
-        <button
-          type="button"
-          className="secondary"
-          disabled={busy !== null}
-          onClick={() =>
-            void act('leave', async () => {
-              await leaveRoom(client, roomId);
-              navigate('/multiplayer', true);
-            })
+            </>
           }
-        >
-          Leave room
-        </button>
-        {host && state.room.status !== 'closed' && (
-          <button
-            type="button"
-            className="danger"
-            disabled={busy !== null}
-            onClick={() => void act('close', () => closeRoom(client, roomId))}
-          >
-            Close room
-          </button>
-        )}
-      </footer>
-    </main>
+          preview={<RoomWorldPreview room={state.room} />}
+        />
+      }
+      actions={
+        <>
+          {error && (
+            <p
+              role="alert"
+              className="multiplayer-error multiplayer-page-error"
+            >
+              {error}
+            </p>
+          )}
+          <SetupActionBar
+            primary={
+              host && waiting ? (
+                <button
+                  type="button"
+                  disabled={busy !== null || !canStart}
+                  onClick={() =>
+                    void act('start', async () => {
+                      const match = await startMatch(client, roomId);
+                      navigate(`/multiplayer/match/${match.id}`, true);
+                    })
+                  }
+                >
+                  {busy === 'start' ? 'Starting…' : 'Start Match'}
+                </button>
+              ) : undefined
+            }
+            status={
+              <>
+                {host && waiting && claimedHumanSeats < 2 && (
+                  <p className="multiplayer-start-helper">
+                    At least 2 players must claim seats before starting.
+                  </p>
+                )}
+                {host && waiting && state.room.assignment_mode !== 'random' && (
+                  <p className="multiplayer-start-helper">
+                    Multiplayer player draft is not supported. Choose random
+                    assignment.
+                  </p>
+                )}
+              </>
+            }
+            secondary={
+              <>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void act('leave', async () => {
+                      await leaveRoom(client, roomId);
+                      navigate('/multiplayer', true);
+                    })
+                  }
+                >
+                  Leave room
+                </button>
+                {host && state.room.status !== 'closed' && (
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      void act('close', () => closeRoom(client, roomId))
+                    }
+                  >
+                    Close room
+                  </button>
+                )}
+              </>
+            }
+          />
+        </>
+      }
+    />
   );
 }
 
