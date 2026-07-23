@@ -19,6 +19,7 @@ import { TerritoryNavigator } from './TerritoryNavigator';
 import { territoryDrawerReducer } from '../core/navigation/territoryNavigator';
 import { playerColorValue } from '../core/setup/playerConfig';
 import { TERRITORY_NAVIGATOR_SHORTCUT } from '../core/input/controlBindings';
+import { formatMatchEvent } from '../core/game/eventFormatter';
 
 const PHASE_LABELS = {
   reinforce: 'Reinforce',
@@ -742,7 +743,10 @@ export function TerritoryHud() {
                 .map((event) => (
                   <li key={event.id}>
                     <span>T{event.turnNumber}</span>
-                    {event.message}
+                    {formatMatchEvent(event, {
+                      planet,
+                      players: configuredPlayers,
+                    })}
                   </li>
                 ))}
             </ol>

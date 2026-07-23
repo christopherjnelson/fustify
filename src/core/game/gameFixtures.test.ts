@@ -178,6 +178,12 @@ describe('hand-authored rules fixtures', () => {
       amount: 1,
     });
     expect(placed.state.territories.a.armyCount).toBe(5);
+    expect(placed.state.events.at(-1)).toMatchObject({
+      type: 'armies-placed',
+      actingPlayerId: 'p1',
+      primaryTerritoryId: 'a',
+      armyCount: 1,
+    });
     const rejected = gameReducer(planet, state, {
       type: 'PLACE_REINFORCEMENT',
       territoryId: 'b',
@@ -200,6 +206,14 @@ describe('hand-authored rules fixtures', () => {
       attackDice: 1,
     });
     expect(invalid.error?.code).toBe('NOT_ADJACENT');
+    expect(
+      gameReducer(planet, state, { type: 'END_ATTACK_PHASE' }).state.events.at(
+        -1,
+      ),
+    ).toMatchObject({
+      type: 'attack-phase-ended',
+      actingPlayerId: 'p1',
+    });
   });
 
   it('treats both land borders and sea routes as strategic adjacency', () => {
@@ -240,6 +254,11 @@ describe('hand-authored rules fixtures', () => {
     expect(result.state.events.at(-1)).toMatchObject({
       id: 'event-3',
       type: 'combat',
+      actingPlayerId: 'p1',
+      defenderPlayerId: 'p2',
+      sourceTerritoryId: 'a',
+      targetTerritoryId: 'b',
+      primaryTerritoryId: 'b',
       attackerLosses: 1,
       defenderLosses: 1,
     });
@@ -257,6 +276,15 @@ describe('hand-authored rules fixtures', () => {
       'territory-captured',
       'player-eliminated',
     ]);
+    expect(
+      state.events.find((event) => event.type === 'territory-captured'),
+    ).toMatchObject({
+      actingPlayerId: 'p1',
+      previousOwnerId: 'p2',
+      sourceTerritoryId: 'a',
+      targetTerritoryId: 'b',
+      primaryTerritoryId: 'b',
+    });
     expect(
       gameReducer(planet, state, { type: 'END_ATTACK_PHASE' }).error?.code,
     ).toBe('CAPTURE_MOVE_REQUIRED');
@@ -280,6 +308,19 @@ describe('hand-authored rules fixtures', () => {
       a: { armyCount: 1 },
       b: { armyCount: 3 },
     });
+    expect(moved.state.events.at(-1)).toMatchObject({
+      type: 'match-won',
+      actingPlayerId: 'p1',
+    });
+    expect(
+      moved.state.events.find((event) => event.type === 'capture-move'),
+    ).toMatchObject({
+      actingPlayerId: 'p1',
+      sourceTerritoryId: 'a',
+      targetTerritoryId: 'b',
+      primaryTerritoryId: 'b',
+      armyCount: 3,
+    });
   });
 
   it('fortifies over branched owned paths and rejects paths through enemies', () => {
@@ -302,6 +343,14 @@ describe('hand-authored rules fixtures', () => {
     expect(fortified.state).toMatchObject({
       phase: 'turn-end',
       fortifiedThisTurn: true,
+    });
+    expect(fortified.state.events.at(-1)).toMatchObject({
+      type: 'fortification-completed',
+      actingPlayerId: 'p1',
+      sourceTerritoryId: 'a',
+      targetTerritoryId: 'd',
+      primaryTerritoryId: 'd',
+      armyCount: 4,
     });
 
     const blocked = rulesFixtures.blockedChain();

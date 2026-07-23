@@ -12,6 +12,7 @@ import { isMultiplayerRoute } from '../browser/routes';
 import type { ApplicationMode, HandoffSummary } from '../core/appFlow';
 import { createMatch } from '../core/game/createMatch';
 import { gameReducer } from '../core/game/gameReducer';
+import { formatMatchEvent } from '../core/game/eventFormatter';
 import type { GameAction, GameError, MatchState } from '../core/game/types';
 import { GENERATOR_VERSION } from '../core/generation/constants';
 import { generatePlanet } from '../core/generation/generatePlanet';
@@ -312,6 +313,8 @@ function selectedTerritory(state: GameState): string | null {
 }
 
 function summaryForTurn(
+  planet: PlanetDefinition,
+  players: readonly LocalPlayerConfig[],
   match: MatchState,
   previousTurn: number,
 ): HandoffSummary {
@@ -329,7 +332,7 @@ function summaryForTurn(
           event.turnNumber === previousTurn && interesting.has(event.type),
       )
       .slice(-4)
-      .map((event) => event.message),
+      .map((event) => formatMatchEvent(event, { planet, players })),
   };
 }
 
@@ -962,7 +965,12 @@ export const useGameStore = create<GameState>((set, get) => {
       if (result.state.phase === 'game-over') applicationMode = 'game-over';
       else if (action.type === 'END_TURN') {
         applicationMode = 'handoff';
-        handoffSummary = summaryForTurn(result.state, state.match.turnNumber);
+        handoffSummary = summaryForTurn(
+          state.planet,
+          state.matchSetup.players,
+          result.state,
+          state.match.turnNumber,
+        );
       }
       set({
         match: result.state,
@@ -1007,7 +1015,12 @@ export const useGameStore = create<GameState>((set, get) => {
       if (result.state.phase === 'game-over') applicationMode = 'game-over';
       else if (action.type === 'END_TURN') {
         applicationMode = 'handoff';
-        handoffSummary = summaryForTurn(result.state, state.match.turnNumber);
+        handoffSummary = summaryForTurn(
+          state.planet,
+          state.matchSetup.players,
+          result.state,
+          state.match.turnNumber,
+        );
       }
       set({
         match: result.state,

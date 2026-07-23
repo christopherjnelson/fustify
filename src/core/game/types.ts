@@ -19,6 +19,7 @@ export type MatchEventType =
   | 'territory-captured'
   | 'player-eliminated'
   | 'capture-move'
+  | 'attack-phase-ended'
   | 'fortification-completed'
   | 'fortification-skipped'
   | 'turn-ended'
@@ -30,7 +31,17 @@ export interface MatchEvent {
   type: MatchEventType;
   message: string;
   playerId?: string;
+  actingPlayerId?: string;
+  previousPlayerId?: string;
+  nextPlayerId?: string;
+  defenderPlayerId?: string;
+  previousOwnerId?: string;
+  eliminatedPlayerId?: string;
   territoryId?: string;
+  primaryTerritoryId?: string;
+  sourceTerritoryId?: string;
+  targetTerritoryId?: string;
+  armyCount?: number;
   attackerRolls?: number[];
   defenderRolls?: number[];
   attackerLosses?: number;

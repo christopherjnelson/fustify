@@ -174,7 +174,9 @@ function endTurn(planet: PlanetDefinition, state: MatchState): MatchState {
     type: 'turn-ended',
     message: `Turn ${state.turnNumber} ended.`,
     playerId: state.activePlayerId,
+    actingPlayerId: state.activePlayerId,
   });
+  const previousPlayerId = state.activePlayerId;
   const activePlayerId = getNextActivePlayer(planet, next);
   const turnNumber = next.turnNumber + 1;
   next = {
@@ -195,11 +197,16 @@ function endTurn(planet: PlanetDefinition, state: MatchState): MatchState {
     type: 'turn-started',
     message: `Turn ${turnNumber} started.`,
     playerId: activePlayerId,
+    actingPlayerId: activePlayerId,
+    previousPlayerId,
+    nextPlayerId: activePlayerId,
   });
   return appendEvent(next, {
     type: 'reinforcements-received',
     message: `Received ${reinforcement.total} reinforcements (${reinforcement.territoryBase} base + ${reinforcement.continentBonus} continents).`,
     playerId: activePlayerId,
+    actingPlayerId: activePlayerId,
+    armyCount: reinforcement.total,
   });
 }
 
@@ -271,7 +278,10 @@ export function gameReducer(
       type: 'armies-placed',
       message: `Placed ${action.amount} ${action.amount === 1 ? 'army' : 'armies'}.`,
       playerId: state.activePlayerId,
+      actingPlayerId: state.activePlayerId,
       territoryId: action.territoryId,
+      primaryTerritoryId: action.territoryId,
+      armyCount: action.amount,
     });
     if (next.remainingReinforcements === 0) {
       next = {
@@ -346,7 +356,12 @@ export function gameReducer(
       type: 'combat',
       message: `Attack rolled ${combat.attackerRolls.join(', ')} vs ${combat.defenderRolls.join(', ')}; losses ${combat.attackerLosses}-${combat.defenderLosses}.`,
       playerId: state.activePlayerId,
+      actingPlayerId: state.activePlayerId,
+      defenderPlayerId: target.ownerId,
       territoryId: action.toTerritoryId,
+      sourceTerritoryId: action.fromTerritoryId,
+      targetTerritoryId: action.toTerritoryId,
+      primaryTerritoryId: action.toTerritoryId,
       ...combat,
     });
     if (updatedTarget.armyCount > 0) return success(next);
@@ -375,7 +390,12 @@ export function gameReducer(
       type: 'territory-captured',
       message: 'Territory captured; move armies in.',
       playerId: state.activePlayerId,
+      actingPlayerId: state.activePlayerId,
+      previousOwnerId: defeatedPlayerId,
       territoryId: action.toTerritoryId,
+      sourceTerritoryId: action.fromTerritoryId,
+      targetTerritoryId: action.toTerritoryId,
+      primaryTerritoryId: action.toTerritoryId,
     });
     if (checkPlayerEliminated(next, defeatedPlayerId)) {
       next = {
@@ -392,6 +412,8 @@ export function gameReducer(
         type: 'player-eliminated',
         message: 'A player was eliminated.',
         playerId: defeatedPlayerId,
+        actingPlayerId: state.activePlayerId,
+        eliminatedPlayerId: defeatedPlayerId,
       });
     }
     return success({ ...next, winnerId: checkVictory(planet, next) });
@@ -443,13 +465,19 @@ export function gameReducer(
       type: 'capture-move',
       message: `Moved ${action.amount} armies into the captured territory.`,
       playerId: state.activePlayerId,
+      actingPlayerId: state.activePlayerId,
       territoryId: action.toTerritoryId,
+      sourceTerritoryId: action.fromTerritoryId,
+      targetTerritoryId: action.toTerritoryId,
+      primaryTerritoryId: action.toTerritoryId,
+      armyCount: action.amount,
     });
     if (next.winnerId) {
       next = appendEvent(next, {
         type: 'match-won',
         message: 'The match was won.',
         playerId: next.winnerId,
+        actingPlayerId: next.winnerId,
       });
     }
     return success(next);
@@ -465,12 +493,22 @@ export function gameReducer(
       }
       return invalid(state, 'WRONG_PHASE', 'It is not the attack phase.');
     }
-    return success({
-      ...state,
-      phase: 'fortify',
-      selectedSourceTerritoryId: null,
-      selectedTargetTerritoryId: null,
-    });
+    return success(
+      appendEvent(
+        {
+          ...state,
+          phase: 'fortify',
+          selectedSourceTerritoryId: null,
+          selectedTargetTerritoryId: null,
+        },
+        {
+          type: 'attack-phase-ended',
+          message: 'Attack phase ended.',
+          playerId: state.activePlayerId,
+          actingPlayerId: state.activePlayerId,
+        },
+      ),
+    );
   }
   if (action.type === 'FORTIFY') {
     if (state.phase !== 'fortify') {
@@ -541,7 +579,12 @@ export function gameReducer(
       type: 'fortification-completed',
       message: `Fortified with ${action.amount} armies.`,
       playerId: state.activePlayerId,
+      actingPlayerId: state.activePlayerId,
       territoryId: action.toTerritoryId,
+      sourceTerritoryId: action.fromTerritoryId,
+      targetTerritoryId: action.toTerritoryId,
+      primaryTerritoryId: action.toTerritoryId,
+      armyCount: action.amount,
     });
     return success(next);
   }
@@ -561,6 +604,7 @@ export function gameReducer(
           type: 'fortification-skipped',
           message: 'Fortification skipped.',
           playerId: state.activePlayerId,
+          actingPlayerId: state.activePlayerId,
         },
       ),
     );

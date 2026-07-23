@@ -69,6 +69,7 @@ export function createMatch(
   state.events = [
     makeEvent(state, 'turn-started', 'Turn 1 started.', {
       playerId: activePlayerId,
+      actingPlayerId: activePlayerId,
     }),
   ];
   state.events.push(
@@ -76,7 +77,11 @@ export function createMatch(
       state,
       'reinforcements-received',
       `Received ${reinforcement.total} reinforcements (${reinforcement.territoryBase} base + ${reinforcement.continentBonus} continents).`,
-      { playerId: activePlayerId },
+      {
+        playerId: activePlayerId,
+        actingPlayerId: activePlayerId,
+        armyCount: reinforcement.total,
+      },
     ),
   );
   return state;
