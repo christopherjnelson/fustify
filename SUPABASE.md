@@ -40,10 +40,9 @@ rows are social metadata and never update `matches`, `match_commands`, gameplay
 revision, state fingerprint, or winner fields.
 
 The hosted history contains all eight migrations in this order. Edge Function
-`multiplayer-game` is active at version 2 with `verify_jwt=false` and source hash
-`43a9ed43a579286be60938827e5ff2c89e47c6356418ae93b1d5665cc44993a6`.
-The connector-returned entrypoint and 25 shared runtime dependencies match the
-corresponding Git files byte-for-byte.
+`multiplayer-game` is active at version 3 with `verify_jwt=false`. The Activity
+reaction work does not change authority-imported source and therefore does not
+redeploy this function.
 
 ## Secrets and browser configuration
 
