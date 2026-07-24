@@ -78,7 +78,7 @@ test.describe('hosted account boundary acceptance', () => {
         });
       });
 
-      await page.getByRole('link', { name: 'Multiplayer' }).click();
+      await page.getByRole('link', { name: 'Play Multiplayer' }).click();
       await expect(page).toHaveURL(/\/multiplayer$/);
       await expect(
         page.getByRole('heading', { name: 'Private multiplayer rooms' }),

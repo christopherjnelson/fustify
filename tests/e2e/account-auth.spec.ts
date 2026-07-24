@@ -481,6 +481,7 @@ test('registered account can edit its profile and sign out', async ({
   await installAuthFixture(page, 'registered');
   await page.goto('/');
   await expect(page.getByText('player@example.test')).toBeVisible();
+  await capture(page, testInfo.project.name, 'homepage-registered');
   await page.getByRole('button', { name: 'Edit profile' }).click();
   const edit = page.getByRole('dialog', { name: 'Edit profile' });
   await capture(page, testInfo.project.name, 'account-edit-profile-dialog');
@@ -527,7 +528,7 @@ test('registered home-to-multiplayer navigation keeps one ready account without 
     });
   });
 
-  await page.getByRole('link', { name: 'Multiplayer' }).click();
+  await page.getByRole('link', { name: 'Play Multiplayer' }).click();
   await expect(page).toHaveURL(/\/multiplayer$/);
   await expect(
     page.getByRole('heading', { name: 'Private multiplayer rooms' }),
@@ -790,7 +791,7 @@ test('signed-out gameplay choices and direct protected URLs authenticate before 
 }, testInfo) => {
   await installAuthFixture(page, 'signed-out');
   await page.goto('/');
-  await page.getByRole('link', { name: 'Single Player' }).click();
+  await page.getByRole('link', { name: 'Play Single Player' }).click();
   await expect(page).toHaveURL(/\/local$/);
   const localGate = page.getByRole('dialog', { name: 'Sign in' });
   await expect(localGate).toBeVisible();
@@ -844,7 +845,9 @@ test('legacy anonymous sessions cannot bypass a protected gameplay route', async
   page,
 }) => {
   await installAuthFixture(page, 'guest');
-  await page.goto('/local?seed=legacy#setup');
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Play Single Player' }).click();
+  await expect(page).toHaveURL(/\/local$/);
   await expect(
     page.getByRole('heading', {
       name: 'Finish creating your account to continue',

@@ -1,23 +1,65 @@
 import { expect, test } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 
-test.use({ viewport: { width: 1920, height: 1080 } });
+async function capture(
+  page: import('@playwright/test').Page,
+  projectName: string,
+  name: string,
+) {
+  const path = `test-results/ui-review/${projectName}/${name}.png`;
+  mkdirSync(dirname(path), { recursive: true });
+  await page.screenshot({ path, fullPage: true });
+}
 
 test('home choices route through the account-required shell without loading gameplay', async ({
   page,
-}) => {
+}, testInfo) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Fustify' })).toBeVisible();
+  await expect(
+    page.getByText(
+      'A strategy game played across procedurally generated spherical worlds.',
+    ),
+  ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Single Player' }),
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Single Player' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Multiplayer' })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(
-    1080,
-  );
+  await expect(
+    page.getByRole('link', { name: 'Play Single Player' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Play Multiplayer' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Every world is different' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'How a match works' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Current features' }),
+  ).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(
+    await page.locator('a a, a button, button a, button button').count(),
+  ).toBe(0);
+  expect(
+    await page
+      .locator('main h1')
+      .evaluateAll((headings) =>
+        headings.map((heading) => heading.textContent),
+      ),
+  ).toEqual(['Fustify']);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await capture(page, testInfo.project.name, 'homepage-signed-out');
   expect(
     await page.evaluate(() =>
       performance
@@ -33,14 +75,24 @@ test('home choices route through the account-required shell without loading game
   ).toEqual([]);
 
   await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Fustify home' })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Account' })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('link', { name: 'Single Player' })).toBeFocused();
+  await expect(
+    page.getByRole('link', { name: 'Play Single Player' }),
+  ).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/local$/);
   await expect(
     page.getByRole('heading', { name: 'Account required' }),
   ).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Sign in' })).toBeVisible();
+  await capture(
+    page,
+    testInfo.project.name,
+    'homepage-single-player-auth-gate',
+  );
   await page.reload();
   await expect(
     page.getByRole('heading', { name: 'Account required' }),
@@ -48,13 +100,15 @@ test('home choices route through the account-required shell without loading game
 
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
-  await page.getByRole('link', { name: 'Multiplayer' }).click();
+  await page.getByRole('link', { name: 'Play Multiplayer' }).click();
   await expect(page).toHaveURL(/\/multiplayer$/);
   await expect(
     page.getByRole('heading', {
       name: /^(Account required|Multiplayer configuration unavailable)$/,
     }),
   ).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Sign in' })).toBeVisible();
+  await capture(page, testInfo.project.name, 'homepage-multiplayer-auth-gate');
 
   await page.goto(
     '/?v=1&seed=legacy-atlas&territories=42&continents=5&players=4&assignment=random#setup',
