@@ -343,12 +343,15 @@
 }
 
 .setup-seat-number {
+  grid-column: 1;
   color: #a9bac9;
   font-size: 0.67rem;
   font-weight: 700;
 }
 
 .setup-seat-color {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -368,6 +371,7 @@
 }
 
 .setup-seat-identity {
+  grid-column: 3;
   min-width: 0;
 }
 
@@ -386,6 +390,7 @@
 }
 
 .setup-seat-badges {
+  grid-column: 4;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -401,6 +406,10 @@
 
 .setup-seat-controls button {
   min-width: 72px;
+}
+
+.setup-seat-controls {
+  grid-column: 5;
 }
 
 .setup-unseated {
@@ -492,6 +501,269 @@
   display: flex;
   gap: 10px;
   margin-left: auto;
+}
+
+.game-setup-shell-overlay {
+  position: absolute;
+  z-index: 6;
+  top: 24px;
+  left: 24px;
+  display: block;
+  width: min(640px, calc(100vw - 48px));
+  min-height: 0;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 18px;
+  border: 1px solid rgba(155, 187, 219, 0.2);
+  border-radius: 12px;
+  background: rgba(8, 16, 29, 0.92);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(20px);
+  scrollbar-width: thin;
+  scrollbar-color: #304257 transparent;
+}
+
+.mode-world-setup .game-setup-shell-overlay {
+  width: min(440px, calc(100vw - 48px));
+}
+
+.game-setup-shell-overlay .game-setup-header {
+  margin: 0 0 10px;
+}
+
+.game-setup-shell-overlay .game-setup-header h1 {
+  margin: 4px 0 0;
+  font-size: 1.65rem;
+}
+
+.game-setup-shell-overlay .setup-summary,
+.game-setup-shell-overlay .setup-main-grid,
+.game-setup-shell-overlay .setup-action-bar {
+  width: 100%;
+  margin-inline: 0;
+}
+
+.game-setup-shell-overlay .setup-summary {
+  margin-bottom: 10px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+}
+
+.game-setup-shell-overlay .setup-main-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.game-setup-shell-overlay .setup-world-content {
+  display: block;
+}
+
+.game-setup-shell-overlay .setup-roster,
+.game-setup-shell-overlay .setup-world-panel {
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.game-setup-shell-overlay .setup-roster-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.game-setup-shell-overlay .setup-roster h2,
+.game-setup-shell-overlay .setup-world-panel h2 {
+  margin: 0 0 8px;
+  font-size: 0.94rem;
+}
+
+.game-setup-shell-overlay .player-count-control {
+  display: flex;
+  width: 118px;
+  grid-template-columns: none;
+  gap: 7px;
+  margin: 0 0 8px;
+}
+
+.game-setup-shell-overlay .player-count-control input {
+  width: 54px;
+  padding: 5px 7px;
+}
+
+.game-setup-shell-overlay .setup-seat-row {
+  grid-template-columns: 42px minmax(140px, 1fr) 116px 130px;
+  gap: 7px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: 7px;
+}
+
+.game-setup-shell-overlay .setup-seat-number {
+  grid-column: 1;
+}
+
+.game-setup-shell-overlay .setup-seat-identity {
+  grid-column: 2;
+}
+
+.game-setup-shell-overlay .setup-seat-color {
+  grid-column: 3;
+}
+
+.game-setup-shell-overlay .setup-seat-controls {
+  grid-column: 4;
+}
+
+.game-setup-shell-overlay .setup-seat-identity input,
+.game-setup-shell-overlay .setup-seat-color select,
+.game-setup-shell-overlay .setup-seat-controls select {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 7px;
+  color: #eef7ff;
+  border: 1px solid rgba(153, 190, 224, 0.2);
+  border-radius: 6px;
+  background: #111d2a;
+  font-size: 0.69rem;
+}
+
+.game-setup-shell-overlay .setup-seat-color {
+  gap: 5px;
+}
+
+.game-setup-shell-overlay .setup-seat-identity small {
+  margin-top: 3px;
+  line-height: 1.3;
+}
+
+.local-setup-summary-note {
+  color: #93a9bc;
+}
+
+.assignment-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: #93a9bc;
+  font-size: 0.67rem;
+}
+
+.game-setup-shell-overlay .assignment-modes {
+  margin-bottom: 8px;
+}
+
+.game-setup-shell-overlay .assignment-modes legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.game-setup-shell-overlay .assignment-modes label {
+  min-height: 38px;
+  padding: 7px 9px;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-setup-shell-overlay .assignment-description {
+  min-height: 1rem;
+  margin: 0 0 8px;
+  color: #8ca2b5;
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+
+.game-setup-shell-overlay .neutral-preview-card {
+  margin-bottom: 0;
+  padding: 8px 10px;
+}
+
+.game-setup-shell-overlay .setup-action-bar {
+  position: sticky;
+  z-index: 2;
+  bottom: -18px;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -10px 24px rgba(3, 8, 14, 0.38);
+}
+
+.game-setup-shell-overlay .setup-action-primary {
+  display: flex;
+}
+
+.game-setup-shell-overlay .setup-action-secondary {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.game-setup-shell-overlay .setup-action-bar button {
+  padding: 7px 10px;
+  font-size: 0.68rem;
+}
+
+.local-setup-intro {
+  margin: 0 0 10px;
+  color: #91a6ba;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.resume-card-content strong,
+.resume-card-content span {
+  display: block;
+}
+
+.resume-card-content span {
+  margin-top: 2px;
+  color: #94aabd;
+  font-size: 0.65rem;
+}
+
+.resume-card-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.resume-card-actions button {
+  padding: 7px 9px;
+  font-size: 0.65rem;
+}
+
+.mode-world-setup .game-setup-shell-overlay .setup-world-content {
+  display: block;
+}
+
+.mode-world-setup .game-setup-shell-overlay .setup-action-bar.setup-actions {
+  position: static;
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mode-world-setup
+  .game-setup-shell-overlay
+  .setup-action-bar.setup-actions
+  .setup-action-primary {
+  order: 2;
+  margin-left: auto;
+}
+
+.mode-world-setup
+  .game-setup-shell-overlay
+  .setup-action-bar.setup-actions
+  .setup-action-secondary {
+  order: 1;
+  margin-left: 0;
 }
 
 .multiplayer-start-helper {
@@ -2061,10 +2333,13 @@ button:disabled {
 }
 
 .mode-world-setup .control-legend,
-.mode-pregame .control-legend,
 .mode-playing .control-legend,
 .mode-game-over .control-legend {
   left: min(568px, calc(100vw - 334px));
+}
+
+.mode-pregame .control-legend {
+  left: min(688px, calc(100vw - 334px));
 }
 
 .control-legend > strong {

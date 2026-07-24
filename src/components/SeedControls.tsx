@@ -6,6 +6,7 @@ import {
   MIN_TERRITORY_COUNT,
 } from '../core/setup/worldSetup';
 import { useGameStore } from '../state/useGameStore';
+import { SetupActionBar } from './setup/GameSetup';
 
 export function SeedControls() {
   const seedInput = useGameStore((state) => state.seedInput);
@@ -91,25 +92,30 @@ export function SeedControls() {
           {error ?? warning}
         </p>
       )}
-      <div className="setup-actions">
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => void generateWorld()}
-          disabled={operation !== null}
-          aria-busy={operation === 'generate-world'}
-        >
-          {operation === 'generate-world' ? 'Generating…' : 'Generate World'}
-        </button>
-        <button
-          type="button"
-          className="continue-setup"
-          onClick={continueToMatchSetup}
-          disabled={operation !== null}
-        >
-          Start Game
-        </button>
-      </div>
+      <SetupActionBar
+        className="setup-actions"
+        primary={
+          <button
+            type="button"
+            className="continue-setup"
+            onClick={continueToMatchSetup}
+            disabled={operation !== null}
+          >
+            Start Game
+          </button>
+        }
+        secondary={
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void generateWorld()}
+            disabled={operation !== null}
+            aria-busy={operation === 'generate-world'}
+          >
+            {operation === 'generate-world' ? 'Generating…' : 'Generate World'}
+          </button>
+        }
+      />
     </form>
   );
 }

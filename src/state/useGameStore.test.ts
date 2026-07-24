@@ -125,6 +125,39 @@ describe('setup and match store integration', () => {
     expect(useGameStore.getState().match).toBeNull();
   });
 
+  it('keeps local player edits, seat-count limits, and assignment on the existing setup state', () => {
+    useGameStore.getState().continueToMatchSetup();
+    const state = useGameStore.getState();
+
+    state.updatePlayer('player-01', {
+      name: 'North Star',
+      colorId: 'color-5',
+      controllerType: 'heuristic-bot',
+    });
+    state.setPlayerCount(5);
+    let setup = useGameStore.getState();
+    expect(setup.matchSetup.players).toHaveLength(5);
+    expect(setup.matchSetup.players[0]).toMatchObject({
+      name: 'North Star',
+      colorId: 'color-5',
+      controllerType: 'heuristic-bot',
+    });
+    expect(setup.matchSetup.players[4]?.name).toBe('Violet Assembly');
+
+    setup.setPlayerCount(9);
+    expect(useGameStore.getState().matchSetup.players).toHaveLength(5);
+    useGameStore.getState().setPlayerCount(2);
+    setup = useGameStore.getState();
+    expect(setup.matchSetup.players).toHaveLength(2);
+    expect(setup.matchSetup.players[0]?.name).toBe('North Star');
+
+    setup.setAssignmentMode('player-draft');
+    expect(useGameStore.getState().setup.assignmentMode).toBe('player-draft');
+    expect(useGameStore.getState().matchSetup.assignmentMode).toBe(
+      'player-draft',
+    );
+  });
+
   it('random assignment is explicit and enters first-turn handoff only after start', async () => {
     useGameStore.getState().setSeedInput('pregame-flow');
     await useGameStore.getState().applySeed();
