@@ -5,7 +5,12 @@ import {
   fetchOwnProfileForVerifiedUser,
   updateCurrentProfile,
 } from './profileApi';
-import { profileDisplayNameSchema, type UserProfile } from './profileModel';
+import { isGeneratedGuestDisplayName } from './guestName';
+import {
+  profileAvatarUrlSchema,
+  profileDisplayNameSchema,
+  type UserProfile,
+} from './profileModel';
 import { validatedReturnPath } from './returnPath';
 import {
   ensureRegisteredSessionReady,
@@ -13,6 +18,7 @@ import {
 } from './registeredSession';
 
 const GUEST_UPGRADE_KEY = 'fustify.auth.guest-email-upgrade';
+const DISCORD_AUTH_KEY = 'fustify.auth.discord';
 const RECOVERY_SESSION_KEY = 'fustify.auth.password-recovery';
 const PASSWORD_MINIMUM = 8;
 
@@ -43,6 +49,31 @@ const guestUpgradeIntentSchema = z
 
 export type GuestUpgradeIntent = z.infer<typeof guestUpgradeIntentSchema>;
 
+const discordAuthIntentSchema = z.discriminatedUnion('intent', [
+  z
+    .object({
+      intent: z.literal('discord-sign-in'),
+      returnPath: z.string().transform(validatedReturnPath),
+    })
+    .strict(),
+  z
+    .object({
+      intent: z.literal('discord-link'),
+      expectedUserId: z.uuid(),
+      returnPath: z.string().transform(validatedReturnPath),
+    })
+    .strict(),
+  z
+    .object({
+      intent: z.literal('legacy-discord-upgrade'),
+      expectedUserId: z.uuid(),
+      returnPath: z.string().transform(validatedReturnPath),
+    })
+    .strict(),
+]);
+
+export type DiscordAuthIntent = z.infer<typeof discordAuthIntentSchema>;
+
 export class AuthFlowError extends Error {
   constructor(
     public readonly code:
@@ -53,6 +84,14 @@ export class AuthFlowError extends Error {
       | 'account_required'
       | 'callback_failed'
       | 'identity_changed'
+      | 'discord_provider_unavailable'
+      | 'oauth_cancelled'
+      | 'oauth_callback_expired'
+      | 'discord_identity_missing'
+      | 'identity_conflict'
+      | 'session_refresh_failed'
+      | 'legacy_conversion_failed'
+      | 'profile_unavailable'
       | 'original_browser_required'
       | 'recovery_session_required'
       | 'request_failed',
@@ -111,6 +150,45 @@ function isRateLimit(error: unknown): boolean {
       ? error.status
       : undefined;
   return status === 429 || /rate limit|too many requests/iu.test(message);
+}
+
+function isDiscordProviderUnavailable(error: unknown): boolean {
+  return /provider.*(?:disabled|not enabled|unsupported)|discord.*(?:disabled|not enabled|unavailable)/iu.test(
+    errorText(error),
+  );
+}
+
+function isIdentityConflict(error: unknown): boolean {
+  const message = errorText(error);
+  const code =
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string'
+      ? error.code
+      : '';
+  return (
+    code === 'identity_already_exists' ||
+    code === 'identity_already_linked' ||
+    /identity.*already|already.*(?:linked|connected|associated)/iu.test(message)
+  );
+}
+
+function discordAuthError(error: unknown): AuthFlowError {
+  if (error instanceof AuthFlowError) return error;
+  if (isDiscordProviderUnavailable(error)) {
+    return new AuthFlowError(
+      'discord_provider_unavailable',
+      'Discord sign-in is temporarily unavailable. Please use email and password.',
+    );
+  }
+  if (isIdentityConflict(error)) {
+    return new AuthFlowError(
+      'identity_conflict',
+      'This Discord account is already connected to another Fustify account. Sign out before using Discord to access that account.',
+    );
+  }
+  return authFlowError(error);
 }
 
 export function authFlowError(error: unknown): AuthFlowError {
@@ -241,6 +319,114 @@ function writeGuestUpgradeIntent(intent: GuestUpgradeIntent): void {
   window.sessionStorage.setItem(GUEST_UPGRADE_KEY, JSON.stringify(intent));
 }
 
+function writeDiscordAuthIntent(intent: DiscordAuthIntent): void {
+  window.sessionStorage.setItem(DISCORD_AUTH_KEY, JSON.stringify(intent));
+}
+
+export function clearDiscordAuthIntent(): void {
+  window.sessionStorage.removeItem(DISCORD_AUTH_KEY);
+}
+
+export function readDiscordAuthIntent(): DiscordAuthIntent | null {
+  const stored = window.sessionStorage.getItem(DISCORD_AUTH_KEY);
+  if (!stored) return null;
+  try {
+    return discordAuthIntentSchema.parse(JSON.parse(stored));
+  } catch {
+    clearDiscordAuthIntent();
+    return null;
+  }
+}
+
+export function hasDiscordIdentity(user: User): boolean {
+  return (
+    user.identities?.some((identity) => identity.provider === 'discord') ===
+    true
+  );
+}
+
+export function hasEmailIdentity(user: User): boolean {
+  return (
+    user.identities?.some((identity) => identity.provider === 'email') === true
+  );
+}
+
+function discordCallbackUrl(): string {
+  return new URL('/auth/callback', window.location.origin).toString();
+}
+
+export async function signInWithDiscord(
+  client: SupabaseClient<Database>,
+  returnPath: string,
+): Promise<void> {
+  clearGuestUpgradeIntent();
+  clearDiscordAuthIntent();
+  const intent = discordAuthIntentSchema.parse({
+    intent: 'discord-sign-in',
+    returnPath,
+  });
+  writeDiscordAuthIntent(intent);
+  let error: unknown;
+  try {
+    ({ error } = await client.auth.signInWithOAuth({
+      provider: 'discord',
+      options: { redirectTo: discordCallbackUrl() },
+    }));
+  } catch (requestError) {
+    error = requestError;
+  }
+  if (!error) return;
+  clearDiscordAuthIntent();
+  throw discordAuthError(error);
+}
+
+export async function linkDiscordIdentity(
+  client: SupabaseClient<Database>,
+  input: {
+    intent: 'discord-link' | 'legacy-discord-upgrade';
+    expectedUserId: string;
+    returnPath: string;
+  },
+): Promise<void> {
+  clearGuestUpgradeIntent();
+  clearDiscordAuthIntent();
+  const verified = await client.auth.getUser();
+  const user = verified.data.user;
+  const expectsAnonymous = input.intent === 'legacy-discord-upgrade';
+  if (
+    verified.error ||
+    !user ||
+    user.id !== input.expectedUserId ||
+    user.is_anonymous !== expectsAnonymous
+  ) {
+    throw new AuthFlowError(
+      'identity_changed',
+      'The current account identity could not be verified. Discord was not connected.',
+    );
+  }
+  if (hasDiscordIdentity(user)) {
+    throw new AuthFlowError(
+      'identity_conflict',
+      'Discord is already connected to this Fustify account.',
+    );
+  }
+
+  const intent = discordAuthIntentSchema.parse(input);
+  writeDiscordAuthIntent(intent);
+  let error: unknown;
+  try {
+    ({ error } = await client.auth.linkIdentity({
+      provider: 'discord',
+      options: { redirectTo: discordCallbackUrl() },
+    }));
+  } catch (requestError) {
+    error = requestError;
+  }
+  if (!error) return;
+  clearDiscordAuthIntent();
+  throw discordAuthError(error);
+}
+
 export function clearGuestUpgradeIntent(): void {
   window.sessionStorage.removeItem(GUEST_UPGRADE_KEY);
 }
@@ -260,6 +446,7 @@ export async function initiateGuestEmailUpgrade(
   client: SupabaseClient<Database>,
   input: { email: string; expectedUserId: string; returnPath: string },
 ): Promise<void> {
+  clearDiscordAuthIntent();
   const email = validateEmail(input.email);
   const verified = await client.auth.getUser();
   if (
@@ -308,10 +495,110 @@ export type AuthCallbackResult =
       user: User;
       intent: GuestUpgradeIntent;
     }
+  | {
+      kind: 'discord-completion';
+      user: User;
+      intent: DiscordAuthIntent;
+      profile: UserProfile;
+    }
   | { kind: 'confirmed'; user: User; returnPath: string };
 
 function callbackFailure(message: string): AuthFlowError {
   return new AuthFlowError('callback_failed', message);
+}
+
+function callbackDiscordError(
+  url: URL,
+  intent: DiscordAuthIntent,
+): AuthFlowError {
+  const errorCode = url.searchParams.get('error_code') ?? '';
+  const description =
+    url.searchParams.get('error_description') ??
+    url.searchParams.get('error') ??
+    '';
+  if (isIdentityConflict({ code: errorCode, message: description })) {
+    return discordAuthError({ code: errorCode, message: description });
+  }
+  if (
+    errorCode === 'access_denied' ||
+    /access_denied|cancelled|canceled|denied/iu.test(description)
+  ) {
+    return new AuthFlowError(
+      'oauth_cancelled',
+      'Discord authorization was cancelled. Your Fustify account was not changed.',
+    );
+  }
+  if (isDiscordProviderUnavailable({ code: errorCode, message: description })) {
+    return discordAuthError({ code: errorCode, message: description });
+  }
+  return new AuthFlowError(
+    'callback_failed',
+    intent.intent === 'discord-sign-in'
+      ? 'Discord sign-in could not be completed. Please try again.'
+      : 'Discord could not be connected. Your Fustify account was not changed.',
+  );
+}
+
+function discordPresentationMetadata(user: User): Record<string, unknown>[] {
+  const discordIdentity = user.identities?.find(
+    (identity) => identity.provider === 'discord',
+  );
+  return [
+    ...(discordIdentity?.identity_data ? [discordIdentity.identity_data] : []),
+    user.user_metadata,
+  ];
+}
+
+function discordMetadataDisplayName(user: User): string | null {
+  for (const metadata of discordPresentationMetadata(user)) {
+    for (const key of [
+      'display_name',
+      'global_name',
+      'full_name',
+      'name',
+      'username',
+      'user_name',
+      'preferred_username',
+    ]) {
+      const value = metadata[key];
+      if (typeof value !== 'string') continue;
+      const parsed = profileDisplayNameSchema.safeParse(value);
+      if (parsed.success) return parsed.data;
+    }
+  }
+  return null;
+}
+
+function discordMetadataAvatarUrl(user: User): string | null {
+  for (const metadata of discordPresentationMetadata(user)) {
+    for (const key of ['avatar_url', 'picture']) {
+      const value = metadata[key];
+      if (typeof value !== 'string') continue;
+      const parsed = profileAvatarUrlSchema.safeParse(value);
+      if (parsed.success) return parsed.data;
+    }
+  }
+  return null;
+}
+
+async function enrichLegacyDiscordProfile(
+  client: SupabaseClient<Database>,
+  user: User,
+  profile: UserProfile,
+): Promise<UserProfile> {
+  const displayName = isGeneratedGuestDisplayName(profile.displayName)
+    ? (discordMetadataDisplayName(user) ?? profile.displayName)
+    : profile.displayName;
+  const avatarUrl =
+    profile.avatarUrl ?? discordMetadataAvatarUrl(user) ?? profile.avatarUrl;
+  if (displayName === profile.displayName && avatarUrl === profile.avatarUrl) {
+    return profile;
+  }
+  try {
+    return await updateCurrentProfile(client, { displayName, avatarUrl });
+  } catch {
+    return profile;
+  }
 }
 
 export async function completeAuthCallback(
@@ -319,11 +606,16 @@ export async function completeAuthCallback(
   href: string,
 ): Promise<AuthCallbackResult> {
   const url = new URL(href);
+  const discordIntent = readDiscordAuthIntent();
   const isGuestUpgradeCallback =
     url.searchParams.get('intent') === 'guest-email-upgrade';
   const callbackError =
     url.searchParams.get('error_description') ?? url.searchParams.get('error');
   if (callbackError) {
+    if (discordIntent) {
+      clearDiscordAuthIntent();
+      throw callbackDiscordError(url, discordIntent);
+    }
     throw callbackFailure(
       'The email link could not be confirmed. Request a new link and try again.',
     );
@@ -331,8 +623,27 @@ export async function completeAuthCallback(
 
   const code = url.searchParams.get('code');
   if (code) {
-    const { error } = await client.auth.exchangeCodeForSession(code);
+    let error: unknown;
+    try {
+      ({ error } = await client.auth.exchangeCodeForSession(code));
+    } catch (requestError) {
+      if (discordIntent) {
+        clearDiscordAuthIntent();
+        throw new AuthFlowError(
+          'request_failed',
+          'The Discord callback could not reach the account service. Check your connection and try again.',
+        );
+      }
+      throw requestError;
+    }
     if (error) {
+      if (discordIntent) {
+        clearDiscordAuthIntent();
+        throw new AuthFlowError(
+          'oauth_callback_expired',
+          'The Discord callback is invalid or expired. Please start again.',
+        );
+      }
       throw isGuestUpgradeCallback
         ? new AuthFlowError(
             'original_browser_required',
@@ -342,9 +653,28 @@ export async function completeAuthCallback(
     }
   }
 
-  const verified = await client.auth.getUser();
+  let verified: Awaited<ReturnType<typeof client.auth.getUser>>;
+  try {
+    verified = await client.auth.getUser();
+  } catch (requestError) {
+    if (discordIntent) {
+      clearDiscordAuthIntent();
+      throw new AuthFlowError(
+        'request_failed',
+        'The Discord account could not be verified. Check your connection and try again.',
+      );
+    }
+    throw requestError;
+  }
   const intent = readGuestUpgradeIntent();
   if (verified.error || !verified.data.user) {
+    if (discordIntent) {
+      clearDiscordAuthIntent();
+      throw new AuthFlowError(
+        'session_refresh_failed',
+        'The Discord account session could not be verified. Please start again.',
+      );
+    }
     throw new AuthFlowError(
       intent ? 'original_browser_required' : 'callback_failed',
       intent
@@ -354,6 +684,79 @@ export async function completeAuthCallback(
   }
 
   const user = verified.data.user;
+  if (discordIntent) {
+    if (
+      'expectedUserId' in discordIntent &&
+      user.id !== discordIntent.expectedUserId
+    ) {
+      clearDiscordAuthIntent();
+      throw new AuthFlowError(
+        'identity_changed',
+        'The returned account did not match the current Fustify account. Discord was not connected.',
+      );
+    }
+    if (!hasDiscordIdentity(user)) {
+      clearDiscordAuthIntent();
+      throw new AuthFlowError(
+        'discord_identity_missing',
+        'Discord did not finish connecting. Your Fustify account was not changed.',
+      );
+    }
+    if (discordIntent.intent === 'discord-link' && !hasEmailIdentity(user)) {
+      clearDiscordAuthIntent();
+      throw new AuthFlowError(
+        'identity_changed',
+        'The original email sign-in identity is unavailable. Discord was not connected.',
+      );
+    }
+
+    const prepared = await ensureRegisteredSessionReady(client, {
+      forceRefresh: discordIntent.intent !== 'discord-sign-in',
+      expectedUserId:
+        'expectedUserId' in discordIntent
+          ? discordIntent.expectedUserId
+          : user.id,
+    });
+    if (
+      prepared.status !== 'registered-ready' ||
+      prepared.user.id !== user.id
+    ) {
+      clearDiscordAuthIntent();
+      throw new AuthFlowError(
+        discordIntent.intent === 'legacy-discord-upgrade'
+          ? 'legacy_conversion_failed'
+          : 'session_refresh_failed',
+        discordIntent.intent === 'legacy-discord-upgrade'
+          ? 'Discord connected, but the legacy account session is not permanent yet. Gameplay remains blocked; please try again.'
+          : 'Discord connected, but the account session could not be refreshed. Please try again.',
+      );
+    }
+
+    let profile: UserProfile;
+    try {
+      profile = await fetchOwnProfileForVerifiedUser(client, user.id);
+    } catch {
+      clearDiscordAuthIntent();
+      throw new AuthFlowError(
+        'profile_unavailable',
+        'Discord connected, but your Fustify profile is temporarily unavailable. Please try again.',
+      );
+    }
+    if (discordIntent.intent === 'legacy-discord-upgrade') {
+      profile = await enrichLegacyDiscordProfile(
+        client,
+        prepared.user,
+        profile,
+      );
+    }
+    clearDiscordAuthIntent();
+    return {
+      kind: 'discord-completion',
+      user: prepared.user,
+      intent: discordIntent,
+      profile,
+    };
+  }
   if (isGuestUpgradeCallback && !intent) {
     throw new AuthFlowError(
       'original_browser_required',
@@ -535,6 +938,7 @@ export async function completePasswordRecovery(
 export async function signOutRegisteredAccount(
   client: SupabaseClient<Database>,
 ): Promise<void> {
+  clearDiscordAuthIntent();
   clearGuestUpgradeIntent();
   clearRecoveryState();
   invalidateRegisteredSessionPreparation(client);

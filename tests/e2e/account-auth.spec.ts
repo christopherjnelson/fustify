@@ -39,14 +39,19 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
       let profileExists = !fixtureName.startsWith('missing-profile');
       const explicitlySignedOut =
         window.sessionStorage.getItem('fustify-auth-test-signed-out') === '1';
+      const registeredInBrowser =
+        window.sessionStorage.getItem('fustify-auth-test-registered') === '1';
+      const discordLinked =
+        window.sessionStorage.getItem('fustify-auth-test-discord-linked') ===
+        '1';
       let user =
         explicitlySignedOut ||
         ((fixtureName === 'signed-out' || fixtureName === 'slow-signed-out') &&
-          window.sessionStorage.getItem('fustify-auth-test-registered') !== '1')
+          !registeredInBrowser)
           ? null
           : {
               id: userId,
-              is_anonymous: fixtureName === 'guest',
+              is_anonymous: fixtureName === 'guest' && !registeredInBrowser,
               email:
                 fixtureName === 'guest' ? undefined : 'player@example.test',
               email_confirmed_at:
@@ -54,9 +59,16 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
                   ? undefined
                   : '2026-07-24T08:00:00.000Z',
               user_metadata: {},
+              identities: [
+                ...(fixtureName === 'guest' && !registeredInBrowser
+                  ? []
+                  : [{ provider: 'email' }]),
+                ...(discordLinked ? [{ provider: 'discord' }] : []),
+              ],
             };
       let tokenIsAnonymous =
-        fixtureName === 'guest' || fixtureName === 'stale-registered';
+        (fixtureName === 'guest' && !registeredInBrowser) ||
+        fixtureName === 'stale-registered';
       let verificationReleased = !fixtureName.startsWith('slow-');
       let releaseVerification: (() => void) | undefined;
       const verificationBarrier = new Promise<void>((resolve) => {
@@ -129,6 +141,16 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
         },
         refreshSession: async () => {
           calls.push({ method: 'refreshSession' });
+          window.sessionStorage.setItem(
+            'fustify-auth-test-refresh-count',
+            String(
+              Number(
+                window.sessionStorage.getItem(
+                  'fustify-auth-test-refresh-count',
+                ) ?? '0',
+              ) + 1,
+            ),
+          );
           if (!user) {
             return {
               data: { session: null, user: null },
@@ -180,12 +202,34 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
             email: 'player@example.test',
             email_confirmed_at: '2026-07-24T08:00:00.000Z',
             user_metadata: {},
+            identities: [{ provider: 'email' }],
           };
           tokenIsAnonymous = false;
           window.sessionStorage.setItem('fustify-auth-test-registered', '1');
           window.sessionStorage.removeItem('fustify-auth-test-signed-out');
           listeners.forEach((listener) => listener('SIGNED_IN', { user }));
           return { data: { user, session: { user } }, error: null };
+        },
+        signInWithOAuth: async (payload: unknown) => {
+          calls.push({ method: 'signInWithOAuth', payload });
+          return { data: { provider: 'discord', url: 'mocked' }, error: null };
+        },
+        linkIdentity: async (payload: unknown) => {
+          calls.push({ method: 'linkIdentity', payload });
+          if (
+            window.sessionStorage.getItem(
+              'fustify-auth-test-identity-conflict',
+            ) === '1'
+          ) {
+            return {
+              data: null,
+              error: {
+                code: 'identity_already_exists',
+                message: 'private identity detail',
+              },
+            };
+          }
+          return { data: { provider: 'discord', url: 'mocked' }, error: null };
         },
         signInAnonymously: async () => {
           calls.push({ method: 'signInAnonymously' });
@@ -221,8 +265,18 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
             email: 'player@example.test',
             email_confirmed_at: '2026-07-24T08:00:00.000Z',
             user_metadata: {},
+            identities: window.sessionStorage.getItem('fustify.auth.discord')
+              ? [{ provider: 'email' }, { provider: 'discord' }]
+              : [{ provider: 'email' }],
           };
           tokenIsAnonymous = false;
+          window.sessionStorage.setItem('fustify-auth-test-registered', '1');
+          if (user.identities.some(({ provider }) => provider === 'discord')) {
+            window.sessionStorage.setItem(
+              'fustify-auth-test-discord-linked',
+              '1',
+            );
+          }
           return {
             data: {
               user,
@@ -331,11 +385,19 @@ async function called(page: Page, method: string) {
       }
     ).__FUSTIFY_AUTH_TEST_STATE__;
     const current = state.calls.filter((call) => call.method === expected);
-    if (expected !== 'exchangeCodeForSession' || current.length > 0) {
+    if (
+      (expected !== 'exchangeCodeForSession' &&
+        expected !== 'refreshSession') ||
+      current.length > 0
+    ) {
       return current;
     }
     const persisted = Number(
-      window.sessionStorage.getItem('fustify-auth-test-exchange-count') ?? '0',
+      window.sessionStorage.getItem(
+        expected === 'exchangeCodeForSession'
+          ? 'fustify-auth-test-exchange-count'
+          : 'fustify-auth-test-refresh-count',
+      ) ?? '0',
     );
     return Array.from({ length: persisted }, () => ({ method: expected }));
   }, method);
@@ -970,4 +1032,150 @@ test('guest upgrade callback without original browser context stops safely', asy
   await expect(page.getByRole('alert')).toContainText(/original browser/i);
   await expect(page).not.toHaveURL(/upgrade-secret|guest-email-upgrade/);
   expect(await called(page, 'exchangeCodeForSession')).toHaveLength(1);
+});
+
+test('Discord remains a secondary signed-out option while email/password stays available', async ({
+  page,
+}, testInfo) => {
+  await installAuthFixture(page, 'signed-out');
+  await page.goto('/multiplayer');
+  const dialog = page.getByRole('dialog', { name: 'Sign in' });
+
+  await expect(dialog.getByLabel('Email')).toBeVisible();
+  await expect(dialog.getByLabel('Password')).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Continue with Discord' }),
+  ).toBeVisible();
+  await capture(page, testInfo.project.name, 'discord-signed-out-auth-dialog');
+  await dialog.getByRole('button', { name: 'Continue with Discord' }).click();
+
+  await expect(
+    dialog.getByRole('button', { name: 'Connecting…' }),
+  ).toBeVisible();
+  expect(await called(page, 'signInWithOAuth')).toEqual([
+    {
+      method: 'signInWithOAuth',
+      payload: {
+        provider: 'discord',
+        options: {
+          redirectTo: 'http://127.0.0.1:4173/auth/callback',
+        },
+      },
+    },
+  ]);
+  const intent = await page.evaluate(() =>
+    window.sessionStorage.getItem('fustify.auth.discord'),
+  );
+  expect(intent).toBe(
+    '{"intent":"discord-sign-in","returnPath":"/multiplayer"}',
+  );
+  expect(intent).not.toMatch(/token|code|email|secret/iu);
+  expect(await protectedResources(page)).toEqual([]);
+  expect(await called(page, 'signInAnonymously')).toHaveLength(0);
+});
+
+test('Discord manual linking returns to the same registered profile and updates account status', async ({
+  page,
+}, testInfo) => {
+  await installAuthFixture(page, 'registered');
+  await page.goto('/');
+  await expect(
+    page.getByRole('button', { name: 'Connect Discord' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Connect Discord' }).click();
+
+  expect(await called(page, 'linkIdentity')).toEqual([
+    {
+      method: 'linkIdentity',
+      payload: {
+        provider: 'discord',
+        options: {
+          redirectTo: 'http://127.0.0.1:4173/auth/callback',
+        },
+      },
+    },
+  ]);
+  await page.goto('/auth/callback?code=mocked-discord-code');
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator('.account-identity strong')).toHaveText(
+    'Player One',
+  );
+  await expect(page.locator('.account-provider-status')).toHaveText(
+    'Discord connected',
+  );
+  await capture(page, testInfo.project.name, 'discord-connected-account-menu');
+  await expect(
+    page.getByRole('button', { name: 'Connect Discord' }),
+  ).toHaveCount(0);
+  expect(await called(page, 'exchangeCodeForSession')).toHaveLength(1);
+  expect(await called(page, 'refreshSession')).toHaveLength(1);
+  expect(await called(page, 'update_own_profile')).toHaveLength(0);
+});
+
+test('Discord identity conflict preserves the current registered account screen', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'registered');
+  await page.goto('/');
+  await page.evaluate(() =>
+    window.sessionStorage.setItem('fustify-auth-test-identity-conflict', '1'),
+  );
+  await page.getByRole('button', { name: 'Connect Discord' }).click();
+
+  await expect(page.getByRole('alert')).toHaveText(
+    'This Discord account is already connected to another Fustify account. Sign out before using Discord to access that account.',
+  );
+  await expect(page.locator('.account-identity strong')).toHaveText(
+    'Player One',
+  );
+  expect(await called(page, 'signOut')).toHaveLength(0);
+});
+
+test('Discord legacy conversion offers both methods and keeps gameplay blocked before callback', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'guest');
+  await page.goto('/local');
+  const dialog = page.getByRole('dialog', {
+    name: 'Finish creating your account',
+  });
+
+  await expect(dialog.getByText('Finish with email')).toBeVisible();
+  await expect(dialog.getByLabel('Email')).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Continue with Discord' }),
+  ).toBeVisible();
+  await dialog.getByRole('button', { name: 'Continue with Discord' }).click();
+
+  expect(await called(page, 'linkIdentity')).toHaveLength(1);
+  await expect(
+    page.getByRole('heading', { name: 'Choose your world' }),
+  ).toHaveCount(0);
+  expect(await protectedResources(page)).toEqual([]);
+});
+
+test('Discord signed-out callback becomes registered-ready before protected gameplay loads', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'signed-out');
+  await page.goto('/multiplayer');
+  await page
+    .getByRole('dialog', { name: 'Sign in' })
+    .getByRole('button', { name: 'Continue with Discord' })
+    .click();
+  await page.goto('/auth/callback?code=mocked-discord-code');
+
+  await expect(page).toHaveURL(/\/multiplayer$/);
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Account required' }),
+  ).toHaveCount(0);
+  await expect(page.locator('.multiplayer-playing-as strong')).toHaveText(
+    'Player One',
+  );
+  expect(await called(page, 'exchangeCodeForSession')).toHaveLength(1);
+  expect(await called(page, 'signInAnonymously')).toHaveLength(0);
 });

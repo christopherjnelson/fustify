@@ -13,10 +13,13 @@ import {
   authFlowError,
   clearGuestUpgradeIntent,
   clearRecoveryState,
+  hasDiscordIdentity,
   initiateGuestEmailUpgrade,
+  linkDiscordIdentity,
   registerWithEmail,
   requestPasswordRecovery,
   signInWithEmail,
+  signInWithDiscord,
   signOutRegisteredAccount,
 } from './authFlow';
 import {
@@ -51,6 +54,7 @@ function accountIdentity(account: AccountState) {
   if (account.status === 'registered-ready') {
     return {
       isAnonymous: false,
+      user: account.account.user,
       userId: account.account.userId,
       email: account.account.email,
       profile: account.account.profile,
@@ -59,6 +63,7 @@ function accountIdentity(account: AccountState) {
   if (account.status === 'legacy-anonymous') {
     return {
       isAnonymous: true,
+      user: account.user,
       userId: account.user.id,
       email: account.user.email ?? null,
       profile: account.profile,
@@ -241,6 +246,31 @@ export function AuthDialog({
     }
   };
 
+  const startDiscord = async () => {
+    if (status.kind === 'busy') return;
+    setStatus({ kind: 'busy' });
+    try {
+      if (view === 'guest-upgrade') {
+        if (!identity?.isAnonymous) {
+          throw new AuthFlowError(
+            'account_required',
+            'The guest session is no longer available.',
+          );
+        }
+        await linkDiscordIdentity(client, {
+          intent: 'legacy-discord-upgrade',
+          expectedUserId: identity.userId,
+          returnPath,
+        });
+        return;
+      }
+      await signInWithDiscord(client, returnPath);
+    } catch (error) {
+      const safe = authFlowError(error);
+      setStatus({ kind: 'error', message: safe.message, code: safe.code });
+    }
+  };
+
   const title =
     view === 'register'
       ? 'Create account'
@@ -311,71 +341,96 @@ export function AuthDialog({
             </button>
           </div>
         ) : (
-          <form className="auth-form" onSubmit={(event) => void submit(event)}>
-            {(view === 'register' || view === 'edit-profile') && (
-              <Field
-                label="Display name"
-                value={displayName}
-                onChange={setDisplayName}
-                autoComplete="nickname"
-                maxLength={40}
-              />
+          <>
+            {view === 'guest-upgrade' && (
+              <span className="auth-method-label">Finish with email</span>
             )}
-            {view === 'edit-profile' && (
-              <Field
-                label="Avatar URL (optional)"
-                type="url"
-                value={avatarUrl}
-                onChange={setAvatarUrl}
-                autoComplete="url"
-                maxLength={2048}
-                required={false}
-              />
+            <form
+              className="auth-form"
+              onSubmit={(event) => void submit(event)}
+            >
+              {(view === 'register' || view === 'edit-profile') && (
+                <Field
+                  label="Display name"
+                  value={displayName}
+                  onChange={setDisplayName}
+                  autoComplete="nickname"
+                  maxLength={40}
+                />
+              )}
+              {view === 'edit-profile' && (
+                <Field
+                  label="Avatar URL (optional)"
+                  type="url"
+                  value={avatarUrl}
+                  onChange={setAvatarUrl}
+                  autoComplete="url"
+                  maxLength={2048}
+                  required={false}
+                />
+              )}
+              {view !== 'edit-profile' && (
+                <Field
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={setEmail}
+                  autoComplete={view === 'sign-in' ? 'username' : 'email'}
+                  maxLength={254}
+                />
+              )}
+              {(view === 'register' || view === 'sign-in') && (
+                <Field
+                  label="Password"
+                  type="password"
+                  value={password}
+                  onChange={setPassword}
+                  autoComplete={
+                    view === 'register' ? 'new-password' : 'current-password'
+                  }
+                />
+              )}
+              {view === 'register' && (
+                <Field
+                  label="Confirm password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  autoComplete="new-password"
+                />
+              )}
+              <button type="submit" disabled={status.kind === 'busy'}>
+                {status.kind === 'busy'
+                  ? 'Working…'
+                  : view === 'register'
+                    ? 'Create account'
+                    : view === 'guest-upgrade'
+                      ? 'Send verification email'
+                      : view === 'forgot-password'
+                        ? 'Send reset email'
+                        : view === 'edit-profile'
+                          ? 'Save profile'
+                          : 'Sign in'}
+              </button>
+            </form>
+            {(view === 'sign-in' ||
+              view === 'register' ||
+              view === 'guest-upgrade') && (
+              <div className="auth-oauth-option">
+                <span aria-hidden="true">or</span>
+                <button
+                  type="button"
+                  className="auth-discord-action"
+                  disabled={status.kind === 'busy'}
+                  onClick={() => void startDiscord()}
+                >
+                  {status.kind === 'busy'
+                    ? 'Connecting…'
+                    : 'Continue with Discord'}
+                </button>
+              </div>
             )}
-            {view !== 'edit-profile' && (
-              <Field
-                label="Email"
-                type="email"
-                value={email}
-                onChange={setEmail}
-                autoComplete={view === 'sign-in' ? 'username' : 'email'}
-                maxLength={254}
-              />
-            )}
-            {(view === 'register' || view === 'sign-in') && (
-              <Field
-                label="Password"
-                type="password"
-                value={password}
-                onChange={setPassword}
-                autoComplete={
-                  view === 'register' ? 'new-password' : 'current-password'
-                }
-              />
-            )}
-            {view === 'register' && (
-              <Field
-                label="Confirm password"
-                type="password"
-                value={confirmPassword}
-                onChange={setConfirmPassword}
-                autoComplete="new-password"
-              />
-            )}
-            <button type="submit" disabled={status.kind === 'busy'}>
-              {status.kind === 'busy'
-                ? 'Working…'
-                : view === 'register'
-                  ? 'Create account'
-                  : view === 'guest-upgrade'
-                    ? 'Send verification email'
-                    : view === 'forgot-password'
-                      ? 'Send reset email'
-                      : view === 'edit-profile'
-                        ? 'Save profile'
-                        : 'Sign in'}
-            </button>
-          </form>
+          </>
         )}
 
         {status.kind === 'success' && (
@@ -400,6 +455,13 @@ export function AuthDialog({
                 </button>
               </>
             )}
+            {status.code === 'identity_conflict' &&
+              view === 'guest-upgrade' && (
+                <p>
+                  Switching to another account will not transfer legacy rooms,
+                  profiles, reactions, matches, or other legacy-owned data.
+                </p>
+              )}
           </div>
         )}
 
@@ -430,6 +492,7 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
   const identity = accountIdentity(account);
   const [dialog, setDialog] = useState<DialogView | null>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [discordBusy, setDiscordBusy] = useState(false);
   const [returnPath] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const requested = params.get('returnPath');
@@ -485,6 +548,28 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
     setDialog(view);
   };
 
+  const connectDiscord = async () => {
+    if (
+      discordBusy ||
+      account.status !== 'registered-ready' ||
+      hasDiscordIdentity(account.account.user)
+    ) {
+      return;
+    }
+    setDiscordBusy(true);
+    setSignOutError(null);
+    try {
+      await linkDiscordIdentity(client, {
+        intent: 'discord-link',
+        expectedUserId: account.account.userId,
+        returnPath,
+      });
+    } catch (error) {
+      setDiscordBusy(false);
+      setSignOutError(authFlowError(error).message);
+    }
+  };
+
   return (
     <aside
       className={`account-control${compact ? ' account-control-compact' : ''}`}
@@ -528,6 +613,9 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
                 : (identity.email ?? 'Registered account')}
             </span>
           </div>
+          {!identity.isAnonymous && hasDiscordIdentity(identity.user) && (
+            <span className="account-provider-status">Discord connected</span>
+          )}
           {identity.isAnonymous ? (
             <div className="account-actions">
               <button type="button" onClick={() => open('guest-upgrade')}>
@@ -549,6 +637,15 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
                     Edit profile
                   </button>
                 )}
+              {!compact && !hasDiscordIdentity(identity.user) && (
+                <button
+                  type="button"
+                  disabled={discordBusy}
+                  onClick={() => void connectDiscord()}
+                >
+                  {discordBusy ? 'Connecting…' : 'Connect Discord'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -660,7 +757,7 @@ export function AccountRequiredGate({
     case 'legacy-anonymous':
       title = 'Finish creating your account to continue';
       message =
-        'Keep this identity by attaching and verifying an email before entering gameplay.';
+        'Keep this identity by finishing with email or Discord before entering gameplay.';
       break;
     case 'registered-ready':
       title = loadError ? 'Game unavailable' : 'Loading game…';

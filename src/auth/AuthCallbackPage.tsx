@@ -4,9 +4,11 @@ import {
   readMultiplayerConfiguration,
 } from '../multiplayer/supabaseClient';
 import {
+  AuthFlowError,
   authFlowError,
   completeAuthCallback,
   completeGuestUpgrade,
+  readDiscordAuthIntent,
   type AuthCallbackResult,
 } from './authFlow';
 
@@ -32,10 +34,17 @@ export function AuthCallbackPage() {
     () => (configured ? getSupabaseClient() : null),
     [configured],
   );
+  const [discordIntent] = useState(() => readDiscordAuthIntent());
   const [result, setResult] = useState<AuthCallbackResult | null>(null);
-  const [error, setError] = useState<string | null>(
-    client ? null : 'Account configuration is unavailable.',
+  const [error, setError] = useState<AuthFlowError | null>(
+    client
+      ? null
+      : new AuthFlowError(
+          'request_failed',
+          'Account configuration is unavailable.',
+        ),
   );
+  const returnPath = discordIntent?.returnPath ?? '/';
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -54,12 +63,16 @@ export function AuthCallbackPage() {
           window.location.replace(callbackResult.returnPath);
           return;
         }
+        if (callbackResult.kind === 'discord-completion') {
+          window.location.replace(callbackResult.intent.returnPath);
+          return;
+        }
         setDisplayName(callbackResult.user.user_metadata.display_name ?? '');
         setResult(callbackResult);
       })
       .catch((callbackError) => {
         removeCallbackSecrets(href);
-        setError(authFlowError(callbackError).message);
+        setError(authFlowError(callbackError));
       });
   }, [client]);
 
@@ -88,7 +101,7 @@ export function AuthCallbackPage() {
     } catch (completionError) {
       setPassword('');
       setConfirmation('');
-      setError(authFlowError(completionError).message);
+      setError(authFlowError(completionError));
       setBusy(false);
     }
   };
@@ -145,16 +158,31 @@ export function AuthCallbackPage() {
           </>
         ) : (
           <>
-            <h1>{error ? 'Email confirmation problem' : 'Confirming email'}</h1>
-            {!error && <p>Verifying this account link…</p>}
+            <h1>
+              {error
+                ? discordIntent
+                  ? 'Discord connection problem'
+                  : 'Email confirmation problem'
+                : 'Confirming account'}
+            </h1>
+            {!error && <p>Verifying this account callback…</p>}
           </>
         )}
         {error && (
-          <p className="auth-error" role="alert">
-            {error}
-          </p>
+          <div className="auth-error" role="alert">
+            <p>{error.message}</p>
+            {error.code === 'identity_conflict' &&
+              discordIntent?.intent === 'legacy-discord-upgrade' && (
+                <p>
+                  Switching accounts will not transfer legacy rooms, profiles,
+                  reactions, matches, or other legacy-owned data.
+                </p>
+              )}
+          </div>
         )}
-        <a href="/">Return home</a>
+        <a href={returnPath}>
+          {returnPath === '/' ? 'Return home' : 'Return to your account'}
+        </a>
       </section>
     </main>
   );

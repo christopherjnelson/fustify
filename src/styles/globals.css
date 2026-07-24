@@ -204,6 +204,14 @@ html.game-route .protected-route-shell {
   white-space: nowrap;
 }
 
+.account-provider-status {
+  flex: 0 0 auto;
+  color: #90c7dd;
+  font-size: 0.61rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .account-actions {
   display: flex;
   align-items: center;
@@ -288,6 +296,62 @@ html.game-route .protected-route-shell {
   gap: 13px;
 }
 
+.auth-method-label {
+  display: block;
+  margin: 0 0 10px;
+  color: #c7d8e4;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.auth-oauth-option {
+  display: grid;
+  margin-top: 16px;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  color: #718b9d;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.auth-oauth-option::before,
+.auth-oauth-option::after {
+  height: 1px;
+  background: rgba(139, 194, 224, 0.18);
+  content: '';
+}
+
+.auth-oauth-option::before {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.auth-oauth-option > span {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.auth-oauth-option::after {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.auth-oauth-option .auth-discord-action {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  width: 100%;
+  color: #e8eaff;
+  border-color: rgba(145, 152, 229, 0.34);
+  background: rgba(73, 81, 153, 0.45);
+}
+
+.auth-dialog button:disabled,
+.account-actions button:disabled {
+  cursor: wait;
+  opacity: 0.66;
+}
+
 .auth-field {
   display: grid;
   gap: 6px;
@@ -352,6 +416,11 @@ html.game-route .protected-route-shell {
 .auth-error p,
 .auth-warning p {
   margin: 0 0 10px;
+}
+
+.auth-error p:last-child,
+.auth-warning p:last-child {
+  margin-bottom: 0;
 }
 
 .auth-warning {
@@ -721,12 +790,25 @@ html.game-route .protected-route-shell {
     display: none;
   }
 
+  .home-header .account-control .account-avatar {
+    display: none;
+  }
+
+  .home-header .account-provider-status {
+    width: 58px;
+    line-height: 1.15;
+    text-align: center;
+  }
+
   .home-header .account-control .account-actions {
     width: auto;
   }
 
   .home-header .account-control .account-actions button {
     flex: 0 0 auto;
+    min-height: 32px;
+    padding: 5px 8px;
+    font-size: 0.68rem;
   }
 
   .home-wordmark small {
