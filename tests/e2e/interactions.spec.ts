@@ -1233,7 +1233,7 @@ test('restores a validated save from the legacy Worldseed storage key', async ({
   ).toEqual({ current: true, legacy: true });
 });
 
-test('turn completion, next-player handoff, and both rematch modes retain intended setup', async ({
+test('turn completion advances to the next-player handoff', async ({
   page,
 }) => {
   await openScenario(page, 'fortification');
@@ -1247,21 +1247,6 @@ test('turn completion, next-player handoff, and both rematch modes retain intend
   await expect(page.locator('.turn-banner')).toContainText(
     'Turn 2 · Reinforce',
   );
-
-  await openScenario(page, 'game-over');
-  const originalVariant = (await stateSnapshot(page)).ownershipVariant;
-  await page.getByRole('button', { name: 'Same ownership rematch' }).click();
-  expect((await stateSnapshot(page)).ownershipVariant).toBe(originalVariant);
-  await expect(page.getByRole('dialog')).toContainText('Pass the device');
-
-  await openScenario(page, 'game-over');
-  await page.getByRole('button', { name: 'Reroll ownership' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Preview and assign territories' }),
-  ).toBeVisible();
-  await expect
-    .poll(async () => (await stateSnapshot(page)).ownershipVariant)
-    .toBe(originalVariant + 1);
 });
 
 test('Activity dock and saved resume controls are operable', async ({
@@ -1286,7 +1271,7 @@ test('Activity dock and saved resume controls are operable', async ({
   await expect(page.getByRole('dialog')).toContainText('Pass the device');
 });
 
-test('game-over dialog provides review and rematch choices', async ({
+test('game-over dialog provides review and remaining local choices', async ({
   page,
 }) => {
   await openScenario(page, 'game-over');
@@ -1296,11 +1281,11 @@ test('game-over dialog provides review and rematch choices', async ({
     dialog.getByRole('button', { name: 'Review world' }),
   ).toBeVisible();
   await expect(
-    dialog.getByRole('button', { name: 'Same ownership rematch' }),
-  ).toBeVisible();
+    page.getByRole('button', { name: 'Same ownership rematch' }),
+  ).toHaveCount(0);
   await expect(
-    dialog.getByRole('button', { name: 'Reroll ownership' }),
-  ).toBeVisible();
+    page.getByRole('button', { name: 'Reroll ownership' }),
+  ).toHaveCount(0);
   await expect(
     dialog.getByRole('button', { name: 'Different world' }),
   ).toBeVisible();

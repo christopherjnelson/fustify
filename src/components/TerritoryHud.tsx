@@ -357,9 +357,6 @@ export function TerritoryHud({
   const planet = useGameStore((state) => state.planet);
   const match = useGameStore((state) => state.match)!;
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
-  const assignmentMode = useGameStore(
-    (state) => state.matchSetup.assignmentMode,
-  );
   const debugView = useGameStore((state) => state.debugView);
   const viewMode = useGameStore((state) => state.viewMode);
   const error = useGameStore((state) => state.lastActionError);
@@ -372,10 +369,6 @@ export function TerritoryHud({
     (state) => state.inspectedTerritoryId,
   );
   const dispatch = useGameStore((state) => state.dispatchGameAction);
-  const resetMatch = useGameStore((state) => state.resetMatch);
-  const rematchNewOwnership = useGameStore(
-    (state) => state.rematchNewOwnership,
-  );
   const backToWorldSetup = useGameStore((state) => state.backToWorldSetup);
   const saveMatch = useGameStore((state) => state.saveMatch);
   const deleteSavedMatch = useGameStore((state) => state.deleteSavedMatch);
@@ -1045,34 +1038,6 @@ export function TerritoryHud({
                       onClick={() => {
                         if (
                           window.confirm(
-                            'Restart with the same world and ownership?',
-                          )
-                        )
-                          resetMatch();
-                      }}
-                    >
-                      Same ownership rematch
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            'Return to pregame with a new ownership layout?',
-                          )
-                        )
-                          rematchNewOwnership();
-                      }}
-                    >
-                      {assignmentMode === 'random'
-                        ? 'Reroll ownership'
-                        : 'Restart player draft'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (
-                          window.confirm(
                             'Leave this match for world setup? The local save will remain.',
                           )
                         )
@@ -1170,14 +1135,6 @@ export function TerritoryHud({
                   </button>
                   {!multiplayerSession && (
                     <>
-                      <button type="button" onClick={resetMatch}>
-                        Same ownership rematch
-                      </button>
-                      <button type="button" onClick={rematchNewOwnership}>
-                        {assignmentMode === 'random'
-                          ? 'Reroll ownership'
-                          : 'Restart player draft'}
-                      </button>
                       <button type="button" onClick={backToWorldSetup}>
                         Different world
                       </button>
