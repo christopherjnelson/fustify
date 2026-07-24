@@ -18,9 +18,16 @@ const [source, target] = planet.territories;
 const players = [
   {
     id: 'player-1',
-    name: 'Player 1',
+    name: 'Crimson League',
     seatIndex: 0,
-    colorId: 'ember' as const,
+    colorId: 'color-1',
+    controllerType: 'local-human' as const,
+  },
+  {
+    id: 'player-2',
+    name: 'Azure Pact',
+    seatIndex: 1,
+    colorId: 'color-2',
     controllerType: 'local-human' as const,
   },
 ];
@@ -57,16 +64,17 @@ describe('event log territory focus', () => {
     }>;
     const stopPropagation = vi.fn();
 
-    expect(
-      renderToStaticMarkup(
-        createElement(EventLogEntry, {
-          event: combat,
-          planet,
-          players,
-          onFocusTerritory,
-        }),
-      ),
-    ).toContain(`aria-label="Focus ${target!.name}"`);
+    const markup = renderToStaticMarkup(
+      createElement(EventLogEntry, {
+        event: combat,
+        planet,
+        players,
+        onFocusTerritory,
+      }),
+    );
+    expect(markup).toContain(`aria-label="Focus ${target!.name}"`);
+    expect(markup).toContain('<svg');
+    expect(markup).not.toContain('>Focus</button>');
     button.props.onClick({ stopPropagation });
 
     expect(stopPropagation).toHaveBeenCalledOnce();
@@ -161,7 +169,7 @@ describe('multiplayer Activity reaction eligibility', () => {
     setReaction: vi.fn(),
   };
 
-  it('shows React only for canonical events in an authoritative multiplayer feed', () => {
+  it('shows the reaction rail only for canonical authoritative multiplayer events', () => {
     const canonical = renderToStaticMarkup(
       createElement(EventLogEntry, {
         event: event('turn-started', { id: 'event-1' }),
@@ -179,8 +187,9 @@ describe('multiplayer Activity reaction eligibility', () => {
         onFocusTerritory: vi.fn(),
       }),
     );
-    expect(canonical).toContain('React to this Activity entry');
-    expect(local).not.toContain('React to this Activity entry');
+    expect(canonical).toContain('event-reaction-rail');
+    expect(canonical.match(/event-reaction-button/g)).toHaveLength(4);
+    expect(local).not.toContain('event-reaction-rail');
   });
 
   it('keeps legacy events rendering without an enabled reaction interface', () => {
@@ -199,6 +208,83 @@ describe('multiplayer Activity reaction eligibility', () => {
       }),
     );
     expect(markup).toContain('Legacy event message.');
-    expect(markup).not.toContain('React to this Activity entry');
+    expect(markup).not.toContain('event-reaction-rail');
+  });
+});
+
+describe('Activity player context', () => {
+  it('adds actor accent, icon tint, two-player markers, and structured name colors', () => {
+    const markup = renderToStaticMarkup(
+      createElement(EventLogEntry, {
+        event: event('combat', {
+          actingPlayerId: 'player-1',
+          defenderPlayerId: 'player-2',
+          sourceTerritoryId: source!.id,
+          targetTerritoryId: target!.id,
+          attackerLosses: 1,
+          defenderLosses: 2,
+        }),
+        planet,
+        players,
+        onFocusTerritory: vi.fn(),
+      }),
+    );
+
+    expect(markup).toContain('class="has-event-actor"');
+    expect(markup).toContain('--event-player-color:#e24f4f');
+    expect(markup).toContain('data-player-id="player-1"');
+    expect(markup).toContain('data-player-id="player-2"');
+    expect(markup.match(/event-participant-marker/g)).toHaveLength(2);
+    expect(markup).toContain(
+      'class="event-player-name" data-player-id="player-1" style="color:#e24f4f"',
+    );
+    expect(markup).toContain(
+      'class="event-player-name" data-player-id="player-2" style="color:#3f91e8"',
+    );
+    expect(markup).toContain('class="event-territory-name"');
+  });
+
+  it('uses one marker for reinforcement and same-owner movement', () => {
+    for (const type of [
+      'armies-placed',
+      'fortification-completed',
+      'capture-move',
+    ] satisfies MatchEvent['type'][]) {
+      const markup = renderToStaticMarkup(
+        createElement(EventLogEntry, {
+          event: event(type, {
+            actingPlayerId: 'player-1',
+            sourceTerritoryId: source!.id,
+            targetTerritoryId: target!.id,
+            primaryTerritoryId: target!.id,
+            armyCount: 2,
+          }),
+          planet,
+          players,
+          onFocusTerritory: vi.fn(),
+        }),
+      );
+      expect(markup.match(/event-participant-marker/g)).toHaveLength(1);
+      expect(markup).not.toContain('data-player-id="player-2"');
+    }
+  });
+
+  it('keeps unresolved legacy player metadata neutral', () => {
+    const legacy = {
+      ...event('turn-ended'),
+      type: 'legacy-event',
+      actingPlayerId: 'missing-player',
+    } as unknown as MatchEvent;
+    const markup = renderToStaticMarkup(
+      createElement(EventLogEntry, {
+        event: legacy,
+        planet,
+        players,
+        onFocusTerritory: vi.fn(),
+      }),
+    );
+    expect(markup).not.toContain('has-event-actor');
+    expect(markup).not.toContain('event-participant-marker');
+    expect(markup).toContain('Legacy event message.');
   });
 });

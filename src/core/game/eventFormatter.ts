@@ -9,6 +9,11 @@ export interface EventDisplayContext {
   players: readonly Pick<LocalPlayerConfig, 'id' | 'name' | 'seatIndex'>[];
 }
 
+export type FormattedEventPart =
+  | { type: 'text'; value: string }
+  | { type: 'player'; playerId: string; value: string }
+  | { type: 'territory'; territoryId: string; value: string };
+
 function playerName(
   playerId: string | undefined,
   players: EventDisplayContext['players'],
@@ -43,32 +48,69 @@ function armies(count: number): string {
   return `${count} ${count === 1 ? 'army' : 'armies'}`;
 }
 
-export function formatMatchEvent(
+function text(value: string): FormattedEventPart {
+  return { type: 'text', value };
+}
+
+function player(
+  playerId: string | undefined,
+  players: EventDisplayContext['players'],
+): FormattedEventPart {
+  return {
+    type: 'player',
+    playerId: playerId ?? '',
+    value: playerName(playerId, players),
+  };
+}
+
+function territory(
+  territoryId: string | undefined,
+  planet: EventDisplayContext['planet'],
+): FormattedEventPart {
+  return {
+    type: 'territory',
+    territoryId: territoryId ?? '',
+    value: territoryName(territoryId, planet),
+  };
+}
+
+export function formatMatchEventParts(
   event: MatchEvent,
   { planet, players }: EventDisplayContext,
-): string {
+): FormattedEventPart[] {
   const actorId = event.actingPlayerId ?? event.playerId;
-  const actor = playerName(actorId, players);
-  const source = territoryName(event.sourceTerritoryId, planet);
-  const target = territoryName(
-    event.targetTerritoryId ?? event.primaryTerritoryId ?? event.territoryId,
-    planet,
-  );
+  const actor = () => player(actorId, players);
+  const source = () => territory(event.sourceTerritoryId, planet);
+  const targetId =
+    event.targetTerritoryId ?? event.primaryTerritoryId ?? event.territoryId;
+  const target = () => territory(targetId, planet);
+  const fallback = () => [text(event.message)];
 
   switch (event.type) {
     case 'turn-started':
       if (event.previousPlayerId && event.nextPlayerId) {
-        return `Turn passed from ${playerName(event.previousPlayerId, players)} to ${playerName(event.nextPlayerId, players)}.`;
+        return [
+          text('Turn passed from '),
+          player(event.previousPlayerId, players),
+          text(' to '),
+          player(event.nextPlayerId, players),
+          text('.'),
+        ];
       }
-      return `${actor} began turn ${event.turnNumber}.`;
+      return [actor(), text(` began turn ${event.turnNumber}.`)];
     case 'reinforcements-received':
       return event.armyCount !== undefined
-        ? `${actor} received ${armies(event.armyCount)}.`
-        : event.message;
+        ? [actor(), text(` received ${armies(event.armyCount)}.`)]
+        : fallback();
     case 'armies-placed':
       return event.armyCount !== undefined
-        ? `${actor} reinforced ${target} with ${armies(event.armyCount)}.`
-        : event.message;
+        ? [
+            actor(),
+            text(' reinforced '),
+            target(),
+            text(` with ${armies(event.armyCount)}.`),
+          ]
+        : fallback();
     case 'combat':
       if (
         event.sourceTerritoryId &&
@@ -76,39 +118,84 @@ export function formatMatchEvent(
         event.attackerLosses !== undefined &&
         event.defenderLosses !== undefined
       ) {
-        const defender = playerName(event.defenderPlayerId, players);
-        return `${actor} attacked ${target} from ${source}: ${actor} lost ${armies(event.attackerLosses)} and ${defender} lost ${armies(event.defenderLosses)}.`;
+        return [
+          actor(),
+          text(' attacked '),
+          target(),
+          text(' from '),
+          source(),
+          text(': '),
+          actor(),
+          text(` lost ${armies(event.attackerLosses)} and `),
+          player(event.defenderPlayerId, players),
+          text(` lost ${armies(event.defenderLosses)}.`),
+        ];
       }
-      return event.message;
+      return fallback();
     case 'territory-captured':
       return event.targetTerritoryId && event.previousOwnerId
-        ? `${actor} captured ${target} from ${playerName(event.previousOwnerId, players)}.`
-        : event.message;
+        ? [
+            actor(),
+            text(' captured '),
+            target(),
+            text(' from '),
+            player(event.previousOwnerId, players),
+            text('.'),
+          ]
+        : fallback();
     case 'player-eliminated':
       return event.eliminatedPlayerId
-        ? `${playerName(event.eliminatedPlayerId, players)} was eliminated by ${actor}.`
-        : event.message;
+        ? [
+            player(event.eliminatedPlayerId, players),
+            text(' was eliminated by '),
+            actor(),
+            text('.'),
+          ]
+        : fallback();
     case 'capture-move':
       return event.sourceTerritoryId &&
         event.targetTerritoryId &&
         event.armyCount !== undefined
-        ? `${actor} moved ${armies(event.armyCount)} from ${source} into captured ${target}.`
-        : event.message;
+        ? [
+            actor(),
+            text(` moved ${armies(event.armyCount)} from `),
+            source(),
+            text(' into captured '),
+            target(),
+            text('.'),
+          ]
+        : fallback();
     case 'attack-phase-ended':
-      return `${actor} ended the attack phase.`;
+      return [actor(), text(' ended the attack phase.')];
     case 'fortification-completed':
       return event.sourceTerritoryId &&
         event.targetTerritoryId &&
         event.armyCount !== undefined
-        ? `${actor} fortified ${target} with ${armies(event.armyCount)} from ${source}.`
-        : event.message;
+        ? [
+            actor(),
+            text(' fortified '),
+            target(),
+            text(` with ${armies(event.armyCount)} from `),
+            source(),
+            text('.'),
+          ]
+        : fallback();
     case 'fortification-skipped':
-      return `${actor} skipped fortification.`;
+      return [actor(), text(' skipped fortification.')];
     case 'turn-ended':
-      return `${actor} ended turn ${event.turnNumber}.`;
+      return [actor(), text(` ended turn ${event.turnNumber}.`)];
     case 'match-won':
-      return `${actor} conquered the world.`;
+      return [actor(), text(' conquered the world.')];
     default:
-      return event.message;
+      return fallback();
   }
+}
+
+export function formatMatchEvent(
+  event: MatchEvent,
+  context: EventDisplayContext,
+): string {
+  return formatMatchEventParts(event, context)
+    .map((part) => part.value)
+    .join('');
 }

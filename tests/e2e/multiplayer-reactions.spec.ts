@@ -107,17 +107,16 @@ function reactionRow(page: Page, eventId: string) {
   return page.locator(`.event-reactions[data-event-id="${eventId}"]`);
 }
 
-async function chooseReaction(
-  page: Page,
-  eventId: string,
-  emoji: string,
-  label: string,
-) {
+async function chooseReaction(page: Page, eventId: string, label: string) {
   const row = reactionRow(page, eventId);
   await row
-    .getByRole('button', { name: 'React to this Activity entry' })
+    .getByRole('button', {
+      name: new RegExp(
+        `(add ${label}|switch to ${label}|remove your ${label}) reaction`,
+        'i',
+      ),
+    })
     .click();
-  await row.getByRole('menuitem', { name: `${emoji} ${label}` }).click();
 }
 
 test('two participants synchronize persistent Activity reactions without changing gameplay', async ({
@@ -182,29 +181,18 @@ test('two participants synchronize persistent Activity reactions without changin
       territoryId,
     );
 
-    await reactionRow(pageA, eventId)
-      .getByRole('button', { name: 'React to this Activity entry' })
-      .click();
-    const picker = reactionRow(pageA, eventId).getByRole('menu', {
-      name: 'Choose a reaction',
-    });
-    await expect(picker.getByRole('menuitem')).toHaveCount(4);
-    await expect(
-      picker.getByRole('menuitem', { name: '🔥 Fire' }),
-    ).toBeVisible();
-    await expect(
-      picker.getByRole('menuitem', { name: '😂 Laugh' }),
-    ).toBeVisible();
-    await expect(
-      picker.getByRole('menuitem', { name: '❤️ Heart' }),
-    ).toBeVisible();
-    await expect(
-      picker.getByRole('menuitem', { name: '😡 Angry' }),
-    ).toBeVisible();
-    await pageA.keyboard.press('Escape');
-    await expect(picker).toBeHidden();
+    await expect(reactionRow(pageA, eventId).getByRole('button')).toHaveCount(
+      4,
+    );
+    for (const label of ['fire', 'laugh', 'heart', 'angry']) {
+      await expect(
+        reactionRow(pageA, eventId).getByRole('button', {
+          name: new RegExp(`add ${label} reaction`, 'i'),
+        }),
+      ).toBeVisible();
+    }
 
-    await chooseReaction(pageA, eventId, '🔥', 'Fire');
+    await chooseReaction(pageA, eventId, 'fire');
     await expect(
       reactionRow(pageB, eventId).getByRole('button', {
         name: /1 fire reaction/,
@@ -212,7 +200,7 @@ test('two participants synchronize persistent Activity reactions without changin
     ).toBeVisible();
 
     await pageA.getByRole('button', { name: 'Collapse Activity' }).click();
-    await chooseReaction(pageB, eventId, '❤️', 'Heart');
+    await chooseReaction(pageB, eventId, 'heart');
     await expect(
       pageA.getByRole('button', { name: 'Open Activity' }),
     ).toBeVisible();
@@ -223,7 +211,7 @@ test('two participants synchronize persistent Activity reactions without changin
       }),
     ).toBeVisible();
 
-    await chooseReaction(pageA, eventId, '😂', 'Laugh');
+    await chooseReaction(pageA, eventId, 'laugh');
     await expect(
       reactionRow(pageB, eventId).getByRole('button', {
         name: /1 laugh reaction/,
@@ -231,17 +219,17 @@ test('two participants synchronize persistent Activity reactions without changin
     ).toBeVisible();
     await expect(
       reactionRow(pageB, eventId).getByRole('button', {
-        name: /fire reaction/,
+        name: /^add fire reaction$/,
       }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     await reactionRow(pageA, eventId)
       .getByRole('button', { name: /Remove your laugh reaction/ })
       .click();
     await expect(
       reactionRow(pageB, eventId).getByRole('button', {
-        name: /laugh reaction/,
+        name: /^add laugh reaction$/,
       }),
-    ).toHaveCount(0);
+    ).toBeVisible();
 
     await pageB.reload();
     await expect(pageB.getByTestId('multiplayer-match')).toBeVisible();
@@ -254,13 +242,13 @@ test('two participants synchronize persistent Activity reactions without changin
     await pageA.evaluate(async () => {
       await window.__FUSTIFY_MULTIPLAYER_TEST__?.interruptRealtime();
     });
-    await chooseReaction(pageB, eventId, '😡', 'Angry');
+    await chooseReaction(pageB, eventId, 'angry');
     await expect(
       reactionRow(pageA, eventId).getByRole('button', {
         name: /1 angry reaction/,
       }),
     ).toBeVisible();
-    await chooseReaction(pageB, eventId, '❤️', 'Heart');
+    await chooseReaction(pageB, eventId, 'heart');
     await pageA.evaluate(async () => {
       await window.__FUSTIFY_MULTIPLAYER_TEST__?.refreshCanonical?.();
       await window.__FUSTIFY_MULTIPLAYER_TEST__?.refreshCanonical?.();

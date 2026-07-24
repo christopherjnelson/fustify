@@ -43,6 +43,7 @@ export type VisualScenario =
   | 'reinforcement'
   | 'multiplayer-authority'
   | 'multiplayer-reinforcement-active'
+  | 'multiplayer-activity-reactions'
   | 'multiplayer-game-over'
   | 'bot-turn'
   | 'bot-reinforcement'
@@ -288,6 +289,66 @@ function withLongActivityHistory(
         defenderLosses: 1,
       }),
     );
+  }
+  return next;
+}
+
+function withActivityReactionReview(
+  match: MatchState,
+  planet: ReturnType<typeof generatePlanet>,
+): MatchState {
+  const next = { ...match, events: [] as MatchState['events'] };
+  const [actorId, opponentId] = Object.keys(match.players);
+  const [source, target] = planet.territories;
+  const fixtures = [
+    {
+      type: 'armies-placed' as const,
+      message: 'Reinforcement fixture.',
+      details: {
+        actingPlayerId: actorId,
+        primaryTerritoryId: source!.id,
+        armyCount: 3,
+      },
+    },
+    {
+      type: 'combat' as const,
+      message: 'Combat fixture.',
+      details: {
+        actingPlayerId: actorId,
+        defenderPlayerId: opponentId,
+        sourceTerritoryId: source!.id,
+        targetTerritoryId: target!.id,
+        attackerLosses: 1,
+        defenderLosses: 2,
+      },
+    },
+    {
+      type: 'territory-captured' as const,
+      message: 'Capture fixture.',
+      details: {
+        actingPlayerId: actorId,
+        previousOwnerId: opponentId,
+        sourceTerritoryId: source!.id,
+        targetTerritoryId: target!.id,
+      },
+    },
+    {
+      type: 'fortification-completed' as const,
+      message: 'Fortification fixture.',
+      details: {
+        actingPlayerId: actorId,
+        sourceTerritoryId: source!.id,
+        targetTerritoryId: target!.id,
+        armyCount: 2,
+      },
+    },
+  ];
+  for (let repeat = 0; repeat < 2; repeat += 1) {
+    for (const fixture of fixtures) {
+      next.events.push(
+        makeEvent(next, fixture.type, fixture.message, fixture.details),
+      );
+    }
   }
   return next;
 }
@@ -590,6 +651,10 @@ export function applyScenario(scenario: VisualScenario) {
   if (scenario === 'event-log' || scenario === 'activity-dock') {
     applicationMode = 'playing';
     scenarioMatch = withLongActivityHistory(match, planet);
+  }
+  if (scenario === 'multiplayer-activity-reactions') {
+    applicationMode = 'playing';
+    scenarioMatch = withActivityReactionReview(match, planet);
   }
   if (scenario === 'saved-resume') {
     const savedAt = '2026-07-17T12:00:00.000Z';

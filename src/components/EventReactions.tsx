@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type MouseEvent,
-} from 'react';
+import type { MouseEvent } from 'react';
 import {
   MATCH_EVENT_REACTIONS,
   type EventReactionSummary,
@@ -33,133 +27,61 @@ export function EventReactions({
   error?: string;
   onSetReaction: (reaction: MatchEventReaction | null) => void;
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const firstOptionRef = useRef<HTMLButtonElement>(null);
   const ownReaction = summary?.ownReaction ?? null;
-
-  const closePicker = (restoreFocus = false) => {
-    setPickerOpen(false);
-    if (restoreFocus) {
-      window.requestAnimationFrame(() => triggerRef.current?.focus());
-    }
-  };
-
-  useEffect(() => {
-    if (!pickerOpen) return;
-    firstOptionRef.current?.focus();
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (
-        event.target instanceof Node &&
-        !containerRef.current?.contains(event.target)
-      ) {
-        closePicker();
-      }
-    };
-    document.addEventListener('pointerdown', closeOnOutsidePointer);
-    return () =>
-      document.removeEventListener('pointerdown', closeOnOutsidePointer);
-  }, [pickerOpen]);
 
   const choose = (
     clickEvent: MouseEvent<HTMLButtonElement>,
     reaction: MatchEventReaction,
   ) => {
     clickEvent.stopPropagation();
-    closePicker(true);
     onSetReaction(desiredReactionAfterSelection(ownReaction, reaction));
   };
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Escape' || !pickerOpen) return;
-    event.preventDefault();
-    event.stopPropagation();
-    closePicker(true);
-  };
-
-  const visibleReactions = MATCH_EVENT_REACTIONS.filter(
-    (reaction) => (summary?.counts[reaction] ?? 0) > 0,
-  );
-
   return (
     <div
-      ref={containerRef}
-      className="event-reactions"
+      className={`event-reactions${pending ? ' pending' : ''}`}
       data-event-id={eventId}
       aria-busy={pending}
       onClick={(event) => event.stopPropagation()}
-      onKeyDown={handleKeyDown}
     >
-      <div className="event-reaction-actions">
-        {visibleReactions.map((reaction) => {
+      <div className="event-reaction-rail">
+        {MATCH_EVENT_REACTIONS.map((reaction) => {
           const presentation = REACTION_PRESENTATION[reaction];
-          const count = summary!.counts[reaction];
+          const count = summary?.counts[reaction] ?? 0;
           const selected = ownReaction === reaction;
+          const action = selected
+            ? `remove your ${presentation.label.toLowerCase()} reaction`
+            : ownReaction
+              ? `switch to ${presentation.label.toLowerCase()} reaction`
+              : `add ${presentation.label.toLowerCase()} reaction`;
+          const label =
+            count > 0 ? `${countLabel(reaction, count)}; ${action}` : action;
           return (
             <button
               key={reaction}
               type="button"
-              className={`event-reaction-chip${selected ? ' selected' : ''}`}
-              aria-label={
-                selected
-                  ? `Remove your ${presentation.label.toLowerCase()} reaction. ${countLabel(reaction, count)}`
-                  : `${countLabel(reaction, count)}. Add ${presentation.label.toLowerCase()} reaction`
-              }
+              className={`event-reaction-button${selected ? ' active' : ''}`}
+              aria-label={label}
               aria-pressed={selected}
               disabled={pending}
               onClick={(event) => choose(event, reaction)}
             >
-              <span aria-hidden="true">{presentation.emoji}</span>
-              <span>{count}</span>
-              {selected && <span className="sr-only">Your reaction</span>}
+              <span className="event-reaction-emoji" aria-hidden="true">
+                {presentation.emoji}
+              </span>
+              {count > 0 && (
+                <span className="event-reaction-count" aria-hidden="true">
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}
-        <button
-          ref={triggerRef}
-          type="button"
-          className="event-reaction-trigger"
-          aria-label="React to this Activity entry"
-          aria-expanded={pickerOpen}
-          aria-haspopup="menu"
-          disabled={pending}
-          onClick={(event) => {
-            event.stopPropagation();
-            setPickerOpen((open) => !open);
-          }}
-        >
-          {pending ? 'Saving…' : 'React'}
-        </button>
+        {pending && (
+          <span className="event-reaction-pending" aria-hidden="true" />
+        )}
+        {pending && <span className="sr-only">Saving reaction</span>}
       </div>
-      {pickerOpen && (
-        <div
-          className="event-reaction-picker"
-          role="menu"
-          aria-label="Choose a reaction"
-        >
-          {MATCH_EVENT_REACTIONS.map((reaction, index) => {
-            const presentation = REACTION_PRESENTATION[reaction];
-            const selected = ownReaction === reaction;
-            return (
-              <button
-                ref={index === 0 ? firstOptionRef : undefined}
-                key={reaction}
-                type="button"
-                role="menuitem"
-                className={selected ? 'selected' : undefined}
-                disabled={pending}
-                aria-label={`${presentation.emoji} ${presentation.label}${selected ? ', selected; choose to remove' : ''}`}
-                onClick={(event) => choose(event, reaction)}
-              >
-                <span aria-hidden="true">{presentation.emoji}</span>
-                <span>{presentation.label}</span>
-                {selected && <span aria-hidden="true">✓</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
       {error && (
         <span className="event-reaction-error" role="alert">
           {error}
