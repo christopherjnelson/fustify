@@ -42,6 +42,7 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
   const selectAndFocus = useGameStore((state) => state.selectAndFocusTerritory);
   const multiplayerSession = useGameStore((state) => state.multiplayerSession);
+  const botPlaybackPaused = useGameStore((state) => state.botPlaybackPaused);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
@@ -83,10 +84,13 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
     match,
     multiplayerSession,
   );
+  const localPausedBot =
+    botControlled && botPlaybackPaused && multiplayerSession === null;
   const inspectionOnly =
-    multiplayerSession !== null && !capabilities.canIssueGameplayActions;
+    localPausedBot ||
+    (multiplayerSession !== null && !capabilities.canIssueGameplayActions);
   const selectionUnavailable =
-    botControlled ||
+    (botControlled && !localPausedBot) ||
     (multiplayerSession !== null &&
       multiplayerSession.pending &&
       capabilities.canIssueGameplayActions) ||

@@ -414,6 +414,123 @@ describe('setup and match store integration', () => {
     ).toBe(true);
   });
 
+  it('pauses only an active local bot and rejects stale pre-pause work', async () => {
+    expect(useGameStore.getState().botPlaybackPaused).toBe(false);
+    expect(useGameStore.getState().pauseBotPlayback()).toBe(false);
+
+    useGameStore.getState().updatePlayer('player-01', {
+      controllerType: 'heuristic-bot',
+    });
+    const started = await startRandomMatch();
+    const match = started.match!;
+    expect(started.beginBotTurn(match.matchId, match.activePlayerId)).toBe(
+      true,
+    );
+    useGameStore.setState({
+      multiplayerSession: {
+        ownPlayerId: null,
+        revision: 1,
+        stateFingerprint: 'authoritative-state',
+        connection: 'connected',
+        pending: false,
+        dispatch: async () => undefined,
+      },
+    });
+    expect(useGameStore.getState().pauseBotPlayback()).toBe(false);
+    useGameStore.setState({ multiplayerSession: null });
+
+    const running = useGameStore.getState();
+    const acceptedCommand = getLegalGameCommands(
+      running.planet,
+      running.match!,
+    )[0]!;
+    expect(
+      running.dispatchControllerAction(
+        acceptedCommand,
+        commandFingerprint(running.match!),
+        running.controllerEpoch,
+      ),
+    ).toBe(true);
+    const afterAcceptedAction = useGameStore.getState();
+    const fingerprint = commandFingerprint(afterAcceptedAction.match!);
+    const command = getLegalGameCommands(
+      afterAcceptedAction.planet,
+      afterAcceptedAction.match!,
+    )[0]!;
+    const epochBeforePause = afterAcceptedAction.controllerEpoch;
+    const matchBeforePause = afterAcceptedAction.match;
+
+    expect(afterAcceptedAction.pauseBotPlayback()).toBe(true);
+    expect(useGameStore.getState().botPlaybackPaused).toBe(true);
+    expect(useGameStore.getState().match).toBe(matchBeforePause);
+    expect(
+      useGameStore
+        .getState()
+        .dispatchControllerAction(command, fingerprint, epochBeforePause),
+    ).toBe(false);
+    expect(useGameStore.getState().match).toBe(matchBeforePause);
+
+    expect(useGameStore.getState().resumeBotPlayback()).toBe(true);
+    const resumed = useGameStore.getState();
+    const resumedCommand = getLegalGameCommands(
+      resumed.planet,
+      resumed.match!,
+    )[0]!;
+    expect(resumedCommand).toEqual(command);
+    expect(
+      resumed.dispatchControllerAction(
+        resumedCommand,
+        commandFingerprint(resumed.match!),
+        resumed.controllerEpoch,
+      ),
+    ).toBe(true);
+    expect(useGameStore.getState().match).not.toBe(matchBeforePause);
+  });
+
+  it('keeps paused bot turns inspectable without changing canonical match state', async () => {
+    useGameStore.getState().updatePlayer('player-01', {
+      controllerType: 'heuristic-bot',
+    });
+    const started = await startRandomMatch();
+    started.beginBotTurn(started.match!.matchId, started.match!.activePlayerId);
+    const running = useGameStore.getState();
+    running.pauseBotPlayback();
+    const matchBeforeInspection = useGameStore.getState().match;
+    const territoryId = running.planet.territories[0]!.id;
+
+    useGameStore.getState().selectAndFocusTerritory(territoryId);
+
+    const inspected = useGameStore.getState();
+    expect(inspected.inspectedTerritoryId).toBe(territoryId);
+    expect(inspected.focusTargetTerritoryId).toBe(territoryId);
+    expect(inspected.match).toBe(matchBeforeInspection);
+    expect(inspected.botPlaybackPaused).toBe(true);
+  });
+
+  it('does not persist pause state and clears it when the match is replaced', async () => {
+    useGameStore.getState().updatePlayer('player-01', {
+      controllerType: 'heuristic-bot',
+    });
+    const started = await startRandomMatch();
+    started.beginBotTurn(started.match!.matchId, started.match!.activePlayerId);
+    useGameStore.getState().pauseBotPlayback();
+
+    const values = new Map<string, string>();
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key),
+      },
+    });
+    useGameStore.getState().saveMatch();
+    const serialized = values.get('fustify.local-match')!;
+    expect(JSON.parse(serialized)).not.toHaveProperty('botPlaybackPaused');
+
+    useGameStore.getState().resetMatch();
+    expect(useGameStore.getState().botPlaybackPaused).toBe(false);
+  });
+
   it('rerolls random ownership without regenerating geography', async () => {
     const state = await beginRandomAssignment();
     const planet = state.planet;

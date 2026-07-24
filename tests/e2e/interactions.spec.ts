@@ -167,7 +167,7 @@ test('bot status locks gameplay selection and human controls return afterward', 
   await expect(page.getByTestId('bot-turn-status')).toHaveCount(0);
 });
 
-test('local bot pacing changes pending playback without disrupting human handoff', async ({
+test('local bot playback pauses safely and resumes with the selected pacing', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -189,35 +189,85 @@ test('local bot pacing changes pending playback without disrupting human handoff
     timeout: 15_000,
   });
   await expect(page.getByText(/Gameplay controls are locked/i)).toBeVisible();
+  await expect(page.getByTestId('bot-turn-status')).toHaveAttribute(
+    'data-bot-state',
+    'applying',
+  );
   const savedEventCount = () =>
     page.evaluate(() => {
       const saved = window.localStorage.getItem('fustify.local-match');
       return saved ? JSON.parse(saved).matchState.events.length : 0;
     });
-  await page.getByText('Game', { exact: true }).click();
+  const gameMenu = page.locator('details.game-menu');
+  const openGameMenu = async () => {
+    if (
+      !(await gameMenu.evaluate(
+        (element) => (element as HTMLDetailsElement).open,
+      ))
+    )
+      await page.getByText('Game', { exact: true }).click();
+  };
+  await openGameMenu();
   const menuPacing = page.getByRole('group', { name: 'Bot pacing' });
   await expect(menuPacing.getByLabel('Deliberate · 5 seconds')).toBeChecked();
   const beforeDeliberateAction = await savedEventCount();
-  await page.waitForTimeout(300);
+  await page.getByRole('button', { name: 'Pause Bots' }).click();
+  const pausedStatus = page.getByTestId('bot-turn-status');
+  await expect(pausedStatus).toHaveAttribute('data-bot-state', 'paused');
+  await expect(
+    page.getByRole('heading', { name: /Crimson League is paused/i }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Resume Bots' })).toHaveCount(
+    2,
+  );
+  await page.waitForTimeout(350);
   expect(await savedEventCount()).toBe(beforeDeliberateAction);
 
-  await menuPacing.getByLabel('Instant').click();
+  await page.getByRole('button', { name: 'Territory list' }).click();
+  const navigator = page.getByRole('dialog', { name: 'Territory navigator' });
+  await expect(navigator).toBeVisible();
+  const inspectTerritory = navigator.locator('ul button').first();
+  await expect(inspectTerritory).toBeEnabled();
+  await inspectTerritory.click();
+  await expect(pausedStatus).toHaveAttribute('data-bot-state', 'paused');
+  await navigator
+    .getByRole('button', { name: /Close and view globe/i })
+    .click();
+
+  await openGameMenu();
+  await menuPacing.getByLabel('Fast · 1 second').click();
   await expect
     .poll(() =>
       page.evaluate(() =>
         window.localStorage.getItem('fustify.botPacing.mode'),
       ),
     )
-    .toBe('instant');
+    .toBe('fast');
+  await page.waitForTimeout(350);
+  expect(await savedEventCount()).toBe(beforeDeliberateAction);
+
+  await page
+    .getByTestId('bot-turn-status')
+    .getByRole('button', { name: 'Resume Bots' })
+    .click();
+  await page.waitForTimeout(350);
+  expect(await savedEventCount()).toBe(beforeDeliberateAction);
   await expect
     .poll(savedEventCount, { timeout: 3000 })
     .toBeGreaterThan(beforeDeliberateAction);
+
+  await openGameMenu();
+  await page
+    .getByRole('group', { name: 'Bot pacing' })
+    .getByLabel('Instant')
+    .click();
   await expect(
     page.getByRole('heading', { name: /Pass the device to Azure Pact/i }),
   ).toBeVisible({ timeout: 30_000 });
   await expect(
     page.getByRole('button', { name: /Begin turn .* Azure Pact/i }),
   ).toBeEnabled();
+  await expect(page.getByTestId('turn-notification')).toHaveCount(1);
 });
 
 test('minimap follows neutral, draft, ready, and active ownership lifecycle', async ({

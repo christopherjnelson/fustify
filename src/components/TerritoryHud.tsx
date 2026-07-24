@@ -37,7 +37,10 @@ import {
 } from '../multiplayer/interactionCapabilities';
 import type { LocalPlayerConfig } from '../core/setup/playerConfig';
 import type { GamePhase, MatchState } from '../core/game/types';
-import { hasHeuristicBot } from '../browser/botPacingVisibility';
+import {
+  hasHeuristicBot,
+  isBotPlaybackControlVisible,
+} from '../browser/botPacingVisibility';
 import { BotPacingSelector } from './BotPacingSelector';
 
 const PHASE_LABELS = {
@@ -57,6 +60,42 @@ const WAITING_PHASE_LABELS: Record<GamePhase, string> = {
   'turn-end': 'Ending turn',
   'game-over': 'Game over',
 };
+
+export function BotPlaybackMenuAction({
+  paused,
+  onPause,
+  onResume,
+}: {
+  paused: boolean;
+  onPause: () => void;
+  onResume: () => void;
+}) {
+  return (
+    <button type="button" onClick={paused ? onResume : onPause}>
+      {paused ? 'Resume Bots' : 'Pause Bots'}
+    </button>
+  );
+}
+
+export function PausedBotStatus({
+  activePlayerName,
+  onResume,
+}: {
+  activePlayerName: string;
+  onResume: () => void;
+}) {
+  return (
+    <>
+      <span className="eyebrow">Bot turn · paused</span>
+      <h2>{activePlayerName} is paused.</h2>
+      <p>Resume bot playback to continue.</p>
+      <button type="button" className="bot-resume-button" onClick={onResume}>
+        Resume Bots
+      </button>
+      <small>Explore the world while the bot turn remains paused.</small>
+    </>
+  );
+}
 
 export function MultiplayerWaitingPanel({
   match,
@@ -325,6 +364,9 @@ export function TerritoryHud({
   const viewMode = useGameStore((state) => state.viewMode);
   const error = useGameStore((state) => state.lastActionError);
   const botExecution = useGameStore((state) => state.botExecution);
+  const botPlaybackPaused = useGameStore((state) => state.botPlaybackPaused);
+  const pauseBotPlayback = useGameStore((state) => state.pauseBotPlayback);
+  const resumeBotPlayback = useGameStore((state) => state.resumeBotPlayback);
   const multiplayerSession = useGameStore((state) => state.multiplayerSession);
   const inspectedTerritoryId = useGameStore(
     (state) => state.inspectedTerritoryId,
@@ -419,7 +461,7 @@ export function TerritoryHud({
   const target = targetId ? territoryById.get(targetId) : undefined;
   const sourceState = sourceId ? match.territories[sourceId] : undefined;
   const inspected =
-    multiplayerSession && !canControl && inspectedTerritoryId
+    !canControl && inspectedTerritoryId
       ? territoryById.get(inspectedTerritoryId)
       : undefined;
   const selected = inspected ?? target ?? source;
@@ -598,16 +640,29 @@ export function TerritoryHud({
               className="phase-card bot-status-card"
               aria-live="polite"
               data-testid="bot-turn-status"
-              data-bot-state={botExecution.phase}
+              data-bot-state={botPlaybackPaused ? 'paused' : botExecution.phase}
             >
-              <span className="eyebrow">Bot turn · {botExecution.phase}</span>
-              <h2>{activePlayer.name} is acting</h2>
-              <p>
-                {botExecution.error ??
-                  botExecution.summary ??
-                  'Choosing the next legal action.'}
-              </p>
-              <small>Gameplay controls are locked until control returns.</small>
+              {botPlaybackPaused ? (
+                <PausedBotStatus
+                  activePlayerName={activePlayer.name}
+                  onResume={resumeBotPlayback}
+                />
+              ) : (
+                <>
+                  <span className="eyebrow">
+                    Bot turn · {botExecution.phase}
+                  </span>
+                  <h2>{activePlayer.name} is acting</h2>
+                  <p>
+                    {botExecution.error ??
+                      botExecution.summary ??
+                      'Choosing the next legal action.'}
+                  </p>
+                  <small>
+                    Gameplay controls are locked until control returns.
+                  </small>
+                </>
+              )}
             </section>
           )}
 
@@ -967,6 +1022,18 @@ export function TerritoryHud({
               <div>
                 <TurnSoundToggle />
                 {hasLocalBots && <BotPacingSelector context="game-menu" />}
+                {isBotPlaybackControlVisible({
+                  multiplayer: multiplayerSession !== null,
+                  hasLocalBots,
+                  botControlled,
+                  phase: match.phase,
+                }) && (
+                  <BotPlaybackMenuAction
+                    paused={botPlaybackPaused}
+                    onPause={pauseBotPlayback}
+                    onResume={resumeBotPlayback}
+                  />
+                )}
                 {!multiplayerSession && (
                   <>
                     <div className="game-menu-separator" />

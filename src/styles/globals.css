@@ -1356,6 +1356,19 @@ select:focus-visible {
   font-size: 0.62rem;
 }
 
+.bot-status-card .bot-resume-button {
+  width: fit-content;
+  margin: 8px 0 5px;
+  padding: 7px 10px;
+  color: #e8f8ff;
+  border: 1px solid rgba(111, 204, 238, 0.4);
+  border-radius: 7px;
+  background: rgba(40, 124, 158, 0.38);
+  cursor: pointer;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
 .balance-card > div:first-child {
   display: flex;
   align-items: center;

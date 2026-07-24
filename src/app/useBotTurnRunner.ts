@@ -70,6 +70,10 @@ export function useBotTurnRunner() {
     (state) => state.dispatchControllerAction,
   );
   const setBotExecution = useGameStore((state) => state.setBotExecution);
+  const botPlaybackPaused = useGameStore((state) => state.botPlaybackPaused);
+  const clearBotPlaybackPause = useGameStore(
+    (state) => state.clearBotPlaybackPause,
+  );
   const controllerEpoch = useGameStore((state) => state.controllerEpoch);
   const activePlayer = players.find(
     (player) => player.id === match?.activePlayerId,
@@ -77,6 +81,13 @@ export function useBotTurnRunner() {
   const fingerprint = useMemo(
     () => (match ? commandFingerprint(match) : null),
     [match],
+  );
+
+  useEffect(
+    () => () => {
+      useGameStore.getState().clearBotPlaybackPause();
+    },
+    [],
   );
 
   useEffect(() => {
@@ -87,6 +98,7 @@ export function useBotTurnRunner() {
       return;
     }
     if (!match || activePlayer?.controllerType !== 'heuristic-bot') {
+      clearBotPlaybackPause();
       setBotExecution({
         phase: 'idle',
         playerId: null,
@@ -97,7 +109,11 @@ export function useBotTurnRunner() {
       });
       return;
     }
-    if (mode === 'game-over') return;
+    if (mode === 'game-over') {
+      clearBotPlaybackPause();
+      return;
+    }
+    if (botPlaybackPaused) return;
     const abort = new AbortController();
     const playerId = activePlayer.id;
 
@@ -146,6 +162,7 @@ export function useBotTurnRunner() {
             ),
           },
         );
+        if (abort.signal.aborted) return;
         if (!legalActions.some((legal) => sameCommand(legal, command))) {
           throw new Error(
             'Controller returned a command outside the legal set.',
@@ -174,6 +191,20 @@ export function useBotTurnRunner() {
         }
         command = fallback;
       }
+
+      const runtime = useGameStore.getState();
+      if (
+        abort.signal.aborted ||
+        runtime.botPlaybackPaused ||
+        runtime.controllerEpoch !== controllerEpoch ||
+        runtime.applicationMode !== 'playing' ||
+        runtime.match?.matchId !== match.matchId ||
+        runtime.match.activePlayerId !== playerId ||
+        runtime.matchSetup.players.find(
+          (player) => player.id === runtime.match?.activePlayerId,
+        )?.controllerType !== 'heuristic-bot'
+      )
+        return;
 
       const highlights = actionTerritories(command);
       const summary = actionSummary(
@@ -212,6 +243,8 @@ export function useBotTurnRunner() {
     activePlayer?.id,
     activePlayer?.name,
     beginBotTurn,
+    botPlaybackPaused,
+    clearBotPlaybackPause,
     controllerEpoch,
     dispatchControllerAction,
     fingerprint?.activePlayerId,

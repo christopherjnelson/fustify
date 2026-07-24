@@ -3,8 +3,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useGameStore } from '../state/useGameStore';
 import {
+  BotPlaybackMenuAction,
   HudUtilityRow,
   MultiplayerWaitingPanel,
+  PausedBotStatus,
   PlayerViewModeSelector,
   ReinforcementPlacementControls,
 } from './TerritoryHud';
@@ -12,6 +14,7 @@ import { PLAYER_VIEW_MODES, playerViewMode } from './playerViewModes';
 import { submitReinforcementPlacement } from './reinforcementPlacement';
 import { multiplayerHudMode } from '../multiplayer/interactionCapabilities';
 import { BotPacingSelector } from './BotPacingSelector';
+import { isBotPlaybackControlVisible } from '../browser/botPacingVisibility';
 
 const initialState = useGameStore.getState();
 
@@ -20,6 +23,58 @@ afterEach(() => {
 });
 
 describe('active-match HUD utilities', () => {
+  it('uses explicit bot playback labels and a compact paused status', () => {
+    const running = renderToStaticMarkup(
+      createElement(BotPlaybackMenuAction, {
+        paused: false,
+        onPause: () => undefined,
+        onResume: () => undefined,
+      }),
+    );
+    const paused = renderToStaticMarkup(
+      createElement(BotPlaybackMenuAction, {
+        paused: true,
+        onPause: () => undefined,
+        onResume: () => undefined,
+      }),
+    );
+    const status = renderToStaticMarkup(
+      createElement(PausedBotStatus, {
+        activePlayerName: 'Azure Pact',
+        onResume: () => undefined,
+      }),
+    );
+
+    expect(running).toContain('>Pause Bots</button>');
+    expect(paused).toContain('>Resume Bots</button>');
+    expect(status).toContain('Azure Pact is paused.');
+    expect(status).toContain('Resume bot playback to continue.');
+    expect(status).toContain('>Resume Bots</button>');
+  });
+
+  it('shows bot playback control only for an active local bot turn', () => {
+    const visible = {
+      multiplayer: false,
+      hasLocalBots: true,
+      botControlled: true,
+      phase: 'attack',
+    } as const;
+
+    expect(isBotPlaybackControlVisible(visible)).toBe(true);
+    expect(
+      isBotPlaybackControlVisible({ ...visible, botControlled: false }),
+    ).toBe(false);
+    expect(
+      isBotPlaybackControlVisible({ ...visible, hasLocalBots: false }),
+    ).toBe(false);
+    expect(isBotPlaybackControlVisible({ ...visible, multiplayer: true })).toBe(
+      false,
+    );
+    expect(
+      isBotPlaybackControlVisible({ ...visible, phase: 'game-over' }),
+    ).toBe(false);
+  });
+
   it('offers the same accessible bot pacing preference in the Game menu', () => {
     const markup = renderToStaticMarkup(
       createElement(BotPacingSelector, { context: 'game-menu' }),

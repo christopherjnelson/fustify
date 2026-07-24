@@ -200,6 +200,7 @@ export interface GameState {
   globeFocus: GeographicPoint;
   setupOperation: SetupOperation | null;
   botExecution: BotExecutionState;
+  botPlaybackPaused: boolean;
   controllerEpoch: number;
   multiplayerSession: MultiplayerStoreSession | null;
   setSeedInput: (seed: string) => void;
@@ -233,6 +234,9 @@ export interface GameState {
     expected: CommandFingerprint,
     expectedEpoch: number,
   ) => boolean;
+  pauseBotPlayback: () => boolean;
+  resumeBotPlayback: () => boolean;
+  clearBotPlaybackPause: () => void;
   setBotExecution: (execution: BotExecutionState) => void;
   saveMatch: () => void;
   resumeSavedMatch: () => Promise<void>;
@@ -409,6 +413,7 @@ export const useGameStore = create<GameState>((set, get) => {
       lastActionError: null,
       saveMessage: null,
       botExecution: IDLE_BOT_EXECUTION,
+      botPlaybackPaused: false,
       controllerEpoch: get().controllerEpoch + 1,
     });
   };
@@ -438,6 +443,7 @@ export const useGameStore = create<GameState>((set, get) => {
     globeFocus: { longitude: 90, latitude: 0 },
     setupOperation: null,
     botExecution: IDLE_BOT_EXECUTION,
+    botPlaybackPaused: false,
     controllerEpoch: 0,
     multiplayerSession: null,
     setSeedInput: (seedInput) =>
@@ -789,6 +795,7 @@ export const useGameStore = create<GameState>((set, get) => {
           playerSetupErrors: [],
           assignmentFeedback: null,
           lastActionError: null,
+          botPlaybackPaused: false,
           controllerEpoch: current.controllerEpoch + 1,
         });
         persist({ ...get(), match, applicationMode: 'handoff' }, 'handoff');
@@ -808,6 +815,7 @@ export const useGameStore = create<GameState>((set, get) => {
         applicationMode: 'world-setup',
         saveMessage: null,
         botExecution: IDLE_BOT_EXECUTION,
+        botPlaybackPaused: false,
         controllerEpoch: get().controllerEpoch + 1,
       }),
     beginTurn: () => {
@@ -857,6 +865,7 @@ export const useGameStore = create<GameState>((set, get) => {
         handoffSummary: { previousTurn: null, messages: [] },
         lastActionError: null,
         botExecution: IDLE_BOT_EXECUTION,
+        botPlaybackPaused: false,
         controllerEpoch: state.controllerEpoch + 1,
       });
       persist({ ...get(), match, applicationMode: 'handoff' }, 'handoff');
@@ -869,6 +878,7 @@ export const useGameStore = create<GameState>((set, get) => {
           matchSetup: restartPlayerDraft(state.matchSetup),
           match: null,
           assignmentFeedback: `${state.matchSetup.players[0]!.name} chooses first.`,
+          botPlaybackPaused: false,
           controllerEpoch: state.controllerEpoch + 1,
         });
       } else {
@@ -876,6 +886,7 @@ export const useGameStore = create<GameState>((set, get) => {
         set({
           applicationMode: 'pregame',
           match: null,
+          botPlaybackPaused: false,
           controllerEpoch: get().controllerEpoch + 1,
         });
       }
@@ -990,6 +1001,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const state = get();
       if (
         state.controllerEpoch !== expectedEpoch ||
+        state.botPlaybackPaused ||
         state.applicationMode !== 'playing' ||
         !state.match ||
         !fingerprintsEqual(commandFingerprint(state.match), expected)
@@ -1028,6 +1040,7 @@ export const useGameStore = create<GameState>((set, get) => {
         lastActionError: null,
         applicationMode,
         handoffSummary,
+        botPlaybackPaused: false,
       });
       persist(
         { ...get(), match: result.state, applicationMode },
@@ -1035,6 +1048,52 @@ export const useGameStore = create<GameState>((set, get) => {
       );
       return true;
     },
+    pauseBotPlayback: () => {
+      const state = get();
+      const active = state.matchSetup.players.find(
+        (player) => player.id === state.match?.activePlayerId,
+      );
+      if (
+        state.botPlaybackPaused ||
+        state.multiplayerSession ||
+        state.applicationMode !== 'playing' ||
+        !state.match ||
+        state.match.phase === 'game-over' ||
+        active?.controllerType !== 'heuristic-bot'
+      )
+        return false;
+      set({
+        botPlaybackPaused: true,
+        controllerEpoch: state.controllerEpoch + 1,
+      });
+      return true;
+    },
+    resumeBotPlayback: () => {
+      const state = get();
+      const active = state.matchSetup.players.find(
+        (player) => player.id === state.match?.activePlayerId,
+      );
+      if (
+        !state.botPlaybackPaused ||
+        state.multiplayerSession ||
+        state.applicationMode !== 'playing' ||
+        !state.match ||
+        state.match.phase === 'game-over' ||
+        active?.controllerType !== 'heuristic-bot'
+      )
+        return false;
+      set({ botPlaybackPaused: false });
+      return true;
+    },
+    clearBotPlaybackPause: () =>
+      set((state) =>
+        state.botPlaybackPaused
+          ? {
+              botPlaybackPaused: false,
+              controllerEpoch: state.controllerEpoch + 1,
+            }
+          : state,
+      ),
     setBotExecution: (botExecution) => set({ botExecution }),
     saveMatch: () => persist(get()),
     resumeSavedMatch: async () => {
@@ -1109,6 +1168,7 @@ export const useGameStore = create<GameState>((set, get) => {
           assignmentFeedback: null,
           lastActionError: null,
           botExecution: IDLE_BOT_EXECUTION,
+          botPlaybackPaused: false,
           controllerEpoch: get().controllerEpoch + 1,
         });
         if (parsed.migrated) persist(get(), applicationMode);
@@ -1149,6 +1209,20 @@ export const useGameStore = create<GameState>((set, get) => {
         return;
       }
       if (state.applicationMode === 'playing') {
+        const activeController = state.matchSetup.players.find(
+          (player) => player.id === state.match?.activePlayerId,
+        )?.controllerType;
+        if (
+          state.botPlaybackPaused &&
+          !state.multiplayerSession &&
+          activeController === 'heuristic-bot'
+        ) {
+          set({
+            inspectedTerritoryId: territoryId,
+            lastActionError: null,
+          });
+          return;
+        }
         const capabilities = multiplayerInteractionCapabilities(
           state.match,
           state.multiplayerSession,
@@ -1171,6 +1245,22 @@ export const useGameStore = create<GameState>((set, get) => {
     selectAndFocusTerritory: (territoryId) => {
       const state = get();
       if (state.applicationMode !== 'playing') return;
+      const activeController = state.matchSetup.players.find(
+        (player) => player.id === state.match?.activePlayerId,
+      )?.controllerType;
+      if (
+        state.botPlaybackPaused &&
+        !state.multiplayerSession &&
+        activeController === 'heuristic-bot'
+      ) {
+        set({
+          inspectedTerritoryId: territoryId,
+          lastActionError: null,
+          focusTargetTerritoryId: territoryId,
+          focusSequence: state.focusSequence + 1,
+        });
+        return;
+      }
       const capabilities = multiplayerInteractionCapabilities(
         state.match,
         state.multiplayerSession,
@@ -1207,11 +1297,12 @@ export const useGameStore = create<GameState>((set, get) => {
     focusSelectedTerritory: () => {
       const state = get();
       const territoryId =
-        state.multiplayerSession &&
-        !multiplayerInteractionCapabilities(
-          state.match,
-          state.multiplayerSession,
-        ).canIssueGameplayActions
+        (state.botPlaybackPaused && !state.multiplayerSession) ||
+        (state.multiplayerSession &&
+          !multiplayerInteractionCapabilities(
+            state.match,
+            state.multiplayerSession,
+          ).canIssueGameplayActions)
           ? state.inspectedTerritoryId
           : selectedTerritory(state);
       if (territoryId !== null) state.requestTerritoryFocus(territoryId);
