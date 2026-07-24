@@ -16,7 +16,7 @@ test('mobile lobby keeps room controls visible without horizontal clipping', asy
   if (!existsSync(mobileAuthState)) {
     await context.storageState({ path: mobileAuthState });
   }
-  await page.getByLabel('Display name').fill('Mobile Host');
+  await page.getByLabel('Room display name').fill('Mobile Host');
   await page.getByRole('button', { name: 'Create private room' }).click();
   await expect(
     page.getByRole('heading', { name: 'Multiplayer lobby' }),
@@ -70,7 +70,7 @@ test('mobile restores an authoritative active match without clipping controls', 
     await expect(
       host.getByRole('heading', { name: 'Private multiplayer rooms' }),
     ).toBeVisible();
-    await host.getByLabel('Display name').fill('Mobile Alpha');
+    await host.getByLabel('Room display name').fill('Mobile Alpha');
     await host.getByRole('button', { name: 'Create private room' }).click();
     roomId = host.url().split('/').at(-1)!;
     await host.getByLabel('Territories').fill('12');
@@ -91,7 +91,7 @@ test('mobile restores an authoritative active match without clipping controls', 
     if (!existsSync(mobileGuestAuthState)) {
       await guestContext.storageState({ path: mobileGuestAuthState });
     }
-    await guest.getByLabel('Display name').fill('Mobile Bravo');
+    await guest.getByLabel('Room display name').fill('Mobile Bravo');
     await guest.getByLabel('Room code').fill(code);
     await guest.getByRole('button', { name: 'Join room' }).click();
     await guest

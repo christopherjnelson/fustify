@@ -126,7 +126,7 @@ describe('registered backend session preparation', () => {
     await expect(
       ensureRegisteredSessionReady(fixture.client),
     ).resolves.toMatchObject({
-      status: 'legacy-guest',
+      status: 'legacy-anonymous',
     });
   });
 
@@ -203,7 +203,7 @@ describe('registered backend session preparation', () => {
       },
     });
     await expect(ensureRegisteredSessionReady(client)).resolves.toMatchObject({
-      status: 'legacy-guest',
+      status: 'legacy-anonymous',
       user: { id: userId },
     });
     expect(refreshSession).not.toHaveBeenCalled();

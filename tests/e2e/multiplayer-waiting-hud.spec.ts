@@ -17,7 +17,7 @@ async function openPlayer(
   if (!existsSync(authStatePath)) {
     await context.storageState({ path: authStatePath });
   }
-  await page.getByLabel('Display name').fill(displayName);
+  await page.getByLabel('Room display name').fill(displayName);
   return page;
 }
 

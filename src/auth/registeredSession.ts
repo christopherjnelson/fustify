@@ -9,11 +9,14 @@ const SESSION_VERIFICATION_MESSAGE =
 export type RegisteredSessionResult =
   | { status: 'registered-ready'; user: User }
   | { status: 'signed-out' }
-  | { status: 'legacy-guest'; user: User }
-  | { status: 'unavailable'; message: string }
+  | { status: 'legacy-anonymous'; user: User }
   | {
       status: 'error';
-      reason: 'refresh-failed' | 'identity-changed' | 'invalid-claims';
+      reason:
+        | 'refresh-failed'
+        | 'identity-changed'
+        | 'invalid-claims'
+        | 'verification-failed';
       message: string;
     };
 
@@ -127,10 +130,10 @@ async function refreshAndVerify(
     };
   }
   if (claims.isAnonymous) {
-    return { status: 'legacy-guest', user };
+    return { status: 'legacy-anonymous', user };
   }
   if (user.is_anonymous !== false) {
-    return { status: 'legacy-guest', user };
+    return { status: 'legacy-anonymous', user };
   }
   return { status: 'registered-ready', user };
 }
@@ -165,11 +168,19 @@ export async function ensureRegisteredSessionReady(
   try {
     sessionResult = await client.auth.getSession();
   } catch {
-    return { status: 'unavailable', message: SESSION_VERIFICATION_MESSAGE };
+    return {
+      status: 'error',
+      reason: 'verification-failed',
+      message: SESSION_VERIFICATION_MESSAGE,
+    };
   }
   const session = sessionResult.data.session;
   if (sessionResult.error) {
-    return { status: 'unavailable', message: SESSION_VERIFICATION_MESSAGE };
+    return {
+      status: 'error',
+      reason: 'verification-failed',
+      message: SESSION_VERIFICATION_MESSAGE,
+    };
   }
   if (!session) return { status: 'signed-out' };
 
@@ -178,7 +189,11 @@ export async function ensureRegisteredSessionReady(
   try {
     verified = await client.auth.getUser(session.access_token);
   } catch {
-    return { status: 'unavailable', message: SESSION_VERIFICATION_MESSAGE };
+    return {
+      status: 'error',
+      reason: 'verification-failed',
+      message: SESSION_VERIFICATION_MESSAGE,
+    };
   }
   if (generation(client) !== startedAtGeneration) {
     return { status: 'signed-out' };
@@ -188,7 +203,11 @@ export async function ensureRegisteredSessionReady(
     return verified.error?.name === 'AuthSessionMissingError' ||
       /auth session missing/i.test(verified.error?.message ?? '')
       ? { status: 'signed-out' }
-      : { status: 'unavailable', message: SESSION_VERIFICATION_MESSAGE };
+      : {
+          status: 'error',
+          reason: 'verification-failed',
+          message: SESSION_VERIFICATION_MESSAGE,
+        };
   }
   if (options.expectedUserId && user.id !== options.expectedUserId) {
     return {
@@ -210,7 +229,7 @@ export async function ensureRegisteredSessionReady(
     };
   }
   if (user.is_anonymous !== false) {
-    return { status: 'legacy-guest', user };
+    return { status: 'legacy-anonymous', user };
   }
   if (options.forceRefresh) {
     return sharedRefresh(client, user.id);

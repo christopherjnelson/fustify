@@ -51,6 +51,24 @@
   font-size: 0.78rem;
 }
 
+.account-control-compact .account-identity span {
+  display: none;
+}
+
+.protected-route-shell {
+  position: relative;
+  min-height: 100vh;
+}
+
+html.game-route .protected-route-shell {
+  height: 100%;
+}
+
+.protected-route-shell > .multiplayer-shell,
+.protected-route-shell > .game-setup-shell {
+  padding-top: 104px;
+}
+
 .account-summary {
   display: flex;
   padding: 8px 10px;
@@ -269,6 +287,7 @@
 }
 
 .auth-route-shell {
+  position: relative;
   display: grid;
   min-height: 100vh;
   padding: 24px;
@@ -396,6 +415,24 @@
 
   .account-actions button {
     flex: 1;
+  }
+
+  .account-control-compact .account-summary {
+    flex-wrap: nowrap;
+  }
+
+  .account-control-compact .account-actions {
+    width: auto;
+  }
+
+  .account-control-compact .account-actions button {
+    flex: 0 0 auto;
+  }
+
+  .protected-route-shell .game-setup-shell-overlay,
+  .protected-route-shell .hud {
+    top: 92px;
+    max-height: calc(100dvh - 102px);
   }
 
   .home-brand {
@@ -2978,6 +3015,12 @@ button:disabled {
   justify-items: end;
   color: #f4f7ff;
   text-transform: uppercase;
+}
+
+@media (min-width: 721px) {
+  .protected-route-shell .board-brand {
+    top: 108px;
+  }
 }
 
 .board-brand-name {

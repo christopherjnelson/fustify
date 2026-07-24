@@ -4,7 +4,6 @@ import type { GameAction } from '../core/game/types';
 import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
 import type { Database, Tables } from './database.types';
 import type { AuthoritativeCommandResult } from './gameProtocol';
-import { ensureRegisteredSessionReady } from '../auth/registeredSession';
 
 export type Room = Tables<'rooms'>;
 export type RoomMember = Tables<'room_members'>;
@@ -244,7 +243,13 @@ function permanentMatchReadFailure(
   );
 }
 
-function isAccountRequiredError(error: unknown): boolean {
+export function isAccountRequiredError(error: unknown): boolean {
+  if (
+    error instanceof Error &&
+    error.message === MULTIPLAYER_ERRORS.account_required
+  ) {
+    return true;
+  }
   return (
     typeof error === 'object' &&
     error !== null &&
@@ -351,20 +356,7 @@ export async function createRoom(
     assignment_mode: settings.assignmentMode,
     max_seats: settings.maxSeats,
   };
-  let { data, error } = await client.rpc('create_room', args);
-  if (isAccountRequiredError(error)) {
-    const prepared = await ensureRegisteredSessionReady(client);
-    if (prepared.status === 'registered-ready') {
-      ({ data, error } = await client.rpc('create_room', args));
-    } else if (
-      prepared.status === 'error' ||
-      prepared.status === 'unavailable'
-    ) {
-      throw new Error(prepared.message);
-    } else if (prepared.status === 'signed-out') {
-      throw new Error(MULTIPLAYER_ERRORS.not_authenticated);
-    }
-  }
+  const { data, error } = await client.rpc('create_room', args);
   if (error) throw multiplayerError(error);
   if (!data) throw multiplayerError('room_creation_failed');
   return data;

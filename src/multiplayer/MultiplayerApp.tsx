@@ -29,6 +29,7 @@ import {
   joinRoom,
   leaveRoom,
   multiplayerError,
+  isAccountRequiredError,
   releaseSeat,
   startMatch,
   submitGameplayCommand,
@@ -40,6 +41,7 @@ import {
   type Room,
   type RoomState,
 } from './multiplayerApi';
+import { useAccount } from '../auth/accountContext';
 import { MatchSynchronization } from './matchSynchronization';
 import { getSupabaseClient } from './supabaseClient';
 import { isMatchState } from './gameProtocol';
@@ -123,12 +125,29 @@ function StatusScreen({ title, message }: { title: string; message: string }) {
 
 function Lobby() {
   const client = useMemo(() => getSupabaseClient(), []);
+  const { controller, state: account } = useAccount();
   const [displayName, setDisplayName] = useState(
     () => window.localStorage.getItem('fustify.multiplayer.displayName') ?? '',
   );
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'create' | 'join' | null>(null);
+  const accountReady = account.status === 'registered-ready';
+
+  const runAuthorized = async <T,>(request: () => Promise<T>): Promise<T> => {
+    if (!controller) {
+      throw new Error('Account configuration is unavailable.');
+    }
+    await controller.requireRegisteredReady();
+    try {
+      return await request();
+    } catch (requestError) {
+      if (isAccountRequiredError(requestError)) {
+        await controller.handleBackendAccountRequired();
+      }
+      throw requestError;
+    }
+  };
 
   const rememberName = () => {
     window.localStorage.setItem(
@@ -141,7 +160,7 @@ function Lobby() {
     setBusy('create');
     setError(null);
     try {
-      const room = await createRoom(client, displayName);
+      const room = await runAuthorized(() => createRoom(client, displayName));
       rememberName();
       navigate(`/multiplayer/room/${room.id}`);
     } catch (requestError) {
@@ -156,7 +175,9 @@ function Lobby() {
     setBusy('join');
     setError(null);
     try {
-      const room = await joinRoom(client, joinCode, displayName);
+      const room = await runAuthorized(() =>
+        joinRoom(client, joinCode, displayName),
+      );
       rememberName();
       navigate(`/multiplayer/room/${room.id}`);
     } catch (requestError) {
@@ -177,7 +198,7 @@ function Lobby() {
           authoritative server boundary.
         </p>
         <label>
-          Display name
+          Room display name
           <input
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
@@ -188,7 +209,7 @@ function Lobby() {
         <button
           type="button"
           onClick={() => void create()}
-          disabled={busy !== null}
+          disabled={busy !== null || !accountReady}
         >
           {busy === 'create' ? 'Creating…' : 'Create private room'}
         </button>
@@ -208,7 +229,7 @@ function Lobby() {
               spellCheck={false}
             />
           </label>
-          <button type="submit" disabled={busy !== null}>
+          <button type="submit" disabled={busy !== null || !accountReady}>
             {busy === 'join' ? 'Joining…' : 'Join room'}
           </button>
         </form>

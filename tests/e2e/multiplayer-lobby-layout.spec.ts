@@ -45,7 +45,7 @@ async function openEntry(
   if (!existsSync(identityPath)) {
     await context.storageState({ path: identityPath });
   }
-  await page.getByLabel('Display name').fill(displayName);
+  await page.getByLabel('Room display name').fill(displayName);
   return page;
 }
 

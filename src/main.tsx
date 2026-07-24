@@ -11,7 +11,6 @@ import {
 const isAdmin = isAdminRoute(window.location.pathname);
 const isAuth = isAuthRoute(window.location.pathname);
 const isMultiplayer = isMultiplayerRoute(window.location.pathname);
-const isLocal = window.location.pathname === '/local';
 const isLegacyLocalSetup =
   window.location.pathname === '/' &&
   (hasLocalSetupParameters(window.location.search) ||
@@ -78,42 +77,17 @@ async function bootstrap() {
     return;
   }
 
-  if (isMultiplayer) {
-    if (
-      import.meta.env.DEV &&
-      isMultiplayerMatch &&
-      new URLSearchParams(window.location.search).get('visual-review') === '1'
-    ) {
-      const { MultiplayerVisualApp } =
-        await import('./testSupport/MultiplayerVisualApp');
-      root.render(
-        <StrictMode>
-          <MultiplayerVisualApp />
-        </StrictMode>,
-      );
-      return;
-    }
-    const { AccountRequiredGate } = await import('./auth/AccountControl');
+  if (
+    import.meta.env.DEV &&
+    isMultiplayer &&
+    isMultiplayerMatch &&
+    new URLSearchParams(window.location.search).get('visual-review') === '1'
+  ) {
+    const { MultiplayerVisualApp } =
+      await import('./testSupport/MultiplayerVisualApp');
     root.render(
       <StrictMode>
-        <AccountRequiredGate
-          returnPath={`${window.location.pathname}${window.location.search}${window.location.hash}`}
-          load={async (userId) => {
-            const { MultiplayerApp } =
-              await import('./multiplayer/MultiplayerApp');
-            return <MultiplayerApp userId={userId} />;
-          }}
-        />
-      </StrictMode>,
-    );
-    return;
-  }
-
-  if (isHome) {
-    const { Home } = await import('./home/Home');
-    root.render(
-      <StrictMode>
-        <Home />
+        <MultiplayerVisualApp />
       </StrictMode>,
     );
     return;
@@ -121,6 +95,7 @@ async function bootstrap() {
 
   if (
     import.meta.env.DEV &&
+    !isHome &&
     new URLSearchParams(window.location.search).get('visual-review') === '1'
   ) {
     const { App } = await import('./app/App');
@@ -132,16 +107,10 @@ async function bootstrap() {
     return;
   }
 
-  const { AccountRequiredGate } = await import('./auth/AccountControl');
+  const { BrowserApp } = await import('./browser/BrowserApp');
   root.render(
     <StrictMode>
-      <AccountRequiredGate
-        returnPath={`${isLocal ? '/local' : window.location.pathname}${window.location.search}${window.location.hash}`}
-        load={async () => {
-          const { App } = await import('./app/App');
-          return <App />;
-        }}
-      />
+      <BrowserApp />
     </StrictMode>,
   );
 }

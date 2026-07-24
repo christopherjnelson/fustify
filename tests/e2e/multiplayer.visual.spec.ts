@@ -12,7 +12,7 @@ test('multiplayer lobby visual', async ({ browser }, testInfo) => {
   });
   const page = await context.newPage();
   await page.goto('/multiplayer');
-  await page.getByLabel('Display name').fill('Visual Host');
+  await page.getByLabel('Room display name').fill('Visual Host');
   if (testInfo.project.name === 'desktop-1920' && !hasReusableIdentity) {
     // Responsive captures reuse this anonymous identity instead of consuming
     // multiple hosted Auth signups for one visual assertion.

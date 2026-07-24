@@ -50,62 +50,7 @@ describe('multiplayer room creation', () => {
     });
   });
 
-  it('refreshes a proven stale registered session and retries account_required once', async () => {
-    const room = { id: 'recovered-room' };
-    const rpc = vi
-      .fn()
-      .mockResolvedValueOnce({
-        data: null,
-        error: { code: 'P0001', message: 'account_required' },
-      })
-      .mockResolvedValueOnce({ data: room, error: null });
-    const refreshSession = vi.fn(async () => ({
-      data: {
-        session: {
-          access_token: 'refreshed-token',
-          user: { id: 'registered-user', is_anonymous: false },
-        },
-        user: { id: 'registered-user', is_anonymous: false },
-      },
-      error: null,
-    }));
-    const client = {
-      rpc,
-      auth: {
-        getSession: vi.fn(async () => ({
-          data: {
-            session: {
-              access_token: 'stale-token',
-              user: { id: 'registered-user', is_anonymous: true },
-            },
-          },
-          error: null,
-        })),
-        getUser: vi.fn(async () => ({
-          data: {
-            user: { id: 'registered-user', is_anonymous: false },
-          },
-          error: null,
-        })),
-        getClaims: vi.fn(async (token: string) => ({
-          data: {
-            claims: {
-              sub: 'registered-user',
-              is_anonymous: token === 'stale-token',
-            },
-          },
-          error: null,
-        })),
-        refreshSession,
-      },
-    } as unknown as SupabaseClient<Database>;
-
-    await expect(createRoom(client, 'Host')).resolves.toBe(room);
-    expect(refreshSession).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not retry repeated account_required indefinitely', async () => {
+  it('surfaces account_required without retrying the room RPC', async () => {
     const rpc = vi.fn(async () => ({
       data: null,
       error: { code: 'P0001', message: 'account_required' },
@@ -143,7 +88,7 @@ describe('multiplayer room creation', () => {
     await expect(createRoom(client, 'Host')).rejects.toThrow(
       'A registered account is required for multiplayer.',
     );
-    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 
   it('never retries non-auth room errors', async () => {

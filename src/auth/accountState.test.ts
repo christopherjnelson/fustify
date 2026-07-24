@@ -1,263 +1,236 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type {
+  AuthChangeEvent,
+  Session,
+  SupabaseClient,
+} from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { Database } from '../multiplayer/database.types';
 import {
+  AccountController,
   deriveAccountState,
-  observeAccountState,
-  type AccountState,
+  safeProtectedAccountState,
+  type ProtectedAccountState,
 } from './accountState';
 
 const userId = '10000000-0000-4000-8000-000000000001';
+const otherUserId = '20000000-0000-4000-8000-000000000002';
 const profileRow = {
   user_id: userId,
-  display_name: 'Guest 1000',
+  display_name: 'Player One',
   avatar_url: null,
   created_at: '2026-07-24T06:00:00.000Z',
   updated_at: '2026-07-24T06:00:00.000Z',
 };
 
-function accountClient(isAnonymous: boolean) {
+function accountClient(options: {
+  anonymous?: boolean;
+  userId?: string;
+  session?: boolean;
+  verificationError?: Error;
+}) {
+  const id = options.userId ?? userId;
+  const anonymous = options.anonymous ?? false;
+  let currentUser: {
+    id: string;
+    is_anonymous: boolean;
+    email?: string;
+  } | null =
+    options.session === false
+      ? null
+      : {
+          id,
+          is_anonymous: anonymous,
+          email: anonymous ? undefined : 'player@example.test',
+        };
+  let listener:
+    ((event: AuthChangeEvent, session: Session | null) => void) | undefined;
   const query = {
     select: vi.fn(() => query),
     eq: vi.fn(() => query),
-    maybeSingle: vi.fn(async () => ({ data: profileRow, error: null })),
+    maybeSingle: vi.fn(async () => ({
+      data: currentUser ? { ...profileRow, user_id: currentUser.id } : null,
+      error: null,
+    })),
   };
-  return {
-    auth: {
-      getSession: vi.fn(async () => ({
-        data: { session: { user: { id: userId } } },
-        error: null,
-      })),
-      getUser: vi.fn(async () => ({
-        data: { user: { id: userId, is_anonymous: isAnonymous } },
-        error: null,
-      })),
-      getClaims: vi.fn(async () => ({
-        data: {
-          claims: { sub: userId, is_anonymous: isAnonymous },
-        },
-        error: null,
-      })),
-      refreshSession: vi.fn(),
-    },
+  const auth = {
+    getSession: vi.fn(async () => ({
+      data: {
+        session: currentUser
+          ? {
+              access_token: 'current-token',
+              user: currentUser,
+            }
+          : null,
+      },
+      error: null,
+    })),
+    getUser: vi.fn(async () =>
+      options.verificationError
+        ? { data: { user: null }, error: options.verificationError }
+        : { data: { user: currentUser }, error: null },
+    ),
+    getClaims: vi.fn(async () => ({
+      data: currentUser
+        ? {
+            claims: {
+              sub: currentUser.id,
+              is_anonymous: currentUser.is_anonymous,
+            },
+          }
+        : null,
+      error: null,
+    })),
+    refreshSession: vi.fn(),
+    onAuthStateChange: vi.fn(
+      (next: (event: AuthChangeEvent, session: Session | null) => void) => {
+        listener = next;
+        return {
+          data: { subscription: { unsubscribe: vi.fn() } },
+        };
+      },
+    ),
+  };
+  const client = {
+    auth,
     from: vi.fn(() => query),
+  } as unknown as SupabaseClient<Database>;
+  return {
+    auth,
+    client,
+    emit(event: AuthChangeEvent) {
+      listener?.(
+        event,
+        currentUser
+          ? ({
+              access_token: 'current-token',
+              user: currentUser,
+            } as Session)
+          : null,
+      );
+    },
+    setUser(
+      next: { id: string; is_anonymous: boolean; email?: string } | null,
+    ) {
+      currentUser = next;
+    },
   };
 }
 
-describe('account state', () => {
-  it('distinguishes an authenticated anonymous user', async () => {
-    const client = accountClient(true);
-    await expect(
-      deriveAccountState(client as unknown as SupabaseClient<Database>),
-    ).resolves.toMatchObject({
-      status: 'authenticated',
-      userId,
-      isAnonymous: true,
-    });
-  });
-
-  it('distinguishes an authenticated permanent user', async () => {
-    const client = accountClient(false);
-    await expect(
-      deriveAccountState(client as unknown as SupabaseClient<Database>),
-    ).resolves.toMatchObject({
-      status: 'authenticated',
-      userId,
-      isAnonymous: false,
-    });
-  });
-
-  it('represents a missing Auth user as unavailable without signing out', async () => {
-    const signOut = vi.fn();
-    const getUser = vi.fn();
-    const client = {
-      auth: {
-        getSession: vi.fn(async () => ({
-          data: { session: null },
-          error: null,
-        })),
-        getUser,
-        signOut,
+describe('protected account state', () => {
+  it('publishes registered-ready only after user, session, claims, and profile agree', async () => {
+    const fixture = accountClient({});
+    await expect(deriveAccountState(fixture.client)).resolves.toMatchObject({
+      status: 'registered-ready',
+      account: {
+        userId,
+        email: 'player@example.test',
+        profile: { displayName: 'Player One' },
       },
-    } as unknown as SupabaseClient<Database>;
-
-    await expect(deriveAccountState(client)).resolves.toEqual({
-      status: 'unavailable',
     });
-    expect(getUser).not.toHaveBeenCalled();
-    expect(signOut).not.toHaveBeenCalled();
   });
 
-  it('represents non-session Auth failures as sanitized errors', async () => {
-    const client = {
-      auth: {
-        getSession: vi.fn(async () => ({
-          data: { session: { user: { id: userId } } },
-          error: null,
-        })),
-        getUser: vi.fn(async () => ({
-          data: { user: null },
-          error: new Error('network endpoint and private response details'),
-        })),
-        getClaims: vi.fn(),
-      },
-    } as unknown as SupabaseClient<Database>;
+  it('keeps signed-out and legacy anonymous states explicit', async () => {
+    const signedOut = accountClient({ session: false });
+    await expect(deriveAccountState(signedOut.client)).resolves.toEqual({
+      status: 'signed-out',
+    });
+    expect(signedOut.auth.getUser).not.toHaveBeenCalled();
 
-    await expect(deriveAccountState(client)).resolves.toEqual({
+    const anonymous = accountClient({ anonymous: true });
+    await expect(deriveAccountState(anonymous.client)).resolves.toMatchObject({
+      status: 'legacy-anonymous',
+      user: { id: userId, is_anonymous: true },
+    });
+  });
+
+  it('uses a retryable error for verification failures, never signed-out', async () => {
+    const fixture = accountClient({
+      verificationError: new Error('private network detail'),
+    });
+    await expect(deriveAccountState(fixture.client)).resolves.toEqual({
       status: 'error',
       message: 'Your account session could not be verified. Please try again.',
     });
   });
 
-  it('sanitizes profile load failures in account state', async () => {
-    const query = {
-      select: vi.fn(() => query),
-      eq: vi.fn(() => query),
-      maybeSingle: vi.fn(async () => ({
-        data: null,
-        error: new Error('private database detail'),
-      })),
+  it('does not mutate a missing profile while account verification is checking', async () => {
+    const fixture = accountClient({});
+    const query = fixture.client.from('profiles') as unknown as {
+      maybeSingle: ReturnType<typeof vi.fn>;
     };
-    const client = {
-      auth: {
-        getSession: vi.fn(async () => ({
-          data: { session: { user: { id: userId } } },
-          error: null,
-        })),
-        getUser: vi.fn(async () => ({
-          data: { user: { id: userId, is_anonymous: true } },
-          error: null,
-        })),
-        getClaims: vi.fn(async () => ({
-          data: { claims: { sub: userId, is_anonymous: true } },
-          error: null,
-        })),
-      },
-      from: vi.fn(() => query),
-    } as unknown as SupabaseClient<Database>;
+    query.maybeSingle.mockResolvedValue({ data: null, error: null });
+    const rpc = vi.fn();
+    (fixture.client as unknown as { rpc: typeof rpc }).rpc = rpc;
 
-    await expect(deriveAccountState(client)).resolves.toEqual({
+    await expect(deriveAccountState(fixture.client)).resolves.toMatchObject({
       status: 'error',
-      message: 'Profile request failed.',
     });
+    expect(rpc).not.toHaveBeenCalled();
   });
 
-  it('recovers a missing profile before publishing authenticated state', async () => {
-    const query = {
-      select: vi.fn(() => query),
-      eq: vi.fn(() => query),
-      maybeSingle: vi.fn(async () => ({ data: null, error: null })),
-    };
-    const rpc = vi.fn(async () => ({ data: profileRow, error: null }));
-    const client = {
-      auth: {
-        getSession: vi.fn(async () => ({
-          data: { session: { user: { id: userId } } },
-          error: null,
-        })),
-        getUser: vi.fn(async () => ({
-          data: { user: { id: userId, is_anonymous: true } },
-          error: null,
-        })),
-        getClaims: vi.fn(async () => ({
-          data: { claims: { sub: userId, is_anonymous: true } },
-          error: null,
-        })),
-      },
-      from: vi.fn(() => query),
-      rpc,
-    } as unknown as SupabaseClient<Database>;
-
-    await expect(deriveAccountState(client)).resolves.toMatchObject({
-      status: 'authenticated',
-      userId,
-    });
-    expect(rpc).toHaveBeenCalledWith('ensure_own_profile');
-  });
-
-  it('reacts to Auth changes, avoids duplicate initial loads, and cleans up', async () => {
-    let authListener:
-      | ((event: 'INITIAL_SESSION' | 'SIGNED_OUT', session: unknown) => void)
-      | undefined;
-    const unsubscribe = vi.fn();
-    const base = accountClient(true);
-    const client = {
-      ...base,
-      auth: {
-        ...base.auth,
-        onAuthStateChange: vi.fn((listener) => {
-          authListener = listener;
-          return { data: { subscription: { unsubscribe } } };
-        }),
-      },
-    } as unknown as SupabaseClient<Database>;
-    const states: AccountState[] = [];
-
-    const cleanup = observeAccountState(client, (state) => states.push(state));
-    authListener?.('INITIAL_SESSION', { user: { id: userId } });
-    await vi.waitFor(() => {
-      expect(states.at(-1)?.status).toBe('authenticated');
-    });
-    expect(base.auth.getUser).toHaveBeenCalledTimes(1);
-
-    authListener?.('SIGNED_OUT', null);
-    expect(states.at(-1)).toEqual({ status: 'unavailable' });
-    cleanup();
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not publish a stale authenticated state after sign-out', async () => {
-    let resolveUser:
-      | ((value: {
-          data: {
-            user: { id: string; is_anonymous: boolean };
-          };
-          error: null;
-        }) => void)
-      | undefined;
-    const getUser = vi.fn(
-      () =>
-        new Promise<{
-          data: {
-            user: { id: string; is_anonymous: boolean };
-          };
-          error: null;
-        }>((resolve) => {
-          resolveUser = resolve;
-        }),
+  it('publishes signed-out immediately and cannot restore stale readiness', async () => {
+    const fixture = accountClient({});
+    const controller = new AccountController(fixture.client);
+    const states: ProtectedAccountState[] = [];
+    controller.subscribe((state) => states.push(state));
+    await vi.waitFor(() =>
+      expect(states.at(-1)?.status).toBe('registered-ready'),
     );
-    let authListener:
-      ((event: 'SIGNED_OUT', session: null) => void) | undefined;
-    const client = {
-      auth: {
-        getSession: vi.fn(async () => ({
-          data: { session: { user: { id: userId } } },
-          error: null,
-        })),
-        getUser,
-        getClaims: vi.fn(async () => ({
-          data: { claims: { sub: userId, is_anonymous: true } },
-          error: null,
-        })),
-        onAuthStateChange: vi.fn((listener) => {
-          authListener = listener;
-          return {
-            data: { subscription: { unsubscribe: vi.fn() } },
-          };
-        }),
-      },
-    } as unknown as SupabaseClient<Database>;
-    const states: AccountState[] = [];
 
-    observeAccountState(client, (state) => states.push(state));
-    authListener?.('SIGNED_OUT', null);
-    resolveUser?.({
-      data: { user: { id: userId, is_anonymous: true } },
-      error: null,
+    fixture.setUser(null);
+    fixture.emit('SIGNED_OUT');
+    expect(states.at(-1)).toEqual({ status: 'signed-out' });
+  });
+
+  it('preserves registered readiness during same-user background verification', async () => {
+    const fixture = accountClient({});
+    const controller = new AccountController(fixture.client);
+    const states: ProtectedAccountState[] = [];
+    controller.subscribe((state) => states.push(state));
+    await vi.waitFor(() =>
+      expect(states.at(-1)?.status).toBe('registered-ready'),
+    );
+
+    const transitionCount = states.length;
+    fixture.emit('TOKEN_REFRESHED');
+    expect(states.at(-1)?.status).toBe('registered-ready');
+    await vi.waitFor(() =>
+      expect(fixture.auth.getUser).toHaveBeenCalledTimes(2),
+    );
+    expect(states.slice(transitionCount)).not.toContainEqual({
+      status: 'checking',
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    expect(states).toHaveLength(transitionCount);
+  });
 
-    expect(states.at(-1)).toEqual({ status: 'unavailable' });
+  it('invalidates a different-user transition before publishing the new account', async () => {
+    const fixture = accountClient({});
+    const controller = new AccountController(fixture.client);
+    const states: ProtectedAccountState[] = [];
+    controller.subscribe((state) => states.push(state));
+    await vi.waitFor(() =>
+      expect(states.at(-1)?.status).toBe('registered-ready'),
+    );
+
+    fixture.setUser({
+      id: otherUserId,
+      is_anonymous: false,
+      email: 'other@example.test',
+    });
+    fixture.emit('SIGNED_IN');
+    expect(states.at(-1)).toEqual({ status: 'checking' });
+    await vi.waitFor(() =>
+      expect(states.at(-1)).toMatchObject({
+        status: 'registered-ready',
+        account: { userId: otherUserId },
+      }),
+    );
+  });
+
+  it('fails closed for unknown account states', () => {
+    expect(safeProtectedAccountState({ status: 'future-ready' })).toEqual({
+      status: 'error',
+      message: 'Your account state could not be verified. Please try again.',
+    });
   });
 });

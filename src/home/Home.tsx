@@ -1,7 +1,24 @@
 import { BRAND } from '../branding';
 import { AccountControl } from '../auth/AccountControl';
+import type { MouseEvent } from 'react';
 
-export function Home() {
+export function Home({ onNavigate }: { onNavigate?: (path: string) => void }) {
+  const navigate = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (
+      !onNavigate ||
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    event.preventDefault();
+    onNavigate(event.currentTarget.pathname);
+  };
+
   return (
     <main className="home-shell">
       <AccountControl />
@@ -22,7 +39,7 @@ export function Home() {
                 local hot-seat games.
               </p>
             </div>
-            <a className="mode-action" href="/local">
+            <a className="mode-action" href="/local" onClick={navigate}>
               Single Player
             </a>
           </article>
@@ -33,7 +50,7 @@ export function Home() {
               <h2>Multiplayer</h2>
               <p>Create or join a private room for 2–5 human players.</p>
             </div>
-            <a className="mode-action" href="/multiplayer">
+            <a className="mode-action" href="/multiplayer" onClick={navigate}>
               Multiplayer
             </a>
           </article>

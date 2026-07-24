@@ -6,10 +6,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react';
-import {
-  getSupabaseClient,
-  readMultiplayerConfiguration,
-} from '../multiplayer/supabaseClient';
+import { getSupabaseClient } from '../multiplayer/supabaseClient';
 import { accountCapabilities } from './accountCapabilities';
 import {
   AuthFlowError,
@@ -22,7 +19,8 @@ import {
   signInWithEmail,
   signOutRegisteredAccount,
 } from './authFlow';
-import { observeAccountState, type AccountState } from './accountState';
+import type { AccountState, RegisteredAccount } from './accountState';
+import { useAccount } from './accountContext';
 import { profileInitials } from './guestName';
 import { updateCurrentProfile } from './profileApi';
 import type { UserProfile } from './profileModel';
@@ -41,6 +39,26 @@ type FormStatus =
   | { kind: 'busy' }
   | { kind: 'success'; message: string }
   | { kind: 'error'; message: string; code?: AuthFlowError['code'] };
+
+function accountIdentity(account: AccountState) {
+  if (account.status === 'registered-ready') {
+    return {
+      isAnonymous: false,
+      userId: account.account.userId,
+      email: account.account.email,
+      profile: account.account.profile,
+    };
+  }
+  if (account.status === 'legacy-anonymous') {
+    return {
+      isAnonymous: true,
+      userId: account.user.id,
+      email: account.user.email ?? null,
+      profile: account.profile,
+    };
+  }
+  return null;
+}
 
 function Avatar({
   displayName,
@@ -106,13 +124,12 @@ export function AuthDialog({
   returnPath: string;
 }) {
   const client = useMemo(() => getSupabaseClient(), []);
+  const identity = accountIdentity(account);
   const dialogRef = useRef<HTMLElement>(null);
   const [displayName, setDisplayName] = useState(
-    account.status === 'authenticated' ? account.profile.displayName : '',
+    identity?.profile.displayName ?? '',
   );
-  const [avatarUrl, setAvatarUrl] = useState(
-    account.status === 'authenticated' ? (account.profile.avatarUrl ?? '') : '',
-  );
+  const [avatarUrl, setAvatarUrl] = useState(identity?.profile.avatarUrl ?? '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -163,7 +180,7 @@ export function AuthDialog({
         return;
       }
       if (view === 'guest-upgrade') {
-        if (account.status !== 'authenticated' || !account.isAnonymous) {
+        if (!identity?.isAnonymous) {
           throw new AuthFlowError(
             'account_required',
             'The guest session is no longer available.',
@@ -171,7 +188,7 @@ export function AuthDialog({
         }
         await initiateGuestEmailUpgrade(client, {
           email,
-          expectedUserId: account.userId,
+          expectedUserId: identity.userId,
           returnPath,
         });
         setStatus({
@@ -196,7 +213,7 @@ export function AuthDialog({
         return;
       }
       if (view === 'edit-profile') {
-        if (account.status !== 'authenticated' || account.isAnonymous) {
+        if (!identity || identity.isAnonymous) {
           throw new AuthFlowError(
             'account_required',
             'Create an account to customize your profile.',
@@ -401,15 +418,9 @@ export function AuthDialog({
   );
 }
 
-export function AccountControl() {
-  const configured = readMultiplayerConfiguration() !== null;
-  const client = useMemo(
-    () => (configured ? getSupabaseClient() : null),
-    [configured],
-  );
-  const [account, setAccount] = useState<AccountState>(
-    client ? { status: 'loading' } : { status: 'unavailable' },
-  );
+export function AccountControl({ compact = false }: { compact?: boolean }) {
+  const { client, controller, state: account } = useAccount();
+  const identity = accountIdentity(account);
   const [dialog, setDialog] = useState<DialogView | null>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [returnPath] = useState(() => {
@@ -419,14 +430,10 @@ export function AccountControl() {
   });
 
   useEffect(() => {
-    if (!client) return;
-    return observeAccountState(client, setAccount);
-  }, [client]);
-
-  useEffect(() => {
     if (
-      account.status !== 'authenticated' &&
-      account.status !== 'unavailable'
+      account.status !== 'registered-ready' &&
+      account.status !== 'legacy-anonymous' &&
+      account.status !== 'signed-out'
     ) {
       return;
     }
@@ -434,9 +441,7 @@ export function AccountControl() {
     if (params.get('account') !== 'create') return;
     const timer = window.setTimeout(() => {
       setDialog(
-        account.status === 'authenticated' && account.isAnonymous
-          ? 'guest-upgrade'
-          : 'register',
+        account.status === 'legacy-anonymous' ? 'guest-upgrade' : 'register',
       );
     }, 0);
     params.delete('account');
@@ -463,39 +468,49 @@ export function AccountControl() {
   };
 
   return (
-    <aside className="account-control" aria-label="Account">
-      {account.status === 'loading' && <span>Checking account…</span>}
+    <aside
+      className={`account-control${compact ? ' account-control-compact' : ''}`}
+      aria-label="Account"
+    >
+      {account.status === 'checking' && <span>Checking account…</span>}
       {account.status === 'error' && (
-        <span role="alert">{account.message}</span>
+        <div className="account-actions">
+          <span role="alert">{account.message}</span>
+          {controller && (
+            <button type="button" onClick={() => void controller.retry()}>
+              Retry
+            </button>
+          )}
+        </div>
       )}
-      {account.status === 'unavailable' && (
+      {account.status === 'signed-out' && (
         <div className="account-actions">
           <button type="button" onClick={() => open('sign-in')}>
             Account
           </button>
         </div>
       )}
-      {account.status === 'authenticated' && (
+      {identity && (
         <div className="account-summary">
-          {!account.isAnonymous && (
+          {!identity.isAnonymous && (
             <Avatar
-              displayName={account.profile.displayName}
-              avatarUrl={account.profile.avatarUrl}
+              displayName={identity.profile.displayName}
+              avatarUrl={identity.profile.avatarUrl}
             />
           )}
           <div className="account-identity">
             <strong>
-              {account.isAnonymous
+              {identity.isAnonymous
                 ? 'Finish account setup'
-                : account.profile.displayName}
+                : identity.profile.displayName}
             </strong>
             <span>
-              {account.isAnonymous
+              {identity.isAnonymous
                 ? 'Required for gameplay'
-                : (account.email ?? 'Registered account')}
+                : (identity.email ?? 'Registered account')}
             </span>
           </div>
-          {account.isAnonymous ? (
+          {identity.isAnonymous ? (
             <div className="account-actions">
               <button type="button" onClick={() => open('guest-upgrade')}>
                 Finish account setup
@@ -509,11 +524,13 @@ export function AccountControl() {
             </div>
           ) : (
             <div className="account-actions">
-              {accountCapabilities(account.isAnonymous).canCustomizeProfile && (
-                <button type="button" onClick={() => open('edit-profile')}>
-                  Edit profile
-                </button>
-              )}
+              {!compact &&
+                accountCapabilities(identity.isAnonymous)
+                  .canCustomizeProfile && (
+                  <button type="button" onClick={() => open('edit-profile')}>
+                    Edit profile
+                  </button>
+                )}
               <button
                 type="button"
                 onClick={() => {
@@ -534,18 +551,12 @@ export function AccountControl() {
       {signOutError && <span role="alert">{signOutError}</span>}
       {dialog && (
         <AuthDialog
-          key={`${dialog}:${account.status === 'authenticated' ? account.userId : 'signed-out'}`}
+          key={`${dialog}:${identity?.userId ?? 'signed-out'}`}
           view={dialog}
           account={account}
           onClose={() => setDialog(null)}
           onView={setDialog}
-          onProfileUpdated={(profile) =>
-            setAccount((current) =>
-              current.status === 'authenticated'
-                ? { ...current, profile }
-                : current,
-            )
-          }
+          onProfileUpdated={(profile) => controller?.updateProfile(profile)}
           returnPath={returnPath}
         />
       )}
@@ -558,16 +569,10 @@ export function AccountRequiredGate({
   load,
 }: {
   returnPath: string;
-  load: (userId: string) => Promise<ReactNode>;
+  load: (account: RegisteredAccount) => Promise<ReactNode>;
 }) {
-  const configured = readMultiplayerConfiguration() !== null;
-  const client = useMemo(
-    () => (configured ? getSupabaseClient() : null),
-    [configured],
-  );
-  const [account, setAccount] = useState<AccountState>(
-    client ? { status: 'loading' } : { status: 'unavailable' },
-  );
+  const { client, controller, state: account } = useAccount();
+  const identity = accountIdentity(account);
   const [dialog, setDialog] = useState<DialogView | null | undefined>(
     undefined,
   );
@@ -582,19 +587,14 @@ export function AccountRequiredGate({
   );
 
   useEffect(() => {
-    if (!client) return;
-    return observeAccountState(client, setAccount);
-  }, [client]);
-
-  useEffect(() => {
-    if (account.status !== 'authenticated' || account.isAnonymous) {
+    if (account.status !== 'registered-ready') {
       return;
     }
     let active = true;
-    void load(account.userId)
+    void load(account.account)
       .then((loaded) => {
         if (active) {
-          setApplication({ userId: account.userId, node: loaded });
+          setApplication({ userId: account.account.userId, node: loaded });
         }
       })
       .catch(() => {
@@ -609,45 +609,63 @@ export function AccountRequiredGate({
 
   const visibleDialog =
     dialog === undefined
-      ? client && account.status === 'unavailable'
+      ? client && account.status === 'signed-out'
         ? 'sign-in'
-        : account.status === 'authenticated' && account.isAnonymous
+        : account.status === 'legacy-anonymous'
           ? 'guest-upgrade'
           : null
       : dialog;
 
   if (
-    account.status === 'authenticated' &&
-    !account.isAnonymous &&
-    application?.userId === account.userId
+    account.status === 'registered-ready' &&
+    application?.userId === account.account.userId
   ) {
-    return application.node;
+    return (
+      <div className="protected-route-shell">
+        <AccountControl compact />
+        {application.node}
+      </div>
+    );
   }
 
-  const title =
-    account.status === 'authenticated' && account.isAnonymous
-      ? 'Finish creating your account to continue'
-      : account.status === 'error'
-        ? 'Account session unavailable'
-        : 'Account required';
-  const message =
-    account.status === 'loading'
-      ? 'Checking your account…'
-      : account.status === 'authenticated' && account.isAnonymous
-        ? 'Keep this identity by attaching and verifying an email before entering gameplay.'
-        : account.status === 'error'
-          ? account.message
-          : client
-            ? 'Sign in or create an account to continue.'
-            : 'Account configuration is unavailable.';
+  let title: string;
+  let message: string;
+  switch (account.status) {
+    case 'checking':
+      title = 'Checking your account…';
+      message = 'Verifying your registered session.';
+      break;
+    case 'signed-out':
+      title = 'Account required';
+      message = 'Sign in or create an account to continue.';
+      break;
+    case 'legacy-anonymous':
+      title = 'Finish creating your account to continue';
+      message =
+        'Keep this identity by attaching and verifying an email before entering gameplay.';
+      break;
+    case 'registered-ready':
+      title = loadError ? 'Game unavailable' : 'Loading game…';
+      message =
+        loadError ?? 'Your registered account is ready. Loading gameplay.';
+      break;
+    case 'error':
+      title = 'Account session problem';
+      message = account.message;
+      break;
+    default:
+      title = 'Account session problem';
+      message = 'Your account state could not be verified. Please try again.';
+  }
 
   return (
-    <main className="auth-route-shell">
+    <main className="auth-route-shell" data-account-state={account.status}>
+      {account.status === 'registered-ready' && <AccountControl compact />}
       <section className="auth-route-card" aria-live="polite">
         <span className="eyebrow">Fustify account</span>
         <h1>{title}</h1>
-        <p>{loadError ?? message}</p>
-        {client && account.status === 'unavailable' && (
+        <p>{message}</p>
+        {client && account.status === 'signed-out' && (
           <div className="account-actions">
             <button type="button" onClick={() => setDialog('sign-in')}>
               Sign in
@@ -660,7 +678,7 @@ export function AccountRequiredGate({
             </button>
           </div>
         )}
-        {account.status === 'authenticated' && account.isAnonymous && (
+        {account.status === 'legacy-anonymous' && (
           <div className="account-actions">
             <button type="button" onClick={() => setDialog('guest-upgrade')}>
               Finish creating account
@@ -673,22 +691,23 @@ export function AccountRequiredGate({
             </button>
           </div>
         )}
+        {account.status === 'error' && controller && (
+          <div className="account-actions">
+            <button type="button" onClick={() => void controller.retry()}>
+              Retry session verification
+            </button>
+          </div>
+        )}
         <a href="/">Return home</a>
       </section>
       {visibleDialog && (
         <AuthDialog
-          key={`${visibleDialog}:${account.status === 'authenticated' ? account.userId : 'signed-out'}`}
+          key={`${visibleDialog}:${identity?.userId ?? 'signed-out'}`}
           view={visibleDialog}
           account={account}
           onClose={() => setDialog(null)}
           onView={setDialog}
-          onProfileUpdated={(profile) =>
-            setAccount((current) =>
-              current.status === 'authenticated'
-                ? { ...current, profile }
-                : current,
-            )
-          }
+          onProfileUpdated={(profile) => controller?.updateProfile(profile)}
           returnPath={safeReturnPath}
         />
       )}

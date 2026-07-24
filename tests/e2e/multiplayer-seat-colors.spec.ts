@@ -6,7 +6,7 @@ async function openEntry(context: BrowserContext, displayName: string) {
   await expect(
     page.getByRole('heading', { name: 'Private multiplayer rooms' }),
   ).toBeVisible();
-  await page.getByLabel('Display name').fill(displayName);
+  await page.getByLabel('Room display name').fill(displayName);
   return page;
 }
 

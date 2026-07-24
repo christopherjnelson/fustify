@@ -7,6 +7,9 @@ type AuthFixture =
   | 'guest'
   | 'registered'
   | 'stale-registered'
+  | 'slow-registered'
+  | 'slow-signed-out'
+  | 'verification-error'
   | 'callback'
   | 'recovery';
 
@@ -18,6 +21,9 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
       const testState: {
         calls: typeof calls;
         releaseRefresh?: () => void;
+        releaseVerification?: () => void;
+        invalidateSession?: (emit: boolean) => void;
+        rejectRoomActions?: boolean;
       } = { calls };
       const listeners: Array<(event: string, session: unknown) => void> = [];
       let profile = {
@@ -32,7 +38,7 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
         window.sessionStorage.getItem('fustify-auth-test-signed-out') === '1';
       let user =
         explicitlySignedOut ||
-        (fixtureName === 'signed-out' &&
+        ((fixtureName === 'signed-out' || fixtureName === 'slow-signed-out') &&
           window.sessionStorage.getItem('fustify-auth-test-registered') !== '1')
           ? null
           : {
@@ -48,10 +54,26 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
             };
       let tokenIsAnonymous =
         fixtureName === 'guest' || fixtureName === 'stale-registered';
+      let verificationReleased = !fixtureName.startsWith('slow-');
+      let releaseVerification: (() => void) | undefined;
+      const verificationBarrier = new Promise<void>((resolve) => {
+        releaseVerification = () => {
+          verificationReleased = true;
+          resolve();
+        };
+      });
+      testState.releaseVerification = releaseVerification;
+      testState.invalidateSession = (emit) => {
+        user = null;
+        tokenIsAnonymous = false;
+        window.sessionStorage.setItem('fustify-auth-test-signed-out', '1');
+        if (emit) listeners.forEach((listener) => listener('SIGNED_OUT', null));
+      };
 
       const auth = {
         getSession: async () => {
           calls.push({ method: 'getSession' });
+          if (!verificationReleased) await verificationBarrier;
           return {
             data: {
               session: user
@@ -71,6 +93,12 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
         },
         getUser: async () => {
           calls.push({ method: 'getUser' });
+          if (fixtureName === 'verification-error') {
+            return {
+              data: { user: null },
+              error: new Error('simulated Auth service failure'),
+            };
+          }
           return user
             ? { data: { user }, error: null }
             : {
@@ -123,6 +151,7 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
         onAuthStateChange: (
           listener: (event: string, session: unknown) => void,
         ) => {
+          calls.push({ method: 'onAuthStateChange' });
           listeners.push(listener);
           return {
             data: {
@@ -226,6 +255,15 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
         from: () => query,
         rpc: async (method: string, payload?: Record<string, string>) => {
           calls.push({ method, payload });
+          if (
+            testState.rejectRoomActions &&
+            (method === 'create_room' || method === 'join_room')
+          ) {
+            return {
+              data: null,
+              error: { code: 'P0001', message: 'account_required' },
+            };
+          }
           if (method === 'update_own_profile' && payload) {
             profile = {
               ...profile,
@@ -234,7 +272,24 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
               updated_at: '2026-07-24T09:00:00.000Z',
             };
           }
+          if (method === 'create_room' || method === 'join_room') {
+            return {
+              data: {
+                id: '30000000-0000-4000-8000-000000000003',
+                join_code: 'TEST-ROOM',
+              },
+              error: null,
+            };
+          }
           return { data: profile, error: null };
+        },
+        channel: (...payload: unknown[]) => {
+          calls.push({ method: 'channel', payload });
+          return {
+            on: () => client.channel(...payload),
+            subscribe: () => client.channel(...payload),
+            unsubscribe: async () => undefined,
+          };
         },
       };
       Object.defineProperty(window, '__FUSTIFY_AUTH_TEST_CLIENT__', {
@@ -268,6 +323,42 @@ async function called(page: Page, method: string) {
     );
     return Array.from({ length: persisted }, () => ({ method: expected }));
   }, method);
+}
+
+async function protectedResources(page: Page) {
+  return page.evaluate(() =>
+    performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .filter(
+        (name) =>
+          name.includes('/app/App') ||
+          name.includes('MultiplayerApp') ||
+          name.includes('three'),
+      ),
+  );
+}
+
+async function releaseVerification(page: Page) {
+  await page.evaluate(() => {
+    (
+      window as typeof window & {
+        __FUSTIFY_AUTH_TEST_STATE__: { releaseVerification?: () => void };
+      }
+    ).__FUSTIFY_AUTH_TEST_STATE__.releaseVerification?.();
+  });
+}
+
+async function invalidateFixtureSession(page: Page, emit: boolean) {
+  await page.evaluate((shouldEmit) => {
+    (
+      window as typeof window & {
+        __FUSTIFY_AUTH_TEST_STATE__: {
+          invalidateSession?: (emit: boolean) => void;
+        };
+      }
+    ).__FUSTIFY_AUTH_TEST_STATE__.invalidateSession?.(shouldEmit);
+  }, emit);
 }
 
 async function capture(page: Page, projectName: string, name: string) {
@@ -395,9 +486,206 @@ test('registered account can edit its profile and sign out', async ({
   expect(await called(page, 'signInAnonymously')).toHaveLength(0);
 });
 
-test('signed-out gameplay choices and direct protected URLs authenticate before loading gameplay', async ({
+test('registered home-to-multiplayer navigation keeps one ready account without a signed-out frame', async ({
+  page,
+}, testInfo) => {
+  await installAuthFixture(page, 'registered');
+  await page.goto('/');
+  await expect(page.getByText('player@example.test')).toBeVisible();
+  const listenerCount = (await called(page, 'onAuthStateChange')).length;
+  const sessionCheckCount = (await called(page, 'getSession')).length;
+  await page.evaluate(() => {
+    const headings: string[] = [];
+    const record = () => {
+      document.querySelectorAll('h1').forEach((heading) => {
+        if (heading.textContent) headings.push(heading.textContent);
+      });
+    };
+    new MutationObserver(record).observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+    Object.defineProperty(window, '__FUSTIFY_HEADING_TRACE__', {
+      configurable: true,
+      value: headings,
+    });
+  });
+
+  await page.getByRole('link', { name: 'Multiplayer' }).click();
+  await expect(page).toHaveURL(/\/multiplayer$/);
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toBeVisible();
+  await expect(page.locator('.account-identity strong')).toHaveText(
+    'Player One',
+  );
+  await expect(page.getByLabel('Room display name')).toBeVisible();
+  await capture(page, testInfo.project.name, 'account-multiplayer-registered');
+
+  const headings = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __FUSTIFY_HEADING_TRACE__: string[];
+        }
+      ).__FUSTIFY_HEADING_TRACE__,
+  );
+  expect(headings).not.toContain('Account required');
+  expect(await called(page, 'onAuthStateChange')).toHaveLength(listenerCount);
+  expect(await called(page, 'getSession')).toHaveLength(sessionCheckCount);
+});
+
+test('slow verification renders only checking and does not import protected code', async ({
   page,
 }) => {
+  await installAuthFixture(page, 'slow-registered');
+  await page.goto('/multiplayer');
+  await expect(
+    page.getByRole('heading', { name: 'Checking your account…' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Account required' }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await protectedResources(page)).toEqual([]);
+  expect(await called(page, 'create_room')).toHaveLength(0);
+  expect(await called(page, 'join_room')).toHaveLength(0);
+  expect(await called(page, 'channel')).toHaveLength(0);
+
+  await releaseVerification(page);
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Account required' }),
+  ).toHaveCount(0);
+});
+
+test('direct signed-out navigation remains account-required with zero multiplayer bootstrap', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'slow-signed-out');
+  await page.goto('/multiplayer');
+  await expect(
+    page.getByRole('heading', { name: 'Checking your account…' }),
+  ).toBeVisible();
+  await releaseVerification(page);
+  await expect(
+    page.getByRole('heading', { name: 'Account required' }),
+  ).toBeVisible();
+  await page.waitForTimeout(100);
+  await expect(
+    page.getByRole('heading', { name: 'Account required' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toHaveCount(0);
+  expect(await protectedResources(page)).toEqual([]);
+  expect(await called(page, 'create_room')).toHaveLength(0);
+  expect(await called(page, 'join_room')).toHaveLength(0);
+  expect(await called(page, 'channel')).toHaveLength(0);
+});
+
+test('Auth verification errors render retry UI with zero multiplayer bootstrap', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'verification-error');
+  await page.goto('/multiplayer');
+  await expect(
+    page.getByRole('heading', { name: 'Account session problem' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Retry session verification' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Account required' }),
+  ).toHaveCount(0);
+  expect(await protectedResources(page)).toEqual([]);
+  expect(await called(page, 'create_room')).toHaveLength(0);
+  expect(await called(page, 'join_room')).toHaveLength(0);
+  expect(await called(page, 'channel')).toHaveLength(0);
+});
+
+test('session invalidation unmounts multiplayer and blocks room RPCs', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'registered');
+  await page.goto('/multiplayer');
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toBeVisible();
+
+  await invalidateFixtureSession(page, false);
+  await page.getByRole('button', { name: 'Create private room' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Account required' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toHaveCount(0);
+  expect(await called(page, 'create_room')).toHaveLength(0);
+  expect(await called(page, 'join_room')).toHaveLength(0);
+
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: 'Account required' }),
+  ).toBeVisible();
+  expect(await called(page, 'signInAnonymously')).toHaveLength(0);
+});
+
+test('a signed-out Auth event immediately invalidates every protected route consumer', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'registered');
+  await page.goto('/multiplayer');
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toBeVisible();
+
+  await invalidateFixtureSession(page, true);
+  await expect(
+    page.getByRole('heading', { name: 'Account required' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toHaveCount(0);
+  expect(await called(page, 'create_room')).toHaveLength(0);
+  expect(await called(page, 'join_room')).toHaveLength(0);
+  expect(await called(page, 'channel')).toHaveLength(0);
+});
+
+test('account_required room rejection revalidates and fails closed without retry', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'registered');
+  await page.goto('/multiplayer');
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toBeVisible();
+  await page.evaluate(() => {
+    (
+      window as typeof window & {
+        __FUSTIFY_AUTH_TEST_STATE__: { rejectRoomActions?: boolean };
+      }
+    ).__FUSTIFY_AUTH_TEST_STATE__.rejectRoomActions = true;
+  });
+
+  await page.getByLabel('Room display name').fill('Room Alias');
+  await page.getByRole('button', { name: 'Create private room' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Account session problem' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toHaveCount(0);
+  expect(await called(page, 'create_room')).toHaveLength(1);
+  expect(await called(page, 'join_room')).toHaveLength(0);
+  expect(await called(page, 'channel')).toHaveLength(0);
+});
+
+test('signed-out gameplay choices and direct protected URLs authenticate before loading gameplay', async ({
+  page,
+}, testInfo) => {
   await installAuthFixture(page, 'signed-out');
   await page.goto('/');
   await page.getByRole('link', { name: 'Single Player' }).click();
@@ -418,6 +706,10 @@ test('signed-out gameplay choices and direct protected URLs authenticate before 
   await expect(
     page.getByRole('heading', { name: 'Choose your world' }),
   ).toBeVisible();
+  await expect(page.locator('.account-identity strong')).toHaveText(
+    'Player One',
+  );
+  await capture(page, testInfo.project.name, 'account-local-registered');
 
   await page.evaluate(() => {
     window.sessionStorage.removeItem('fustify-auth-test-registered');
@@ -462,6 +754,10 @@ test('legacy anonymous sessions cannot bypass a protected gameplay route', async
   await expect(
     page.getByRole('heading', { name: 'Choose your world' }),
   ).toHaveCount(0);
+  expect(await protectedResources(page)).toEqual([]);
+  expect(await called(page, 'create_room')).toHaveLength(0);
+  expect(await called(page, 'join_room')).toHaveLength(0);
+  expect(await called(page, 'channel')).toHaveLength(0);
 });
 
 test('stale upgraded sessions refresh once before loading protected gameplay', async ({

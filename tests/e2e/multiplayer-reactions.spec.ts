@@ -26,7 +26,7 @@ async function newPlayer(
   if (!existsSync(authStatePath)) {
     await context.storageState({ path: authStatePath });
   }
-  await page.getByLabel('Display name').fill(name);
+  await page.getByLabel('Room display name').fill(name);
   return page;
 }
 
