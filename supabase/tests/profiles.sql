@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(37);
+select extensions.plan(47);
 
 select extensions.ok(
   (
@@ -36,6 +36,14 @@ select extensions.hasnt_column(
   'profiles',
   'role',
   'profiles does not expose a role field'
+);
+select extensions.ok(
+  not has_function_privilege(
+    'authenticated',
+    'profile_private.current_user_is_registered()',
+    'EXECUTE'
+  ),
+  'registered-user helper is not exposed to browser roles'
 );
 select extensions.ok(
   exists (
@@ -76,8 +84,9 @@ select extensions.ok(
 insert into public.profiles (user_id, display_name)
 select
   users.id,
-  profile_private.derive_display_name(users.id, users.raw_user_meta_data)
+  profile_private.derive_guest_display_name(users.id)
 from auth.users as users
+where users.id = '90000000-0000-4000-8000-000000000001'
 on conflict (user_id) do nothing;
 select extensions.is(
   (
@@ -85,8 +94,10 @@ select extensions.is(
     from public.profiles
     where user_id = '90000000-0000-4000-8000-000000000001'
   ),
-  'Backfilled Guest',
-  'migration backfill creates a normalized profile for an existing auth user'
+  profile_private.derive_guest_display_name(
+    '90000000-0000-4000-8000-000000000001'
+  ),
+  'missing anonymous profile recovery uses the generated guest identity'
 );
 
 insert into auth.users (
@@ -141,8 +152,10 @@ select extensions.is(
     from public.profiles
     where user_id = '91000000-0000-4000-8000-000000000001'
   ),
-  'Guest 9100',
-  'anonymous user without metadata receives a stable short guest label'
+  profile_private.derive_guest_display_name(
+    '91000000-0000-4000-8000-000000000001'
+  ),
+  'anonymous user without metadata receives the stable friendly guest label'
 );
 select extensions.is(
   (
@@ -159,8 +172,78 @@ select extensions.is(
     from public.profiles
     where user_id = '93000000-0000-4000-8000-000000000003'
   ),
-  'Valid Fallback',
-  'invalid preferred metadata falls through to the next safe name'
+  profile_private.derive_guest_display_name(
+    '93000000-0000-4000-8000-000000000003'
+  ),
+  'anonymous user metadata cannot replace the generated guest identity'
+);
+select extensions.is(
+  profile_private.derive_guest_display_name(
+    '91000000-0000-4000-8000-000000000001'
+  ),
+  profile_private.derive_guest_display_name(
+    '91000000-0000-4000-8000-000000000001'
+  ),
+  'the same user ID always derives the same guest display name'
+);
+select extensions.ok(
+  (
+    select bool_and(
+      profile_private.derive_guest_display_name(test_id)
+        ~ '^[A-Z][a-z]+[A-Z][a-z]+-[0-9]{3}$'
+      and char_length(profile_private.derive_guest_display_name(test_id)) <= 40
+    )
+    from unnest(array[
+      '11000000-0000-4000-8000-000000000001'::uuid,
+      '22000000-0000-4000-8000-000000000002'::uuid,
+      '33000000-0000-4000-8000-000000000003'::uuid
+    ]) as ids(test_id)
+  ),
+  'different UUID fixtures derive valid readable generated names'
+);
+
+insert into auth.users (
+  id, aud, role, is_anonymous, raw_app_meta_data, raw_user_meta_data
+) values
+  (
+    '94000000-0000-4000-8000-000000000004',
+    'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb
+  ),
+  (
+    '95000000-0000-4000-8000-000000000005',
+    'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb
+  );
+update public.profiles
+set display_name =
+  'Guest ' || upper(substr(replace(user_id::text, '-', ''), 1, 4))
+where user_id = '94000000-0000-4000-8000-000000000004';
+update public.profiles
+set display_name = 'Custom Tester'
+where user_id = '95000000-0000-4000-8000-000000000005';
+update public.profiles as profiles
+set display_name = profile_private.derive_guest_display_name(profiles.user_id)
+from auth.users as users
+where users.id = profiles.user_id
+  and users.is_anonymous is true
+  and profiles.display_name =
+    'Guest ' || upper(substr(replace(profiles.user_id::text, '-', ''), 1, 4));
+select extensions.is(
+  (
+    select display_name from public.profiles
+    where user_id = '94000000-0000-4000-8000-000000000004'
+  ),
+  profile_private.derive_guest_display_name(
+    '94000000-0000-4000-8000-000000000004'
+  ),
+  'the old untouched Guest XXXX fallback is upgraded'
+);
+select extensions.is(
+  (
+    select display_name from public.profiles
+    where user_id = '95000000-0000-4000-8000-000000000005'
+  ),
+  'Custom Tester',
+  'guest-name backfill preserves custom profile names'
 );
 
 set local role anon;
@@ -178,16 +261,25 @@ select extensions.throws_ok(
 );
 
 reset role;
+update auth.users
+set raw_user_meta_data =
+  raw_user_meta_data || '{"is_registered":true,"is_admin":true}'::jsonb
+where id = '91000000-0000-4000-8000-000000000001';
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config(
   'request.jwt.claim.sub',
   '91000000-0000-4000-8000-000000000001',
   true
 );
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"91000000-0000-4000-8000-000000000001","is_anonymous":true}',
+  true
+);
 set local role authenticated;
 select extensions.is(
   (select count(*)::integer from public.profiles),
-  4,
+  6,
   'an authenticated anonymous user can read public profile rows'
 );
 select extensions.lives_ok(
@@ -203,12 +295,91 @@ select extensions.is(
   1,
   'trigger and ensure execution never duplicate a profile'
 );
+select extensions.throws_ok(
+  $$select public.update_own_profile('Player One', null)$$,
+  'P0001',
+  'account_required',
+  'anonymous users cannot customize their profile even with capability-shaped metadata'
+);
+
+create temporary table profile_upgrade_fixture (
+  room_id uuid primary key
+) on commit drop;
+grant all on profile_upgrade_fixture to authenticated;
+insert into profile_upgrade_fixture
+select id
+from public.create_room(
+  'Stable Guest Room',
+  'profile-upgrade-room',
+  12,
+  2,
+  'random',
+  2
+);
+
+reset role;
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"91000000-0000-4000-8000-000000000001"}',
+  true
+);
+set local role authenticated;
+select extensions.throws_ok(
+  $$select public.update_own_profile('Player One', null)$$,
+  'P0001',
+  'account_required',
+  'a missing anonymous claim fails closed'
+);
+
+reset role;
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"91000000-0000-4000-8000-000000000001","is_anonymous":"false"}',
+  true
+);
+set local role authenticated;
+select extensions.throws_ok(
+  $$select public.update_own_profile('Player One', null)$$,
+  'P0001',
+  'account_required',
+  'a malformed anonymous claim fails closed'
+);
+
+reset role;
+update auth.users
+set is_anonymous = false,
+    email = 'registered-profile-test@example.invalid',
+    raw_user_meta_data = raw_user_meta_data || '{"is_registered":true,"is_admin":true}'::jsonb
+where id = '91000000-0000-4000-8000-000000000001';
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"91000000-0000-4000-8000-000000000001","is_anonymous":false}',
+  true
+);
+set local role authenticated;
 select extensions.lives_ok(
   $$select public.update_own_profile(
     '  Player One  ',
     'https://cdn.example.com/avatar.png'
   )$$,
   'authenticated user can update safe fields through the controlled RPC'
+);
+select extensions.is(
+  (
+    select user_id from public.profiles
+    where user_id = '91000000-0000-4000-8000-000000000001'
+  ),
+  '91000000-0000-4000-8000-000000000001'::uuid,
+  'guest-to-email registration preserves the profile user ID'
+);
+select extensions.is(
+  (
+    select rooms.host_user_id
+    from public.rooms
+    join profile_upgrade_fixture on profile_upgrade_fixture.room_id = rooms.id
+  ),
+  '91000000-0000-4000-8000-000000000001'::uuid,
+  'guest-to-email registration preserves existing room ownership'
 );
 select extensions.is(
   (

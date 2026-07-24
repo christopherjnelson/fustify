@@ -12,6 +12,7 @@ const parameters = new URLSearchParams(window.location.search);
 const postMatchFixture = parameters.get('scenario') === 'multiplayer-game-over';
 const activityReactionFixture =
   parameters.get('scenario') === 'multiplayer-activity-reactions';
+const guestReactionFixture = parameters.get('reaction-account') === 'guest';
 
 applyScenario(
   postMatchFixture
@@ -34,6 +35,7 @@ const activityReactionSelections: Array<{
 const activityReactions: ActivityReactionController | undefined =
   activityReactionFixture
     ? {
+        canReact: !guestReactionFixture,
         summaries: Object.fromEntries(
           activityEvents.map((event, index) => [
             event.id,

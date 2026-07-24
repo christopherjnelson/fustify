@@ -11,6 +11,15 @@ export function isMultiplayerRoute(pathname: string): boolean {
   );
 }
 
+export function isAuthRoute(pathname: string): boolean {
+  return (
+    pathname === '/auth/callback' ||
+    pathname === '/auth/callback/' ||
+    pathname === '/auth/reset-password' ||
+    pathname === '/auth/reset-password/'
+  );
+}
+
 const LOCAL_SETUP_QUERY_KEYS = [
   'v',
   'seed',

@@ -148,3 +148,50 @@ test('multiplayer Activity reactions stay compact, contextual, and accessible', 
     fullPage: true,
   });
 });
+
+test('guest Activity reactions remain readable but expose only the account gate', async ({
+  page,
+}, testInfo) => {
+  await page.goto(
+    '/multiplayer/match/visual-match?visual-review=1&scenario=multiplayer-activity-reactions&reaction-account=guest',
+  );
+
+  const activity = page.getByRole('region', {
+    name: 'Activity',
+    exact: true,
+  });
+  await expect(activity).toBeVisible();
+  const rows = activity.locator('.event-log li');
+  await expect(rows).toHaveCount(8);
+  await expect(activity.getByRole('button', { name: /reaction/i })).toHaveCount(
+    0,
+  );
+  await expect(
+    activity.getByRole('link', { name: 'Create an account to react' }),
+  ).toHaveCount(8);
+  await expect(activity.locator('.event-reaction-readonly')).toHaveCount(10);
+  await expect(
+    activity.getByRole('button', { name: /^Focus / }).first(),
+  ).toBeVisible();
+  await expect(
+    activity.getByRole('link', { name: 'Create an account to react' }).first(),
+  ).toHaveAttribute(
+    'href',
+    /\/\?account=create&returnPath=%2Fmultiplayer%2Fmatch%2Fvisual-match/,
+  );
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __FUSTIFY_ACTIVITY_REACTION_SELECTIONS__?: unknown[];
+          }
+        ).__FUSTIFY_ACTIVITY_REACTION_SELECTIONS__?.length,
+    ),
+  ).toBe(0);
+
+  await page.screenshot({
+    path: reviewPath(testInfo, 'multiplayer-activity-reactions-guest'),
+    fullPage: true,
+  });
+});

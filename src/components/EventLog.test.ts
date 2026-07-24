@@ -163,6 +163,7 @@ describe('match event icons', () => {
 
 describe('multiplayer Activity reaction eligibility', () => {
   const reactions: ActivityReactionController = {
+    canReact: true,
     summaries: {},
     pendingEventIds: new Set(),
     errors: {},

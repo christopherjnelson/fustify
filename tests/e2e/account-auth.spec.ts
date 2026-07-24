@@ -1,0 +1,348 @@
+import { expect, test, type Page } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+
+type AuthFixture =
+  'signed-out' | 'guest' | 'registered' | 'callback' | 'recovery';
+
+async function installAuthFixture(page: Page, fixture: AuthFixture) {
+  await page.addInitScript(
+    ({ fixtureName }) => {
+      const userId = '10000000-0000-4000-8000-000000000001';
+      const calls: Array<{ method: string; payload?: unknown }> = [];
+      const listeners: Array<(event: string, session: unknown) => void> = [];
+      let profile = {
+        user_id: userId,
+        display_name:
+          fixtureName === 'guest' ? 'MistyBadger-482' : 'Player One',
+        avatar_url: null,
+        created_at: '2026-07-24T06:00:00.000Z',
+        updated_at: '2026-07-24T06:00:00.000Z',
+      };
+      let user =
+        fixtureName === 'signed-out'
+          ? null
+          : {
+              id: userId,
+              is_anonymous: fixtureName === 'guest',
+              email:
+                fixtureName === 'guest' ? undefined : 'player@example.test',
+              email_confirmed_at:
+                fixtureName === 'guest'
+                  ? undefined
+                  : '2026-07-24T08:00:00.000Z',
+              user_metadata: {},
+            };
+
+      const auth = {
+        getUser: async () =>
+          user
+            ? { data: { user }, error: null }
+            : {
+                data: { user: null },
+                error: {
+                  name: 'AuthSessionMissingError',
+                  message: 'Auth session missing',
+                },
+              },
+        onAuthStateChange: (
+          listener: (event: string, session: unknown) => void,
+        ) => {
+          listeners.push(listener);
+          return {
+            data: {
+              subscription: {
+                unsubscribe: () => {
+                  const index = listeners.indexOf(listener);
+                  if (index >= 0) listeners.splice(index, 1);
+                  calls.push({ method: 'unsubscribe' });
+                },
+              },
+            },
+          };
+        },
+        signUp: async (payload: unknown) => {
+          calls.push({ method: 'signUp', payload });
+          return { data: { user: null, session: null }, error: null };
+        },
+        signInWithPassword: async (payload: unknown) => {
+          calls.push({ method: 'signInWithPassword', payload });
+          user = {
+            id: userId,
+            is_anonymous: false,
+            email: 'player@example.test',
+            email_confirmed_at: '2026-07-24T08:00:00.000Z',
+            user_metadata: {},
+          };
+          listeners.forEach((listener) => listener('SIGNED_IN', { user }));
+          return { data: { user, session: { user } }, error: null };
+        },
+        signInAnonymously: async () => {
+          calls.push({ method: 'signInAnonymously' });
+          throw new Error('home must not create an anonymous user');
+        },
+        updateUser: async (payload: Record<string, string>) => {
+          calls.push({ method: 'updateUser', payload });
+          if (payload.email) return { data: { user }, error: null };
+          return { data: { user }, error: null };
+        },
+        resetPasswordForEmail: async (email: string, options: unknown) => {
+          calls.push({
+            method: 'resetPasswordForEmail',
+            payload: { email, options },
+          });
+          return { data: {}, error: null };
+        },
+        exchangeCodeForSession: async (code: string) => {
+          calls.push({ method: 'exchangeCodeForSession', payload: { code } });
+          window.sessionStorage.setItem(
+            'fustify-auth-test-exchange-count',
+            String(
+              Number(
+                window.sessionStorage.getItem(
+                  'fustify-auth-test-exchange-count',
+                ) ?? '0',
+              ) + 1,
+            ),
+          );
+          user = {
+            id: userId,
+            is_anonymous: false,
+            email: 'player@example.test',
+            email_confirmed_at: '2026-07-24T08:00:00.000Z',
+            user_metadata: {},
+          };
+          return {
+            data: {
+              user,
+              session: { user },
+              redirectType: fixtureName === 'recovery' ? 'recovery' : 'signup',
+            },
+            error: null,
+          };
+        },
+        signOut: async () => {
+          calls.push({ method: 'signOut' });
+          user = null;
+          listeners.forEach((listener) => listener('SIGNED_OUT', null));
+          return { error: null };
+        },
+      };
+
+      const query = {
+        select: () => query,
+        eq: () => query,
+        in: () => query,
+        order: () => query,
+        maybeSingle: async () => ({ data: user ? profile : null, error: null }),
+        then: (
+          resolve: (value: { data: (typeof profile)[]; error: null }) => void,
+        ) => resolve({ data: user ? [profile] : [], error: null }),
+      };
+      const client = {
+        auth,
+        from: () => query,
+        rpc: async (method: string, payload?: Record<string, string>) => {
+          calls.push({ method, payload });
+          if (method === 'update_own_profile' && payload) {
+            profile = {
+              ...profile,
+              display_name: payload.p_display_name,
+              avatar_url: payload.p_avatar_url || null,
+              updated_at: '2026-07-24T09:00:00.000Z',
+            };
+          }
+          return { data: profile, error: null };
+        },
+      };
+      Object.defineProperty(window, '__FUSTIFY_AUTH_TEST_CLIENT__', {
+        configurable: true,
+        value: client,
+      });
+      Object.defineProperty(window, '__FUSTIFY_AUTH_TEST_STATE__', {
+        configurable: true,
+        value: { calls },
+      });
+    },
+    { fixtureName: fixture },
+  );
+}
+
+async function called(page: Page, method: string) {
+  return page.evaluate((expected) => {
+    const state = (
+      window as typeof window & {
+        __FUSTIFY_AUTH_TEST_STATE__: {
+          calls: Array<{ method: string; payload?: unknown }>;
+        };
+      }
+    ).__FUSTIFY_AUTH_TEST_STATE__;
+    const current = state.calls.filter((call) => call.method === expected);
+    if (expected !== 'exchangeCodeForSession' || current.length > 0) {
+      return current;
+    }
+    const persisted = Number(
+      window.sessionStorage.getItem('fustify-auth-test-exchange-count') ?? '0',
+    );
+    return Array.from({ length: persisted }, () => ({ method: expected }));
+  }, method);
+}
+
+async function capture(page: Page, projectName: string, name: string) {
+  const path = `test-results/ui-review/${projectName}/${name}.png`;
+  mkdirSync(dirname(path), { recursive: true });
+  await page.screenshot({ path, fullPage: true });
+}
+
+test('signed-out home registration, login, and recovery stay in the Auth layer', async ({
+  page,
+}, testInfo) => {
+  await installAuthFixture(page, 'signed-out');
+  await page.goto('/');
+
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Create account' }),
+  ).toBeVisible();
+  expect(await called(page, 'signInAnonymously')).toHaveLength(0);
+  expect(
+    await page.evaluate(() =>
+      performance
+        .getEntriesByType('resource')
+        .map((entry) => entry.name)
+        .filter(
+          (name) =>
+            name.includes('/app/App') ||
+            name.includes('MultiplayerApp') ||
+            name.includes('three'),
+        ),
+    ),
+  ).toEqual([]);
+  await capture(page, testInfo.project.name, 'account-home-signed-out');
+
+  await page.getByRole('button', { name: 'Create account' }).click();
+  const register = page.getByRole('dialog', { name: 'Create account' });
+  await expect(register.getByLabel('Display name')).toBeFocused();
+  await capture(page, testInfo.project.name, 'account-register-dialog');
+  await register.getByLabel('Display name').fill('Player One');
+  await register.getByLabel('Email').fill('player@example.test');
+  await register.getByLabel('Password', { exact: true }).fill('correct horse');
+  await register.getByLabel('Confirm password').fill('correct horse');
+  await register.getByRole('button', { name: 'Create account' }).click();
+  await expect(register.getByText(/verification link/i)).toBeVisible();
+  expect(await called(page, 'signUp')).toHaveLength(1);
+  expect(await called(page, 'signInAnonymously')).toHaveLength(0);
+
+  await register.getByRole('button', { name: 'Back to sign in' }).click();
+  const signIn = page.getByRole('dialog', { name: 'Sign in' });
+  await signIn.getByRole('button', { name: 'Forgot password?' }).click();
+  const forgot = page.getByRole('dialog', { name: 'Reset password' });
+  await forgot.getByLabel('Email').fill('player@example.test');
+  await forgot.getByRole('button', { name: 'Send reset email' }).click();
+  await expect(forgot.getByText(/If that account exists/i)).toBeVisible();
+  expect(await called(page, 'resetPasswordForEmail')).toHaveLength(1);
+});
+
+test('guest controls preserve generated identity and require deliberate switching', async ({
+  page,
+}, testInfo) => {
+  await installAuthFixture(page, 'guest');
+  await page.goto('/');
+  await expect(page.getByText('MistyBadger-482')).toBeVisible();
+  await expect(page.getByText('Guest account')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit profile' })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
+  await capture(page, testInfo.project.name, 'account-home-guest');
+
+  await page
+    .getByRole('button', { name: 'Sign in to existing account' })
+    .click();
+  const warning = page.getByRole('dialog', {
+    name: 'Sign in to another account',
+  });
+  await expect(warning.getByText(/cannot be recovered/i)).toBeVisible();
+  expect(await called(page, 'signOut')).toHaveLength(0);
+  await warning
+    .getByRole('button', { name: 'Keep guest and create account' })
+    .click();
+  const upgrade = page.getByRole('dialog', {
+    name: 'Keep this guest identity',
+  });
+  await upgrade.getByLabel('Email').fill('new@example.test');
+  await upgrade
+    .getByRole('button', { name: 'Send verification email' })
+    .click();
+  await expect(
+    upgrade.getByText(/Check your email in this browser/i),
+  ).toBeVisible();
+  expect(await called(page, 'updateUser')).toHaveLength(1);
+  expect(await called(page, 'signOut')).toHaveLength(0);
+});
+
+test('registered account can edit its profile and sign out', async ({
+  page,
+}, testInfo) => {
+  await installAuthFixture(page, 'registered');
+  await page.goto('/');
+  await expect(page.getByText('player@example.test')).toBeVisible();
+  await page.getByRole('button', { name: 'Edit profile' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit profile' });
+  await capture(page, testInfo.project.name, 'account-edit-profile-dialog');
+  await edit.getByLabel('Display name').fill('Renamed Player');
+  await edit.getByRole('button', { name: 'Save profile' }).click();
+  await expect
+    .poll(async () => (await called(page, 'update_own_profile')).length)
+    .toBe(1);
+  await expect(edit.getByText('Profile updated.')).toBeVisible();
+  await edit.getByRole('button', { name: 'Close account dialog' }).click();
+  await expect(page.getByText('Renamed Player')).toBeVisible();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  expect(await called(page, 'signOut')).toHaveLength(1);
+});
+
+test('callback validates locally and password recovery completes without exposing the code', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'recovery');
+  await page.goto('/auth/reset-password?code=recovery-secret');
+  await expect(
+    page.getByRole('heading', { name: 'Choose a new password' }),
+  ).toBeVisible();
+  await expect(page).not.toHaveURL(/recovery-secret/);
+  await page.getByLabel('New password').fill('correct horse');
+  await page.getByLabel('Confirm password').fill('correct horse');
+  await page.getByRole('button', { name: 'Update password' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Password updated' }),
+  ).toBeVisible();
+  expect(await called(page, 'exchangeCodeForSession')).toHaveLength(1);
+  expect(await called(page, 'updateUser')).toHaveLength(1);
+});
+
+test('email confirmation exchanges its PKCE code once and follows a safe return path', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'callback');
+  await page.goto('/auth/callback?code=confirmation-secret&returnPath=%2F');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page).not.toHaveURL(/confirmation-secret/);
+  expect(await called(page, 'exchangeCodeForSession')).toHaveLength(1);
+});
+
+test('guest upgrade callback without original browser context stops safely', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'callback');
+  await page.goto(
+    '/auth/callback?code=upgrade-secret&intent=guest-email-upgrade',
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Email confirmation problem' }),
+  ).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText(/original browser/i);
+  await expect(page).not.toHaveURL(/upgrade-secret|guest-email-upgrade/);
+  expect(await called(page, 'exchangeCodeForSession')).toHaveLength(1);
+});

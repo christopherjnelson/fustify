@@ -1,14 +1,15 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(32);
+select extensions.plan(38);
 
 insert into auth.users (id, aud, role, is_anonymous, raw_app_meta_data, raw_user_meta_data)
 values
-  ('60000000-0000-4000-8000-000000000001', 'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb),
-  ('60000000-0000-4000-8000-000000000002', 'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb),
-  ('60000000-0000-4000-8000-000000000003', 'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb),
-  ('60000000-0000-4000-8000-000000000004', 'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb);
+  ('60000000-0000-4000-8000-000000000001', 'authenticated', 'authenticated', false, '{}'::jsonb, '{}'::jsonb),
+  ('60000000-0000-4000-8000-000000000002', 'authenticated', 'authenticated', false, '{}'::jsonb, '{}'::jsonb),
+  ('60000000-0000-4000-8000-000000000003', 'authenticated', 'authenticated', false, '{}'::jsonb, '{}'::jsonb),
+  ('60000000-0000-4000-8000-000000000004', 'authenticated', 'authenticated', false, '{}'::jsonb, '{}'::jsonb),
+  ('60000000-0000-4000-8000-000000000005', 'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb);
 
 create temporary table reaction_fixture (
   label text primary key,
@@ -20,6 +21,7 @@ grant all on reaction_fixture to authenticated, service_role;
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000001","is_anonymous":false}', true);
 set local role authenticated;
 insert into reaction_fixture
 select
@@ -27,7 +29,7 @@ select
   id,
   join_code,
   '70000000-0000-4000-8000-000000000001'
-from public.create_room('Reaction Host', 'reaction-primary', 12, 2, 'random', 3);
+from public.create_room('Reaction Host', 'reaction-primary', 12, 2, 'random', 4);
 select public.claim_room_seat(
   (select room_id from reaction_fixture where label = 'primary'),
   0
@@ -35,6 +37,7 @@ select public.claim_room_seat(
 
 reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000002","is_anonymous":false}', true);
 set local role authenticated;
 select public.join_room(
   (select join_code from reaction_fixture where label = 'primary'),
@@ -47,6 +50,7 @@ select public.claim_room_seat(
 
 reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000003', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000003","is_anonymous":false}', true);
 set local role authenticated;
 select public.join_room(
   (select join_code from reaction_fixture where label = 'primary'),
@@ -55,6 +59,7 @@ select public.join_room(
 
 reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000002","is_anonymous":false}', true);
 set local role authenticated;
 insert into reaction_fixture
 select
@@ -70,6 +75,7 @@ select public.claim_room_seat(
 
 reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000004', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000004","is_anonymous":false}', true);
 set local role authenticated;
 select public.join_room(
   (select join_code from reaction_fixture where label = 'secondary'),
@@ -81,13 +87,26 @@ select public.claim_room_seat(
 );
 
 reset role;
+select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000005', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000005","is_anonymous":true}', true);
+set local role authenticated;
+select public.join_room(
+  (select join_code from reaction_fixture where label = 'primary'),
+  'Generated Guest'
+);
+select public.claim_room_seat(
+  (select room_id from reaction_fixture where label = 'primary'),
+  2
+);
+
+reset role;
 set local role service_role;
 select public.authority_initialize_room_match(
   (select room_id from reaction_fixture where label = 'primary'),
   (select match_id from reaction_fixture where label = 'primary'),
   '60000000-0000-4000-8000-000000000001',
   '{"version":2}'::jsonb,
-  '[{"seatIndex":0,"userId":"60000000-0000-4000-8000-000000000001","playerId":"player-01"},{"seatIndex":1,"userId":"60000000-0000-4000-8000-000000000002","playerId":"player-02"}]'::jsonb,
+  '[{"seatIndex":0,"userId":"60000000-0000-4000-8000-000000000001","playerId":"player-01"},{"seatIndex":1,"userId":"60000000-0000-4000-8000-000000000002","playerId":"player-02"},{"seatIndex":2,"userId":"60000000-0000-4000-8000-000000000005","playerId":"player-03"}]'::jsonb,
   '{}'::jsonb,
   '{}'::jsonb,
   '{"matchId":"70000000-0000-4000-8000-000000000001","activePlayerId":"player-01","winnerId":null,"events":[{"id":"event-1","turnNumber":1,"type":"turn-started","message":"Started."},{"turnNumber":1,"type":"turn-ended","message":"Legacy."}]}'::jsonb,
@@ -107,6 +126,7 @@ select public.authority_initialize_room_match(
 
 reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000001","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.lives_ok(
   $$select public.set_match_event_reaction(
@@ -144,6 +164,7 @@ select extensions.is(
 
 reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000002","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.lives_ok(
   $$select public.set_match_event_reaction(
@@ -168,6 +189,7 @@ select extensions.is(
 
 reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000001","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.lives_ok(
   $$select public.set_match_event_reaction(
@@ -180,6 +202,86 @@ select extensions.is(
   1,
   'removal decrements exactly one aggregate row'
 );
+
+reset role;
+select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000005', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000005","is_anonymous":true}', true);
+set local role authenticated;
+select extensions.throws_ok(
+  $$select public.set_match_event_reaction(
+    '70000000-0000-4000-8000-000000000001', 'event-1', 'fire'
+  )$$,
+  'P0001',
+  'account_required',
+  'anonymous claimed participant cannot create a reaction'
+);
+
+reset role;
+insert into public.match_event_reactions (
+  match_id, event_id, user_id, reaction
+) values (
+  '70000000-0000-4000-8000-000000000001',
+  'event-1',
+  '60000000-0000-4000-8000-000000000005',
+  'fire'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000005', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000005","is_anonymous":true}', true);
+set local role authenticated;
+select extensions.is(
+  (
+    select count(*)::integer
+    from public.match_event_reactions
+    where match_id = '70000000-0000-4000-8000-000000000001'
+  ),
+  2,
+  'authorized guests can still read existing reaction counts'
+);
+select extensions.throws_ok(
+  $$select public.set_match_event_reaction(
+    '70000000-0000-4000-8000-000000000001', 'event-1', 'heart'
+  )$$,
+  'P0001',
+  'account_required',
+  'anonymous participant cannot switch a historical reaction'
+);
+select extensions.throws_ok(
+  $$select public.set_match_event_reaction(
+    '70000000-0000-4000-8000-000000000001', 'event-1', null
+  )$$,
+  'P0001',
+  'account_required',
+  'anonymous participant cannot remove a historical reaction'
+);
+select extensions.is(
+  (
+    select reaction
+    from public.match_event_reactions
+    where user_id = '60000000-0000-4000-8000-000000000005'
+  ),
+  'fire',
+  'historical guest reactions remain stored and visible'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000001"}', true);
+set local role authenticated;
+select extensions.throws_ok(
+  $$select public.set_match_event_reaction(
+    '70000000-0000-4000-8000-000000000001', 'event-1', 'fire'
+  )$$,
+  'P0001',
+  'account_required',
+  'reaction authorization fails closed when the anonymous claim is absent'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000001","is_anonymous":false}', true);
+set local role authenticated;
 select extensions.throws_ok(
   $$select public.set_match_event_reaction(
     '70000000-0000-4000-8000-000000000001', 'event-1', 'sparkles'
@@ -215,6 +317,7 @@ select extensions.throws_ok(
 
 reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000003', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000003","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.throws_ok(
   $$select public.set_match_event_reaction(
@@ -227,6 +330,7 @@ select extensions.throws_ok(
 
 reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000004', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000004","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.throws_ok(
   $$select public.set_match_event_reaction(
@@ -244,6 +348,7 @@ select extensions.is(
 
 reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000002","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.throws_ok(
   $$insert into public.match_event_reactions (
@@ -311,6 +416,7 @@ where id = '70000000-0000-4000-8000-000000000001';
 
 reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000001","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.lives_ok(
   $$select public.set_match_event_reaction(
@@ -324,7 +430,7 @@ select extensions.is(
     from public.match_event_reactions
     where match_id = '70000000-0000-4000-8000-000000000001'
   ),
-  2,
+  3,
   'completed-match reaction preserves independent participant rows'
 );
 select extensions.is(
@@ -375,6 +481,7 @@ select extensions.is(
 
 reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000002","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.is(
   (
@@ -382,7 +489,7 @@ select extensions.is(
     from public.match_event_reactions
     where match_id = '70000000-0000-4000-8000-000000000001'
   ),
-  2,
+  3,
   'authorized participant can read completed-match aggregate rows'
 );
 

@@ -61,6 +61,9 @@ async function run() {
   if (initialProfile.userId !== userId) {
     throw new Error('triggered_profile_user_id_mismatch');
   }
+  if (!/^[A-Z][a-z]+[A-Z][a-z]+-[0-9]{3}$/u.test(initialProfile.displayName)) {
+    throw new Error('generated_guest_display_name_invalid');
+  }
 
   const directInsert = await client.from('profiles').insert({
     user_id: crypto.randomUUID(),
@@ -80,15 +83,27 @@ async function run() {
     .eq('user_id', userId);
   requireDenied(directDelete.error, 'direct_profile_delete');
 
-  const updatedProfile = await updateCurrentProfile(client, {
-    displayName: '  Profile Foundation Smoke  ',
-    avatarUrl: 'https://cdn.example.com/fustify/profile-smoke.png',
+  let profileUpdateError: unknown;
+  try {
+    await updateCurrentProfile(client, {
+      displayName: 'Profile Foundation Smoke',
+      avatarUrl: 'https://cdn.example.com/fustify/profile-smoke.png',
+    });
+  } catch (error) {
+    profileUpdateError = error;
+  }
+  requireDenied(profileUpdateError, 'anonymous_profile_update');
+
+  const anonymousReaction = await client.rpc('set_match_event_reaction', {
+    p_match_id: crypto.randomUUID(),
+    p_event_id: 'event-1',
+    p_reaction: 'fire',
   });
   if (
-    updatedProfile.userId !== userId ||
-    updatedProfile.displayName !== 'Profile Foundation Smoke'
+    !anonymousReaction.error ||
+    !anonymousReaction.error.message.includes('account_required')
   ) {
-    throw new Error('controlled_profile_update_failed');
+    throw new Error('anonymous_reaction_unexpectedly_allowed');
   }
 
   const restoredUserId = await ensureAnonymousSession(client);
@@ -120,7 +135,10 @@ async function run() {
     JSON.stringify({
       result: 'pass',
       anonymousProfileCreated: true,
+      generatedGuestDisplayName: true,
       directProfileWritesDenied: true,
+      anonymousProfileCustomizationDenied: true,
+      anonymousReactionDenied: true,
       restoredSameUserId: true,
       multiplayerNameUnchanged: true,
       roomClosed: true,

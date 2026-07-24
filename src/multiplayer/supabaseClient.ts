@@ -8,6 +8,12 @@ export interface MultiplayerConfiguration {
 
 let client: SupabaseClient<Database> | null = null;
 
+declare global {
+  interface Window {
+    __FUSTIFY_AUTH_TEST_CLIENT__?: SupabaseClient<Database>;
+  }
+}
+
 export function readMultiplayerConfiguration(): MultiplayerConfiguration | null {
   const url = import.meta.env.VITE_SUPABASE_URL?.trim();
   const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
@@ -15,6 +21,9 @@ export function readMultiplayerConfiguration(): MultiplayerConfiguration | null 
 }
 
 export function getSupabaseClient(): SupabaseClient<Database> {
+  if (import.meta.env.DEV && window.__FUSTIFY_AUTH_TEST_CLIENT__) {
+    return window.__FUSTIFY_AUTH_TEST_CLIENT__;
+  }
   const configuration = readMultiplayerConfiguration();
   if (!configuration) {
     throw new Error('multiplayer_configuration_unavailable');
@@ -27,6 +36,7 @@ export function getSupabaseClient(): SupabaseClient<Database> {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false,
+        flowType: 'pkce',
       },
     },
   );

@@ -12,6 +12,7 @@ const PROFILE_COLUMNS =
   'user_id, display_name, avatar_url, created_at, updated_at';
 
 const PROFILE_ERROR_MESSAGES: Record<string, string> = {
+  account_required: 'Create an account to customize your profile.',
   invalid_profile_avatar_url: 'Use a valid HTTPS avatar URL.',
   invalid_profile_display_name:
     'Use a display name between 1 and 40 characters without control characters.',

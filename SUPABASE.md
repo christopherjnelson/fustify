@@ -23,6 +23,7 @@ Migration order:
 7. `20260722201731_finalize_after_capture_movement.sql`
 8. `20260724032701_add_match_event_reactions.sql`
 9. `20260724062455_create_profile_foundation.sql`
+10. `20260724081653_add_email_password_accounts.sql`
 
 The authority migration extends `matches`, creates append-only
 `match_commands`, adds member-scoped read RLS, removes browser execution of the
@@ -47,10 +48,21 @@ own-profile ensure/update RPCs. Browser roles have no direct profile write
 grants. Display names and HTTPS avatar URLs are presentation data only; profiles
 contain no role, permission, or administrator fields.
 
-The hosted history contains all nine migrations in this order. Edge Function
+The account migration derives readable guest names from each Auth user UUID,
+updates only untouched `Guest XXXX` fallbacks, and keeps aliases and historical
+snapshots unchanged. Its private registered-account helper trusts only
+`auth.uid()` and the JWT `is_anonymous` boolean, failing closed when the claim is
+missing or malformed. Guests may still ensure and read profiles, rooms, matches,
+Activity events, and reactions, but profile updates and reaction mutations now
+return `account_required`. Registered users retain the existing RPC behavior.
+The frontend capability model mirrors these restrictions for profile editing,
+reactions, and future chat presentation. Future chat writes must independently
+enforce registered-user status on the server.
+
+The hosted history contains all ten migrations in this order. Edge Function
 `multiplayer-game` is active at version 3 with `verify_jwt=false`. The Activity
-reaction and profile-foundation work do not change authority-imported source
-and therefore do not redeploy this function.
+reaction, profile-foundation, and account work do not change
+authority-imported source and therefore do not redeploy this function.
 
 ## Secrets and browser configuration
 
@@ -67,6 +79,31 @@ or database URL to a `VITE_` variable. Hosted Edge Functions receive
 automatically. `multiplayer-game` disables the legacy gateway JWT check in
 `config.toml` and explicitly verifies the bearer token with `auth.getUser()` so
 current asymmetric and legacy user JWTs share one controlled path.
+
+## Email Auth prerequisites
+
+Before testing email/password Auth against the hosted project:
+
+- Enable the email/password provider and choose whether confirmation is
+  required. The application supports required confirmation.
+- Add the deployed origin's exact `/auth/callback` and
+  `/auth/reset-password` URLs, plus their local equivalents, to the Auth
+  redirect allow list. Do not use an external return URL; the client accepts
+  only known same-origin application paths.
+- Set the hosted Site URL to the deployed application origin. The checked-in
+  `config.toml` intentionally contains only local development URLs and must not
+  be pushed unchanged as production Auth configuration.
+- Configure custom SMTP before friend or volume testing. Supabase's hosted
+  default sender is test-only and rate limited. SMTP credentials belong only
+  in Supabase's secret configuration, never Git or browser variables.
+- Enable an appropriate password policy and leaked-password protection for
+  production. The application requires at least eight characters client-side,
+  while Supabase remains the final policy authority.
+
+Local registration, confirmation, anonymous upgrade, and recovery are exercised
+against Mailpit with `pnpm test:auth:local`. The script uses generated disposable
+identities, does not print email addresses, passwords, tokens, or verification
+links, and removes its local Auth users and room records.
 
 ## Deployment
 
@@ -101,10 +138,13 @@ receive explicit read grants and policies; non-members see no room, seat, match,
 command, or reaction rows. There are no browser insert/update/delete grants for
 canonical match state, commands, or reactions. Authority RPC execute is revoked
 from `PUBLIC`, `anon`, and `authenticated`, then granted only to `service_role`.
-The reaction RPC is the narrow exception: only `authenticated` may execute it,
-it derives the caller from `auth.uid()`, requires current room membership and
+The reaction RPC is the narrow exception: only `authenticated` may execute it.
+It derives the caller from `auth.uid()`, requires the trusted JWT
+`is_anonymous` claim to be exactly `false`, requires current room membership and
 the claimed human seat recorded in the immutable seat snapshot, and accepts no
-caller-supplied user ID.
+caller-supplied user ID. Profile customization uses the same private
+registered-account check. No profile value or user-editable metadata grants
+either capability.
 
 The Edge Function derives `actor_user_id` from the verified JWT, never request
 JSON. Both TypeScript and SQL validate current seat membership; SQL locks the
@@ -125,6 +165,10 @@ permit weakening grants or policies.
 - `match_event_reactions` RLS is enabled and browser roles have `SELECT` only.
 - `profiles` RLS is enabled, authenticated users have `SELECT` only, and the
   trigger/backfill leave one profile per Auth user.
+- New anonymous users receive deterministic adjective+noun names with a
+  three-digit suffix; only exact old per-user fallbacks are backfilled.
+- Anonymous and malformed/missing-claim callers receive `account_required` for
+  profile and reaction mutations; registered callers retain normal behavior.
 - Member reads and non-member zero-row behavior pass.
 - Browser writes and authority-function execution fail.
 - Reaction writes validate canonical event ownership, participant identity, and

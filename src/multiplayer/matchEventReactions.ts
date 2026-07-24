@@ -28,6 +28,7 @@ export interface EventReactionSummary {
 export type EventReactionSummaries = Record<string, EventReactionSummary>;
 
 export interface ActivityReactionController {
+  canReact: boolean;
   summaries: EventReactionSummaries;
   pendingEventIds: ReadonlySet<string>;
   errors: Readonly<Record<string, string>>;

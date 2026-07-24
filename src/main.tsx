@@ -4,10 +4,12 @@ import './styles/globals.css';
 import {
   hasLocalSetupParameters,
   isAdminRoute,
+  isAuthRoute,
   isMultiplayerRoute,
 } from './browser/routes';
 
 const isAdmin = isAdminRoute(window.location.pathname);
+const isAuth = isAuthRoute(window.location.pathname);
 const isMultiplayer = isMultiplayerRoute(window.location.pathname);
 const isLegacyLocalSetup =
   window.location.pathname === '/' &&
@@ -22,11 +24,13 @@ const isMultiplayerMatch = window.location.pathname.startsWith(
 document.documentElement.classList.add(
   isAdmin
     ? 'admin-route'
-    : isMultiplayer
-      ? 'multiplayer-route'
-      : isHome
-        ? 'home-route'
-        : 'game-route',
+    : isAuth
+      ? 'auth-route'
+      : isMultiplayer
+        ? 'multiplayer-route'
+        : isHome
+          ? 'home-route'
+          : 'game-route',
 );
 if (isMultiplayerMatch) {
   document.documentElement.classList.add('multiplayer-match-route');
@@ -51,6 +55,25 @@ async function bootstrap() {
         <AdminDashboard source={source} dataAvailable={import.meta.env.DEV} />
       </StrictMode>,
     );
+    return;
+  }
+
+  if (isAuth) {
+    if (window.location.pathname.startsWith('/auth/reset-password')) {
+      const { ResetPasswordPage } = await import('./auth/ResetPasswordPage');
+      root.render(
+        <StrictMode>
+          <ResetPasswordPage />
+        </StrictMode>,
+      );
+    } else {
+      const { AuthCallbackPage } = await import('./auth/AuthCallbackPage');
+      root.render(
+        <StrictMode>
+          <AuthCallbackPage />
+        </StrictMode>,
+      );
+    }
     return;
   }
 

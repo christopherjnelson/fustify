@@ -27,11 +27,17 @@ test('home selects either mode and preserves legacy local setup URLs', async ({
           (name) =>
             name.includes('/app/App') ||
             name.includes('MultiplayerApp') ||
-            name.includes('supabase'),
+            name.includes('three'),
         ),
     ),
   ).toEqual([]);
 
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(
+    page.getByRole('button', { name: 'Create account' }),
+  ).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(
     page.getByRole('link', { name: 'Set up local game' }),

@@ -1,8 +1,10 @@
 import { BRAND } from '../branding';
+import { AccountControl } from '../auth/AccountControl';
 
 export function Home() {
   return (
     <main className="home-shell">
+      <AccountControl />
       <section className="home-content" aria-labelledby="home-title">
         <div className="home-brand">
           <span className="eyebrow">{BRAND.shortDescription}</span>

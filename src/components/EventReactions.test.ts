@@ -9,6 +9,7 @@ describe('Activity reaction controls', () => {
     const markup = renderToStaticMarkup(
       createElement(EventReactions, {
         eventId: 'event-4',
+        canReact: true,
         summary: {
           eventId: 'event-4',
           counts: { fire: 2, laugh: 0, heart: 1, angry: 0 },
@@ -41,6 +42,7 @@ describe('Activity reaction controls', () => {
     const markup = renderToStaticMarkup(
       createElement(EventReactions, {
         eventId: 'event-4',
+        canReact: true,
         summary: {
           eventId: 'event-4',
           counts: { fire: 0, laugh: 0, heart: 0, angry: 0 },
@@ -58,6 +60,7 @@ describe('Activity reaction controls', () => {
     const markup = renderToStaticMarkup(
       createElement(EventReactions, {
         eventId: 'event-4',
+        canReact: true,
         summary: {
           eventId: 'event-4',
           counts: { fire: 2, laugh: 0, heart: 0, angry: 0 },
@@ -73,5 +76,26 @@ describe('Activity reaction controls', () => {
     expect(markup).toContain('>2<');
     expect(markup.match(/disabled=""/g)).toHaveLength(2);
     expect(markup).toContain('role="alert"');
+  });
+
+  it('keeps counts readable but replaces guest actions with one account gate', () => {
+    const markup = renderToStaticMarkup(
+      createElement(EventReactions, {
+        eventId: 'event-4',
+        canReact: false,
+        summary: {
+          eventId: 'event-4',
+          counts: { fire: 2, laugh: 0, heart: 1, angry: 0 },
+          ownReaction: null,
+        },
+        pending: false,
+        onSetReaction: vi.fn(),
+      }),
+    );
+    expect(markup).toContain('2 fire reactions');
+    expect(markup).toContain('1 heart reaction');
+    expect(markup).toContain('Create an account to react');
+    expect(markup).not.toContain('aria-label="Add reaction"');
+    expect(markup).not.toContain('<button');
   });
 });

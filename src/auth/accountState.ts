@@ -10,6 +10,7 @@ export type AccountState =
       status: 'authenticated';
       userId: string;
       isAnonymous: boolean;
+      email: string | null;
       profile: UserProfile;
     }
   | { status: 'error'; message: string };
@@ -52,7 +53,8 @@ export async function deriveAccountState(
     return {
       status: 'authenticated',
       userId: data.user.id,
-      isAnonymous: data.user.is_anonymous === true,
+      isAnonymous: data.user.is_anonymous !== false,
+      email: data.user.email ?? null,
       profile,
     };
   } catch (profileError) {

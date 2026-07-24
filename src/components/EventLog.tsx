@@ -105,6 +105,7 @@ export function EventLogEntry({
           <EventReactions
             eventId={event.id}
             summary={reactions.summaries[event.id]}
+            canReact={reactions.canReact}
             pending={reactions.pendingEventIds.has(event.id)}
             error={reactions.errors[event.id]}
             onSetReaction={(reaction) =>

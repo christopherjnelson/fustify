@@ -707,7 +707,15 @@ export function MultiplayerGameScene({
   );
 }
 
-function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
+function MatchView({
+  matchId,
+  userId,
+  canReact,
+}: {
+  matchId: string;
+  userId: string;
+  canReact: boolean;
+}) {
   const client = useMemo(() => getSupabaseClient(), []);
   const [match, setMatch] = useState<MultiplayerMatch | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1016,12 +1024,14 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
 
   const activityReactions = useMemo<ActivityReactionController>(
     () => ({
+      canReact,
       summaries: aggregateMatchEventReactions(reactionRows, userId),
       pendingEventIds: pendingReactionEventIds,
       errors: reactionErrors,
       setReaction,
     }),
     [
+      canReact,
       pendingReactionEventIds,
       reactionErrors,
       reactionRows,
@@ -1068,6 +1078,7 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
 export function MultiplayerApp() {
   const [route, setRoute] = useState<Route>(() => currentRoute());
   const [userId, setUserId] = useState<string | null>(null);
+  const [isAnonymous, setIsAnonymous] = useState(true);
   const [authRevision, setAuthRevision] = useState(0);
   const [authError, setAuthError] = useState<string | null>(null);
   const configured = readMultiplayerConfiguration() !== null;
@@ -1083,8 +1094,15 @@ export function MultiplayerApp() {
     let active = true;
     const client = getSupabaseClient();
     void ensureAnonymousSession(client)
-      .then((id) => {
-        if (active) setUserId(id);
+      .then(async (id) => {
+        const verified = await client.auth.getUser();
+        if (verified.error || !verified.data.user) {
+          throw verified.error ?? new Error('auth_session_unavailable');
+        }
+        if (active) {
+          setUserId(id);
+          setIsAnonymous(verified.data.user.is_anonymous !== false);
+        }
       })
       .catch((error: unknown) => {
         if (active) setAuthError(multiplayerError(error).message);
@@ -1093,6 +1111,7 @@ export function MultiplayerApp() {
       if (!active) return;
       if (session?.user) {
         setUserId(session.user.id);
+        setIsAnonymous(session.user.is_anonymous !== false);
         if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
           setAuthRevision((current) => current + 1);
         }
@@ -1137,6 +1156,7 @@ export function MultiplayerApp() {
         key={`${route.id}:${authRevision}`}
         matchId={route.id}
         userId={userId}
+        canReact={!isAnonymous}
       />
     );
   return <Lobby userId={userId} />;

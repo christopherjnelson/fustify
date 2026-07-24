@@ -24,17 +24,23 @@ function countLabel(reaction: MatchEventReaction, count: number) {
 export function EventReactions({
   eventId,
   summary,
+  canReact,
   pending,
   error,
   onSetReaction,
 }: {
   eventId: string;
   summary?: EventReactionSummary;
+  canReact: boolean;
   pending: boolean;
   error?: string;
   onSetReaction: (reaction: MatchEventReaction | null) => void;
 }) {
   const ownReaction = summary?.ownReaction ?? null;
+  const accountReturnPath =
+    typeof window === 'undefined'
+      ? '/'
+      : `${window.location.pathname}${window.location.search}${window.location.hash}`;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerPosition, setPickerPosition] = useState({ left: 0, top: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -108,6 +114,22 @@ export function EventReactions({
               : `add ${presentation.label.toLowerCase()} reaction`;
           const label =
             count > 0 ? `${countLabel(reaction, count)}; ${action}` : action;
+          if (!canReact) {
+            return (
+              <span
+                key={reaction}
+                className="event-reaction-button event-reaction-readonly"
+                aria-label={countLabel(reaction, count)}
+              >
+                <span className="event-reaction-emoji" aria-hidden="true">
+                  {presentation.emoji}
+                </span>
+                <span className="event-reaction-count" aria-hidden="true">
+                  {count}
+                </span>
+              </span>
+            );
+          }
           return (
             <button
               key={reaction}
@@ -129,51 +151,66 @@ export function EventReactions({
             </button>
           );
         })}
-        <button
-          ref={addButtonRef}
-          type="button"
-          className="event-add-reaction-button"
-          aria-label={ownReaction ? 'Change reaction' : 'Add reaction'}
-          aria-expanded={pickerOpen}
-          aria-haspopup="true"
-          disabled={pending}
-          onClick={(event) => {
-            event.stopPropagation();
-            keyboardOpenRef.current = event.detail === 0;
-            const panel = event.currentTarget.closest('.activity-panel');
-            if (panel) {
-              const button = event.currentTarget.getBoundingClientRect();
-              const bounds = panel.getBoundingClientRect();
-              const pickerWidth = 120;
-              const pickerHeight = 128;
-              const below = button.bottom + 4;
-              const top =
-                below + pickerHeight <= bounds.bottom - 4
-                  ? below
-                  : button.top - pickerHeight - 4;
-              setPickerPosition({
-                left: Math.max(
-                  bounds.left + 4,
-                  Math.min(
-                    button.right - pickerWidth,
-                    bounds.right - pickerWidth - 4,
+        {canReact ? (
+          <button
+            ref={addButtonRef}
+            type="button"
+            className="event-add-reaction-button"
+            aria-label={ownReaction ? 'Change reaction' : 'Add reaction'}
+            aria-expanded={pickerOpen}
+            aria-haspopup="true"
+            disabled={pending}
+            onClick={(event) => {
+              event.stopPropagation();
+              keyboardOpenRef.current = event.detail === 0;
+              const panel = event.currentTarget.closest('.activity-panel');
+              if (panel) {
+                const button = event.currentTarget.getBoundingClientRect();
+                const bounds = panel.getBoundingClientRect();
+                const pickerWidth = 120;
+                const pickerHeight = 128;
+                const below = button.bottom + 4;
+                const top =
+                  below + pickerHeight <= bounds.bottom - 4
+                    ? below
+                    : button.top - pickerHeight - 4;
+                setPickerPosition({
+                  left: Math.max(
+                    bounds.left + 4,
+                    Math.min(
+                      button.right - pickerWidth,
+                      bounds.right - pickerWidth - 4,
+                    ),
                   ),
-                ),
-                top: Math.max(
-                  bounds.top + 4,
-                  Math.min(top, bounds.bottom - pickerHeight - 4),
-                ),
-              });
-            }
-            setPickerOpen((open) => !open);
-          }}
-        >
-          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-            <circle cx="8.5" cy="9.5" r="5.5" />
-            <path d="M6.4 10.7c.8 1 1.4 1.3 2.2 1.3s1.5-.3 2.2-1.3M6.7 8h.1m3.5 0h.1M15 3.5v5m-2.5-2.5h5" />
-          </svg>
-        </button>
-        {pickerOpen &&
+                  top: Math.max(
+                    bounds.top + 4,
+                    Math.min(top, bounds.bottom - pickerHeight - 4),
+                  ),
+                });
+              }
+              setPickerOpen((open) => !open);
+            }}
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+              <circle cx="8.5" cy="9.5" r="5.5" />
+              <path d="M6.4 10.7c.8 1 1.4 1.3 2.2 1.3s1.5-.3 2.2-1.3M6.7 8h.1m3.5 0h.1M15 3.5v5m-2.5-2.5h5" />
+            </svg>
+          </button>
+        ) : (
+          <a
+            className="event-account-required"
+            aria-label="Create an account to react"
+            href={`/?account=create&returnPath=${encodeURIComponent(accountReturnPath)}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+              <rect x="5" y="9" width="10" height="8" rx="2" />
+              <path d="M7.5 9V6.8a2.5 2.5 0 0 1 5 0V9" />
+            </svg>
+          </a>
+        )}
+        {canReact &&
+          pickerOpen &&
           createPortal(
             <div
               ref={pickerRef}

@@ -1,0 +1,393 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Database } from '../multiplayer/database.types';
+import {
+  AuthFlowError,
+  completeAuthCallback,
+  completeGuestUpgrade,
+  completePasswordRecovery,
+  establishRecoverySession,
+  initiateGuestEmailUpgrade,
+  readGuestUpgradeIntent,
+  registerWithEmail,
+  requestPasswordRecovery,
+  signInWithEmail,
+} from './authFlow';
+
+const userId = '10000000-0000-4000-8000-000000000001';
+const profileRow = {
+  user_id: userId,
+  display_name: 'MistyBadger-482',
+  avatar_url: null,
+  created_at: '2026-07-24T06:00:00.000Z',
+  updated_at: '2026-07-24T06:00:00.000Z',
+};
+
+function browserStorage() {
+  const values = new Map<string, string>();
+  return {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+    removeItem: (key: string) => values.delete(key),
+    clear: () => values.clear(),
+    key: (index: number) => [...values.keys()][index] ?? null,
+    get length() {
+      return values.size;
+    },
+  };
+}
+
+beforeEach(() => {
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      location: { origin: 'https://play.fustify.test' },
+      sessionStorage: browserStorage(),
+    },
+  });
+});
+
+function asClient(value: unknown): SupabaseClient<Database> {
+  return value as SupabaseClient<Database>;
+}
+
+describe('email/password authentication flows', () => {
+  it('registers a signed-out account with safe metadata and no anonymous bootstrap', async () => {
+    const signUp = vi.fn(async () => ({ data: {}, error: null }));
+    const signInAnonymously = vi.fn();
+    const client = asClient({ auth: { signUp, signInAnonymously } });
+
+    await registerWithEmail(client, {
+      displayName: '  Player One ',
+      email: 'player@example.com',
+      password: 'correct horse',
+      confirmPassword: 'correct horse',
+      returnPath: '/multiplayer',
+    });
+
+    expect(signUp).toHaveBeenCalledWith({
+      email: 'player@example.com',
+      password: 'correct horse',
+      options: {
+        data: { display_name: 'Player One' },
+        emailRedirectTo:
+          'https://play.fustify.test/auth/callback?returnPath=%2Fmultiplayer',
+      },
+    });
+    expect(signInAnonymously).not.toHaveBeenCalled();
+  });
+
+  it('logs in, verifies the user, and fetches the profile', async () => {
+    const query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => ({ data: profileRow, error: null })),
+    };
+    const client = asClient({
+      auth: {
+        signInWithPassword: vi.fn(async () => ({ error: null })),
+        getUser: vi.fn(async () => ({
+          data: {
+            user: { id: userId, is_anonymous: false },
+          },
+          error: null,
+        })),
+      },
+      from: vi.fn(() => query),
+    });
+
+    await expect(
+      signInWithEmail(client, {
+        email: 'player@example.com',
+        password: 'correct horse',
+      }),
+    ).resolves.toMatchObject({
+      user: { id: userId },
+      profile: { displayName: 'MistyBadger-482' },
+    });
+  });
+
+  it('uses one generic login error for invalid credentials', async () => {
+    const client = asClient({
+      auth: {
+        signInWithPassword: vi.fn(async () => ({
+          error: new Error('user does not exist in internal table'),
+        })),
+      },
+    });
+    await expect(
+      signInWithEmail(client, {
+        email: 'player@example.com',
+        password: 'wrong-password',
+      }),
+    ).rejects.toMatchObject({
+      code: 'invalid_credentials',
+      message: 'The email or password is incorrect.',
+    });
+  });
+
+  it('starts a guest upgrade with updateUser and stores only safe callback context', async () => {
+    const updateUser = vi.fn(async () => ({ error: null }));
+    const client = asClient({
+      auth: {
+        getUser: vi.fn(async () => ({
+          data: {
+            user: { id: userId, is_anonymous: true },
+          },
+          error: null,
+        })),
+        updateUser,
+      },
+    });
+
+    await initiateGuestEmailUpgrade(client, {
+      email: 'player@example.com',
+      expectedUserId: userId,
+      returnPath: '/multiplayer/room/room-id',
+    });
+
+    expect(updateUser).toHaveBeenCalledWith(
+      { email: 'player@example.com' },
+      {
+        emailRedirectTo:
+          'https://play.fustify.test/auth/callback?returnPath=%2Fmultiplayer%2Froom%2Froom-id&intent=guest-email-upgrade',
+      },
+    );
+    expect(readGuestUpgradeIntent()).toEqual({
+      intent: 'guest-email-upgrade',
+      expectedUserId: userId,
+      returnPath: '/multiplayer/room/room-id',
+    });
+    const serialized = JSON.stringify(readGuestUpgradeIntent());
+    expect(serialized).not.toMatch(/password|token|otp/iu);
+  });
+
+  it('preserves the guest session and explains an email conflict', async () => {
+    const signOut = vi.fn();
+    const client = asClient({
+      auth: {
+        getUser: vi.fn(async () => ({
+          data: { user: { id: userId, is_anonymous: true } },
+          error: null,
+        })),
+        updateUser: vi.fn(async () => ({
+          error: { code: 'email_exists', message: 'private detail' },
+        })),
+        signOut,
+      },
+    });
+
+    await expect(
+      initiateGuestEmailUpgrade(client, {
+        email: 'player@example.com',
+        expectedUserId: userId,
+        returnPath: '/',
+      }),
+    ).rejects.toMatchObject({
+      code: 'email_conflict',
+    });
+    expect(signOut).not.toHaveBeenCalled();
+    expect(readGuestUpgradeIntent()).toBeNull();
+  });
+
+  it('accepts an upgraded callback only for the expected same user ID', async () => {
+    const client = asClient({
+      auth: {
+        getUser: vi.fn(async () => ({
+          data: {
+            user: {
+              id: userId,
+              is_anonymous: true,
+            },
+          },
+          error: null,
+        })),
+        updateUser: vi.fn(async () => ({ error: null })),
+        exchangeCodeForSession: vi.fn(async () => ({ error: null })),
+      },
+    });
+    await initiateGuestEmailUpgrade(client, {
+      email: 'player@example.com',
+      expectedUserId: userId,
+      returnPath: '/multiplayer',
+    });
+    client.auth.getUser = vi.fn(async () => ({
+      data: {
+        user: {
+          id: userId,
+          is_anonymous: false,
+          email_confirmed_at: '2026-07-24T08:00:00.000Z',
+        },
+      },
+      error: null,
+    })) as unknown as typeof client.auth.getUser;
+
+    await expect(
+      completeAuthCallback(
+        client,
+        'https://play.fustify.test/auth/callback?code=secret-code&intent=guest-email-upgrade',
+      ),
+    ).resolves.toMatchObject({
+      kind: 'guest-upgrade-completion',
+      user: { id: userId },
+    });
+  });
+
+  it('stops an upgraded callback if the user ID changes', async () => {
+    const client = asClient({
+      auth: {
+        getUser: vi
+          .fn()
+          .mockResolvedValueOnce({
+            data: { user: { id: userId, is_anonymous: true } },
+            error: null,
+          })
+          .mockResolvedValueOnce({
+            data: {
+              user: {
+                id: '20000000-0000-4000-8000-000000000002',
+                is_anonymous: false,
+                email_confirmed_at: '2026-07-24T08:00:00.000Z',
+              },
+            },
+            error: null,
+          }),
+        updateUser: vi.fn(async () => ({ error: null })),
+        exchangeCodeForSession: vi.fn(async () => ({ error: null })),
+      },
+    });
+    await initiateGuestEmailUpgrade(client, {
+      email: 'player@example.com',
+      expectedUserId: userId,
+      returnPath: '/',
+    });
+
+    await expect(
+      completeAuthCallback(
+        client,
+        'https://play.fustify.test/auth/callback?code=secret-code&intent=guest-email-upgrade',
+      ),
+    ).rejects.toMatchObject({ code: 'identity_changed' });
+  });
+
+  it('explains that a guest upgrade must return to the original browser', async () => {
+    const client = asClient({
+      auth: {
+        exchangeCodeForSession: vi.fn(async () => ({
+          error: new Error('PKCE verifier missing'),
+        })),
+      },
+    });
+
+    await expect(
+      completeAuthCallback(
+        client,
+        'https://play.fustify.test/auth/callback?code=secret-code&intent=guest-email-upgrade',
+      ),
+    ).rejects.toMatchObject({
+      code: 'original_browser_required',
+      message: expect.stringMatching(/original browser/i),
+    });
+  });
+
+  it('sets the password before updating the registered profile', async () => {
+    const calls: string[] = [];
+    const client = asClient({
+      auth: {
+        getUser: vi.fn(async () => ({
+          data: { user: { id: userId, is_anonymous: false } },
+          error: null,
+        })),
+        updateUser: vi.fn(async () => {
+          calls.push('password');
+          return { error: null };
+        }),
+      },
+      rpc: vi.fn(async () => {
+        calls.push('profile');
+        return {
+          data: { ...profileRow, display_name: 'Player One' },
+          error: null,
+        };
+      }),
+    });
+
+    await completeGuestUpgrade(client, {
+      expectedUserId: userId,
+      displayName: 'Player One',
+      password: 'correct horse',
+      confirmPassword: 'correct horse',
+    });
+    expect(calls).toEqual(['password', 'profile']);
+  });
+
+  it('returns generic forgot-password success and safe rate-limit wording', async () => {
+    const client = asClient({
+      auth: {
+        resetPasswordForEmail: vi
+          .fn()
+          .mockResolvedValueOnce({ error: null })
+          .mockResolvedValueOnce({
+            error: { status: 429, message: 'private limiter detail' },
+          }),
+      },
+    });
+    await expect(
+      requestPasswordRecovery(client, {
+        email: 'player@example.com',
+        returnPath: '/',
+      }),
+    ).resolves.toBe('sent');
+    await expect(
+      requestPasswordRecovery(client, {
+        email: 'player@example.com',
+        returnPath: '/',
+      }),
+    ).resolves.toBe('rate-limited');
+  });
+
+  it('requires a recovery callback before changing a password', async () => {
+    const updateUser = vi.fn(async () => ({ error: null }));
+    const client = asClient({
+      auth: {
+        exchangeCodeForSession: vi.fn(async () => ({
+          data: { redirectType: 'recovery' },
+          error: null,
+        })),
+        getUser: vi.fn(async () => ({
+          data: { user: { id: userId, is_anonymous: false } },
+          error: null,
+        })),
+        updateUser,
+      },
+    });
+
+    await expect(
+      completePasswordRecovery(client, 'correct horse', 'correct horse'),
+    ).rejects.toBeInstanceOf(AuthFlowError);
+    await establishRecoverySession(
+      client,
+      'https://play.fustify.test/auth/reset-password?code=recovery-code',
+    );
+    await completePasswordRecovery(client, 'correct horse', 'correct horse');
+    expect(updateUser).toHaveBeenCalledWith({ password: 'correct horse' });
+  });
+
+  it('rejects a valid non-recovery callback on the reset route', async () => {
+    const client = asClient({
+      auth: {
+        exchangeCodeForSession: vi.fn(async () => ({
+          data: { redirectType: 'signup' },
+          error: null,
+        })),
+      },
+    });
+
+    await expect(
+      establishRecoverySession(
+        client,
+        'https://play.fustify.test/auth/reset-password?code=signup-code',
+      ),
+    ).rejects.toMatchObject({ code: 'recovery_session_required' });
+  });
+});
