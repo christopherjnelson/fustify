@@ -24,6 +24,7 @@ import { TERRITORY_NAVIGATOR_SHORTCUT } from '../core/input/controlBindings';
 import type { ActivityReactionController } from '../multiplayer/matchEventReactions';
 import { MatchDock } from './MatchDock';
 import { TurnSoundToggle } from './TurnNotificationController';
+import { submitReinforcementPlacement } from './reinforcementPlacement';
 
 const PHASE_LABELS = {
   reinforce: 'Reinforce',
@@ -107,6 +108,79 @@ function ArmyAmountControl({
       />
       <strong aria-live="polite">{value}</strong>
     </label>
+  );
+}
+
+export function ReinforcementPlacementControls({
+  remainingReinforcements,
+  amount,
+  selectedTerritoryId,
+  pending,
+  onAmountChange,
+  onPlace,
+}: {
+  remainingReinforcements: number;
+  amount: number;
+  selectedTerritoryId: string | null;
+  pending: boolean;
+  onAmountChange: (value: number) => void;
+  onPlace: (territoryId: string, amount: number) => void;
+}) {
+  if (remainingReinforcements <= 0) return null;
+
+  const singleArmyRemaining = remainingReinforcements === 1;
+  const placementAmount = singleArmyRemaining ? 1 : amount;
+
+  return (
+    <>
+      {!singleArmyRemaining && (
+        <ArmyAmountControl
+          label="Armies to place"
+          minimum={1}
+          maximum={remainingReinforcements}
+          value={placementAmount}
+          onChange={onAmountChange}
+          alwaysShowSlider
+          disabled={pending}
+        />
+      )}
+      <div className="reinforcement-actions">
+        {!singleArmyRemaining && (
+          <button
+            type="button"
+            className="amount-shortcut"
+            aria-label={`Max: ${remainingReinforcements} armies`}
+            disabled={placementAmount === remainingReinforcements || pending}
+            onClick={() => onAmountChange(remainingReinforcements)}
+          >
+            Max
+          </button>
+        )}
+        <button
+          type="button"
+          aria-busy={pending}
+          aria-describedby="reinforcement-placement-instruction"
+          disabled={!selectedTerritoryId || pending}
+          title={
+            !selectedTerritoryId
+              ? 'Select an owned territory before placing armies.'
+              : pending
+                ? 'A reinforcement placement is being submitted.'
+                : undefined
+          }
+          onClick={() =>
+            submitReinforcementPlacement(
+              selectedTerritoryId,
+              placementAmount,
+              onPlace,
+            )
+          }
+        >
+          {pending ? 'Placing' : 'Place'} {placementAmount}{' '}
+          {placementAmount === 1 ? 'army' : 'armies'}
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -402,64 +476,25 @@ export function TerritoryHud({
               >
                 Select one of your dashed markers, then place armies.
               </p>
-              <ArmyAmountControl
-                label="Armies to place"
-                minimum={1}
-                maximum={match.remainingReinforcements}
-                value={effectiveReinforcementAmount}
-                onChange={(value) =>
+              <ReinforcementPlacementControls
+                remainingReinforcements={match.remainingReinforcements}
+                amount={effectiveReinforcementAmount}
+                selectedTerritoryId={sourceId}
+                pending={multiplayerPending}
+                onAmountChange={(value) =>
                   setReinforcementAmount({
                     turnKey: reinforcementTurnKey,
                     value,
                   })
                 }
-                alwaysShowSlider
-                disabled={multiplayerPending}
+                onPlace={(territoryId, amount) =>
+                  dispatch({
+                    type: 'PLACE_REINFORCEMENT',
+                    territoryId,
+                    amount,
+                  })
+                }
               />
-              <div className="reinforcement-actions">
-                <button
-                  type="button"
-                  className="amount-shortcut"
-                  aria-label={`Max: ${match.remainingReinforcements} armies`}
-                  disabled={
-                    effectiveReinforcementAmount ===
-                      match.remainingReinforcements || multiplayerPending
-                  }
-                  onClick={() =>
-                    setReinforcementAmount({
-                      turnKey: reinforcementTurnKey,
-                      value: match.remainingReinforcements,
-                    })
-                  }
-                >
-                  Max
-                </button>
-                <button
-                  type="button"
-                  aria-busy={multiplayerPending}
-                  aria-describedby="reinforcement-placement-instruction"
-                  disabled={!sourceId || multiplayerPending}
-                  title={
-                    !sourceId
-                      ? 'Select an owned territory before placing armies.'
-                      : multiplayerPending
-                        ? 'A reinforcement placement is being submitted.'
-                        : undefined
-                  }
-                  onClick={() =>
-                    sourceId &&
-                    dispatch({
-                      type: 'PLACE_REINFORCEMENT',
-                      territoryId: sourceId,
-                      amount: effectiveReinforcementAmount,
-                    })
-                  }
-                >
-                  {multiplayerPending ? 'Placing' : 'Place'}{' '}
-                  {effectiveReinforcementAmount}{' '}
-                  {effectiveReinforcementAmount === 1 ? 'army' : 'armies'}
-                </button>
-              </div>
             </section>
           )}
 
