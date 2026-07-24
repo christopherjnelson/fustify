@@ -9,12 +9,49 @@ export type Room = Tables<'rooms'>;
 export type RoomMember = Tables<'room_members'>;
 export type RoomSeat = Tables<'room_seats'>;
 export type MultiplayerMatch = Tables<'matches'>;
+export type MatchVersion = Pick<
+  MultiplayerMatch,
+  'id' | 'status' | 'revision' | 'state_fingerprint' | 'updated_at'
+>;
+export type MatchMutableState = Pick<
+  MultiplayerMatch,
+  | 'status'
+  | 'revision'
+  | 'state_snapshot'
+  | 'state_fingerprint'
+  | 'last_command_type'
+  | 'winner_player_id'
+  | 'winner_user_id'
+  | 'updated_at'
+>;
+export type RoomMatchSummary = Pick<
+  MultiplayerMatch,
+  'id' | 'room_id' | 'status' | 'revision'
+>;
 
 export interface RoomState {
   room: Room;
   members: RoomMember[];
   seats: RoomSeat[];
-  match: MultiplayerMatch | null;
+  match: RoomMatchSummary | null;
+}
+
+export const MATCH_BOOTSTRAP_COLUMNS =
+  'id, room_id, status, revision, setup_snapshot, seat_order_snapshot, generator_metadata, planet_snapshot, state_snapshot, state_fingerprint, last_command_type, winner_player_id, winner_user_id, created_at, updated_at' as const;
+export const MATCH_VERSION_COLUMNS =
+  'id, status, revision, state_fingerprint, updated_at' as const;
+export const MATCH_MUTABLE_COLUMNS =
+  'status, revision, state_snapshot, state_fingerprint, last_command_type, winner_player_id, winner_user_id, updated_at' as const;
+const ROOM_MATCH_COLUMNS = 'id, room_id, status, revision' as const;
+
+export class PermanentMatchReadError extends Error {
+  readonly permanent = true;
+}
+
+export function isPermanentMatchReadError(
+  error: unknown,
+): error is PermanentMatchReadError {
+  return error instanceof PermanentMatchReadError;
 }
 
 export const multiplayerRoomSettingsSchema = z.object({
@@ -85,6 +122,38 @@ const pendingSessionByClient = new WeakMap<
   SupabaseClient<Database>,
   Promise<string>
 >();
+const pendingBootstrapByClient = new WeakMap<
+  SupabaseClient<Database>,
+  Map<string, Promise<MultiplayerMatch>>
+>();
+const pendingVersionByClient = new WeakMap<
+  SupabaseClient<Database>,
+  Map<string, Promise<MatchVersion>>
+>();
+const pendingMutableByClient = new WeakMap<
+  SupabaseClient<Database>,
+  Map<string, Promise<MatchMutableState>>
+>();
+
+function coalescedMatchRead<T>(
+  pendingByClient: WeakMap<SupabaseClient<Database>, Map<string, Promise<T>>>,
+  client: SupabaseClient<Database>,
+  matchId: string,
+  read: () => Promise<T>,
+): Promise<T> {
+  let pendingByMatch = pendingByClient.get(client);
+  if (!pendingByMatch) {
+    pendingByMatch = new Map();
+    pendingByClient.set(client, pendingByMatch);
+  }
+  const existing = pendingByMatch.get(matchId);
+  if (existing) return existing;
+  const request = read().finally(() => {
+    if (pendingByMatch.get(matchId) === request) pendingByMatch.delete(matchId);
+  });
+  pendingByMatch.set(matchId, request);
+  return request;
+}
 
 export function multiplayerError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
@@ -139,7 +208,15 @@ export function ensureAnonymousSession(
 export async function fetchRoomState(
   client: SupabaseClient<Database>,
   roomId: string,
+  includeMatch = true,
 ): Promise<RoomState> {
+  const matchRequest = includeMatch
+    ? client
+        .from('matches')
+        .select(ROOM_MATCH_COLUMNS)
+        .eq('room_id', roomId)
+        .maybeSingle()
+    : Promise.resolve({ data: null, error: null });
   const [roomResult, membersResult, seatsResult, matchResult] =
     await Promise.all([
       client.from('rooms').select('*').eq('id', roomId).maybeSingle(),
@@ -153,7 +230,7 @@ export async function fetchRoomState(
         .select('*')
         .eq('room_id', roomId)
         .order('seat_index'),
-      client.from('matches').select('*').eq('room_id', roomId).maybeSingle(),
+      matchRequest,
     ]);
   const error =
     roomResult.error ??
@@ -170,18 +247,100 @@ export async function fetchRoomState(
   };
 }
 
-export async function fetchMatch(
+function permanentMatchReadFailure(
+  error: unknown,
+  responseStatus?: number,
+): boolean {
+  const errorStatus =
+    typeof error === 'object' && error !== null && 'status' in error
+      ? Number(error.status)
+      : Number.NaN;
+  const status = responseStatus ?? errorStatus;
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    status === 401 ||
+    status === 403 ||
+    /(?:jwt|token|api key).*(?:expired|invalid)|invalid api key|permission denied|not authenticated/i.test(
+      message,
+    )
+  );
+}
+
+function matchReadError(
+  error: unknown,
+  missing = false,
+  responseStatus?: number,
+): Error {
+  if (missing || permanentMatchReadFailure(error, responseStatus)) {
+    return new PermanentMatchReadError(MULTIPLAYER_ERRORS.room_access_denied);
+  }
+  return multiplayerError(error);
+}
+
+export function fetchMatchBootstrap(
   client: SupabaseClient<Database>,
   matchId: string,
 ): Promise<MultiplayerMatch> {
-  const { data, error } = await client
-    .from('matches')
-    .select('*')
-    .eq('id', matchId)
-    .maybeSingle();
-  if (error) throw multiplayerError(error);
-  if (!data) throw multiplayerError('room_access_denied');
-  return data;
+  return coalescedMatchRead(
+    pendingBootstrapByClient,
+    client,
+    matchId,
+    async () => {
+      const result = await client
+        .from('matches')
+        .select(MATCH_BOOTSTRAP_COLUMNS)
+        .eq('id', matchId)
+        .maybeSingle();
+      if (result.error)
+        throw matchReadError(result.error, false, result.status);
+      if (!result.data) throw matchReadError('room_access_denied', true);
+      return result.data;
+    },
+  );
+}
+
+export function fetchMatchVersion(
+  client: SupabaseClient<Database>,
+  matchId: string,
+): Promise<MatchVersion> {
+  return coalescedMatchRead(
+    pendingVersionByClient,
+    client,
+    matchId,
+    async () => {
+      const result = await client
+        .from('matches')
+        .select(MATCH_VERSION_COLUMNS)
+        .eq('id', matchId)
+        .maybeSingle();
+      if (result.error)
+        throw matchReadError(result.error, false, result.status);
+      if (!result.data) throw matchReadError('room_access_denied', true);
+      return result.data;
+    },
+  );
+}
+
+export function fetchMatchMutableState(
+  client: SupabaseClient<Database>,
+  matchId: string,
+): Promise<MatchMutableState> {
+  return coalescedMatchRead(
+    pendingMutableByClient,
+    client,
+    matchId,
+    async () => {
+      const result = await client
+        .from('matches')
+        .select(MATCH_MUTABLE_COLUMNS)
+        .eq('id', matchId)
+        .maybeSingle();
+      if (result.error)
+        throw matchReadError(result.error, false, result.status);
+      if (!result.data) throw matchReadError('room_access_denied', true);
+      return result.data;
+    },
+  );
 }
 
 export async function createRoom(
@@ -389,7 +548,7 @@ export function subscribeToRoom(
 export function subscribeToMatch(
   client: SupabaseClient<Database>,
   matchId: string,
-  onRevision: (revision: number) => void,
+  onChange: (version: Pick<MatchVersion, 'revision' | 'status'>) => void,
   onStatus: (status: string) => void,
 ): RealtimeChannel {
   const channel = client.channel(`private-match:${matchId}`);
@@ -403,10 +562,14 @@ export function subscribeToMatch(
         filter: `id=eq.${matchId}`,
       },
       (payload) => {
-        const revision = Number(
-          (payload.new as { revision?: number } | null)?.revision ?? -1,
-        );
-        if (Number.isSafeInteger(revision)) onRevision(revision);
+        const row = payload.new as {
+          revision?: number;
+          status?: string;
+        } | null;
+        const revision = Number(row?.revision ?? -1);
+        if (Number.isSafeInteger(revision)) {
+          onChange({ revision, status: row?.status ?? 'active' });
+        }
       },
     )
     .subscribe(onStatus);

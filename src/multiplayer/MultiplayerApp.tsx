@@ -25,7 +25,6 @@ import {
   closeRoom,
   createRoom,
   ensureAnonymousSession,
-  fetchMatch,
   fetchRoomState,
   formatRoomCode,
   joinRoom,
@@ -42,6 +41,7 @@ import {
   type Room,
   type RoomState,
 } from './multiplayerApi';
+import { MatchSynchronization } from './matchSynchronization';
 import {
   getSupabaseClient,
   readMultiplayerConfiguration,
@@ -722,8 +722,8 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
     Readonly<Record<string, string>>
   >({});
   const matchRef = useRef<MultiplayerMatch | null>(null);
+  const synchronizationRef = useRef<MatchSynchronization | null>(null);
   const completedRoomStateRef = useRef<RoomState | null>(null);
-  const refreshSequence = useRef(0);
   const reactionRefreshSequence = useRef(0);
   const pendingReactionEventIdsRef = useRef(new Set<string>());
 
@@ -777,37 +777,12 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
     [userId],
   );
 
-  const refresh = useCallback(
-    async (minimumRevision = -1) => {
-      const sequence = ++refreshSequence.current;
-      const canonical = await fetchMatch(client, matchId);
-      let recoveredRoomState = completedRoomStateRef.current;
-      if (
-        canonical.status === 'completed' &&
-        recoveredRoomState?.room.id !== canonical.room_id
-      ) {
-        recoveredRoomState = await fetchRoomState(client, canonical.room_id);
-      }
-      if (sequence !== refreshSequence.current) return;
-      const currentRevision = matchRef.current?.revision ?? -1;
-      if (
-        canonical.revision >= minimumRevision &&
-        canonical.revision >= currentRevision
-      ) {
-        if (recoveredRoomState !== completedRoomStateRef.current) {
-          completedRoomStateRef.current = recoveredRoomState;
-          setCompletedRoomState(recoveredRoomState);
-        }
-        install(canonical);
-      }
-    },
-    [client, install, matchId],
-  );
-
   const dispatch = useCallback(
     async (action: Parameters<typeof submitGameplayCommand>[4]) => {
       const canonical = matchRef.current;
-      if (!canonical) throw new Error('Reconnecting to the match…');
+      const synchronization = synchronizationRef.current;
+      if (!canonical || !synchronization)
+        throw new Error('Reconnecting to the match…');
       const idempotencyKey = crypto.randomUUID();
       try {
         const result = await submitGameplayCommand(
@@ -817,13 +792,16 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
           idempotencyKey,
           action,
         );
-        await refresh(result.acceptedRevision);
+        await synchronization.installAcceptedRevision(
+          result.acceptedRevision,
+          result.stateFingerprint,
+        );
       } catch (requestError) {
-        await refresh().catch(() => undefined);
+        await synchronization.recoverRevisionConflict().catch(() => undefined);
         throw multiplayerError(requestError);
       }
     },
-    [client, matchId, refresh],
+    [client, matchId],
   );
 
   const refreshReactions = useCallback(async () => {
@@ -869,22 +847,54 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
   useEffect(() => {
     let active = true;
     let reactionRefreshTimer: number | null = null;
+    const synchronization = new MatchSynchronization({
+      client,
+      matchId,
+      install,
+      onError: (requestError) => {
+        if (!active) return;
+        setError(requestError.message);
+        useGameStore.setState({
+          lastActionError: {
+            code: 'CONTROLLER_LOCKED',
+            message: requestError.message,
+          },
+        });
+      },
+      onCompleted: (canonical) => {
+        void client.removeChannel(channel);
+        if (completedRoomStateRef.current?.room.id === canonical.room_id)
+          return;
+        void fetchRoomState(client, canonical.room_id, false)
+          .then((roomState) => {
+            if (
+              !active ||
+              synchronization.current?.id !== canonical.id ||
+              synchronization.current.status !== 'completed'
+            )
+              return;
+            completedRoomStateRef.current = roomState;
+            setCompletedRoomState(roomState);
+          })
+          .catch((requestError: unknown) => {
+            if (active) setError(multiplayerError(requestError).message);
+          });
+      },
+    });
+    synchronizationRef.current = synchronization;
     let channel = subscribeToMatch(
       client,
       matchId,
-      (revision) => {
-        if (revision > (matchRef.current?.revision ?? -1))
-          void refresh(revision);
-      },
+      (version) => synchronization.realtimeChanged(version),
       (status) => {
         if (!active) return;
+        synchronization.realtimeStatus(status);
         setConnection(status);
         useGameStore.setState((current) => ({
           multiplayerSession: current.multiplayerSession
             ? { ...current.multiplayerSession, connection: status }
             : null,
         }));
-        if (status === 'SUBSCRIBED') void refresh();
       },
     );
     let reactionChannel = subscribeToMatchEventReactions(
@@ -903,24 +913,24 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
         if (active && status === 'SUBSCRIBED') void refreshReactions();
       },
     );
-    void Promise.all([refresh(), refreshReactions()]).catch(
-      (requestError: unknown) => {
-        if (active) setError(multiplayerError(requestError).message);
-      },
-    );
+    void Promise.all([synchronization.bootstrap(), refreshReactions()]);
     const recover = () => {
-      void refresh();
+      synchronization.online();
       void refreshReactions();
     };
-    const reconcile = window.setInterval(recover, 2_000);
-    window.addEventListener('focus', recover);
+    const visibilityChanged = () =>
+      synchronization.visibilityChanged(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', visibilityChanged);
     window.addEventListener('online', recover);
 
     if (import.meta.env.DEV) {
       window.__FUSTIFY_MULTIPLAYER_TEST__ = {
         getRealtimeEventCount: () => matchRef.current?.revision ?? 0,
         refreshCanonical: async () => {
-          await Promise.all([refresh(), refreshReactions()]);
+          await Promise.all([
+            synchronization.recoverRevisionConflict(),
+            refreshReactions(),
+          ]);
         },
         interruptRealtime: async () => {
           setConnection('RECONNECTING');
@@ -928,15 +938,17 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
             client.removeChannel(channel),
             client.removeChannel(reactionChannel),
           ]);
-          channel = subscribeToMatch(
-            client,
-            matchId,
-            (revision) => void refresh(revision),
-            (status) => {
-              setConnection(status);
-              if (status === 'SUBSCRIBED') void refresh();
-            },
-          );
+          if (synchronization.current?.status !== 'completed') {
+            channel = subscribeToMatch(
+              client,
+              matchId,
+              (version) => synchronization.realtimeChanged(version),
+              (status) => {
+                synchronization.realtimeStatus(status);
+                setConnection(status);
+              },
+            );
+          }
           reactionChannel = subscribeToMatchEventReactions(
             client,
             matchId,
@@ -945,7 +957,8 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
               if (status === 'SUBSCRIBED') void refreshReactions();
             },
           );
-          await Promise.all([refresh(), refreshReactions()]);
+          synchronization.online();
+          await refreshReactions();
         },
       };
     }
@@ -954,8 +967,11 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
       if (reactionRefreshTimer !== null) {
         window.clearTimeout(reactionRefreshTimer);
       }
-      window.clearInterval(reconcile);
-      window.removeEventListener('focus', recover);
+      synchronization.stop();
+      if (synchronizationRef.current === synchronization) {
+        synchronizationRef.current = null;
+      }
+      document.removeEventListener('visibilitychange', visibilityChanged);
       window.removeEventListener('online', recover);
       delete window.__FUSTIFY_MULTIPLAYER_TEST__;
       void client.removeChannel(channel);
@@ -965,7 +981,7 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
         inspectedTerritoryId: null,
       });
     };
-  }, [client, matchId, refresh, refreshReactions]);
+  }, [client, install, matchId, refreshReactions]);
 
   useEffect(() => {
     useGameStore.setState((current) => ({
@@ -1052,6 +1068,7 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
 export function MultiplayerApp() {
   const [route, setRoute] = useState<Route>(() => currentRoute());
   const [userId, setUserId] = useState<string | null>(null);
+  const [authRevision, setAuthRevision] = useState(0);
   const [authError, setAuthError] = useState<string | null>(null);
   const configured = readMultiplayerConfiguration() !== null;
 
@@ -1074,7 +1091,12 @@ export function MultiplayerApp() {
       });
     const { data } = client.auth.onAuthStateChange((event, session) => {
       if (!active) return;
-      if (session?.user) setUserId(session.user.id);
+      if (session?.user) {
+        setUserId(session.user.id);
+        if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          setAuthRevision((current) => current + 1);
+        }
+      }
       if (event === 'SIGNED_OUT') setUserId(null);
     });
     return () => {
@@ -1110,6 +1132,12 @@ export function MultiplayerApp() {
   if (route.kind === 'room')
     return <RoomView roomId={route.id} userId={userId} />;
   if (route.kind === 'match')
-    return <MatchView matchId={route.id} userId={userId} />;
+    return (
+      <MatchView
+        key={`${route.id}:${authRevision}`}
+        matchId={route.id}
+        userId={userId}
+      />
+    );
   return <Lobby userId={userId} />;
 }
