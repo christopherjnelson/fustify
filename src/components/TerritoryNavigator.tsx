@@ -13,6 +13,7 @@ import {
 } from '../core/navigation/territoryNavigator';
 import { useGameStore } from '../state/useGameStore';
 import { CLOSE_DIALOG_SHORTCUT } from '../core/input/controlBindings';
+import { multiplayerInteractionCapabilities } from '../multiplayer/interactionCapabilities';
 
 const STATUS_LABELS = {
   'valid-source': 'Valid source',
@@ -78,12 +79,19 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
   const botControlled =
     configuredPlayers.find((player) => player.id === match.activePlayerId)
       ?.controllerType === 'heuristic-bot';
+  const capabilities = multiplayerInteractionCapabilities(
+    match,
+    multiplayerSession,
+  );
+  const inspectionOnly =
+    multiplayerSession !== null && !capabilities.canIssueGameplayActions;
   const selectionUnavailable =
     botControlled ||
     (multiplayerSession !== null &&
-      (multiplayerSession.pending ||
-        multiplayerSession.ownPlayerId !== match.activePlayerId)) ||
-    !['reinforce', 'attack', 'fortify'].includes(match.phase);
+      multiplayerSession.pending &&
+      capabilities.canIssueGameplayActions) ||
+    (!inspectionOnly &&
+      !['reinforce', 'attack', 'fortify'].includes(match.phase));
 
   useEffect(() => {
     if (!open || !dialogRef.current) return;

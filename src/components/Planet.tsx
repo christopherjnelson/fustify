@@ -21,6 +21,7 @@ import {
 } from '../presentation/territoryVisuals';
 import { PLANET_ROTATION } from '../presentation/globeOrientation';
 import { useGameStore } from '../state/useGameStore';
+import { multiplayerInteractionCapabilities } from '../multiplayer/interactionCapabilities';
 import { ArmyMarkers } from './ArmyMarkers';
 import { ContinentGlobeLabels } from './ContinentGlobeLabels';
 import { GraphDebugOverlay } from './GraphDebugOverlay';
@@ -36,6 +37,9 @@ export function Planet({ planet }: PlanetProps) {
   const applicationMode = useGameStore((state) => state.applicationMode);
   const matchSetup = useGameStore((state) => state.matchSetup);
   const hoveredId = useGameStore((state) => state.hoveredTerritoryId);
+  const inspectedTerritoryId = useGameStore(
+    (state) => state.inspectedTerritoryId,
+  );
   const debugView = useGameStore((state) => state.debugView);
   const viewMode = useGameStore((state) => state.viewMode);
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
@@ -46,6 +50,10 @@ export function Planet({ planet }: PlanetProps) {
   const displayedTerritories = useMemo(
     () => displayedTerritoryStates(matchSetup, match),
     [match, matchSetup],
+  );
+  const interactionCapabilities = multiplayerInteractionCapabilities(
+    match,
+    multiplayerSession,
   );
   const gameplayActive =
     match !== null &&
@@ -75,8 +83,7 @@ export function Planet({ planet }: PlanetProps) {
       !match ||
       applicationMode !== 'playing' ||
       activeController === 'heuristic-bot' ||
-      (multiplayerSession !== null &&
-        multiplayerSession.ownPlayerId !== match.activePlayerId)
+      !interactionCapabilities.canIssueGameplayActions
     ) {
       return {
         sources: new Set<string>(),
@@ -124,12 +131,26 @@ export function Planet({ planet }: PlanetProps) {
         .filter((id) => targets.includes(id)),
     );
     return { sources: new Set(sources), targets: new Set(targets), seaTargets };
-  }, [applicationMode, configuredPlayers, match, multiplayerSession, planet]);
+  }, [
+    applicationMode,
+    configuredPlayers,
+    interactionCapabilities.canIssueGameplayActions,
+    match,
+    planet,
+  ]);
 
   const visualKind = useCallback(
     (territoryId: string): TerritoryVisualKind => {
       if (!match || applicationMode !== 'playing') {
         return territoryId === hoveredId ? 'hovered' : null;
+      }
+      if (
+        multiplayerSession !== null &&
+        !interactionCapabilities.canIssueGameplayActions
+      ) {
+        return territoryId === hoveredId || territoryId === inspectedTerritoryId
+          ? 'hovered'
+          : null;
       }
       if (territoryId === botExecution.targetTerritoryId) return 'target';
       if (territoryId === botExecution.sourceTerritoryId) return 'source';
@@ -148,7 +169,16 @@ export function Planet({ planet }: PlanetProps) {
       }
       return null;
     },
-    [botExecution, hoveredId, applicationMode, legal, match],
+    [
+      applicationMode,
+      botExecution,
+      hoveredId,
+      inspectedTerritoryId,
+      interactionCapabilities.canIssueGameplayActions,
+      legal,
+      match,
+      multiplayerSession,
+    ],
   );
 
   const { landGeometry, oceanGeometry, landCellIds } = useMemo(() => {

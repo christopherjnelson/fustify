@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useGameStore } from './useGameStore';
+import { reconcileMultiplayerSelection, useGameStore } from './useGameStore';
 import { commandFingerprint } from '../core/controllers/observation';
 import { getLegalGameCommands } from '../core/controllers/legalCommands';
 
@@ -279,6 +279,75 @@ describe('setup and match store integration', () => {
     await vi.waitFor(() =>
       expect(useGameStore.getState().multiplayerSession?.pending).toBe(false),
     );
+  });
+
+  it('uses waiting-player territory clicks for inspection without gameplay selection or dispatch', async () => {
+    const started = await startRandomMatch();
+    started.beginTurn();
+    const playing = useGameStore.getState();
+    const otherPlayer = playing.matchSetup.players.find(
+      (player) => player.id !== playing.match!.activePlayerId,
+    )!;
+    const authoritativeDispatch = vi.fn(async () => undefined);
+    useGameStore.setState({
+      multiplayerSession: {
+        ownPlayerId: otherPlayer.id,
+        revision: 8,
+        stateFingerprint: 'waiting-inspection',
+        connection: 'SUBSCRIBED',
+        pending: false,
+        dispatch: authoritativeDispatch,
+      },
+    });
+    const territory = playing.planet.territories[0]!;
+
+    useGameStore.getState().selectTerritory(territory.id);
+
+    const inspected = useGameStore.getState();
+    expect(inspected.inspectedTerritoryId).toBe(territory.id);
+    expect(inspected.match?.selectedSourceTerritoryId).toBeNull();
+    expect(inspected.match?.selectedTargetTerritoryId).toBeNull();
+    expect(inspected.lastActionError).toBeNull();
+    expect(authoritativeDispatch).not.toHaveBeenCalled();
+
+    inspected.selectAndFocusTerritory(territory.id);
+    expect(useGameStore.getState().focusTargetTerritoryId).toBe(territory.id);
+    expect(authoritativeDispatch).not.toHaveBeenCalled();
+  });
+
+  it('clears gameplay selections on a canonical handoff and preserves them for a repeated same-player revision', async () => {
+    const started = await startRandomMatch();
+    started.beginTurn();
+    const state = useGameStore.getState();
+    const ownedTerritory = state.planet.territories.find(
+      (territory) =>
+        state.match!.territories[territory.id]?.ownerId ===
+        state.match!.activePlayerId,
+    )!;
+    state.selectTerritory(ownedTerritory.id);
+    const selected = useGameStore.getState().match!;
+    const repeated = reconcileMultiplayerSelection(
+      state.planet,
+      { ...selected },
+      selected,
+    );
+    const nextPlayer = state.matchSetup.players.find(
+      (player) => player.id !== selected.activePlayerId,
+    )!;
+    const handedOff = reconcileMultiplayerSelection(
+      state.planet,
+      {
+        ...selected,
+        activePlayerId: nextPlayer.id,
+        selectedSourceTerritoryId: null,
+        selectedTargetTerritoryId: null,
+      },
+      selected,
+    );
+
+    expect(repeated.selectedSourceTerritoryId).toBe(ownedTerritory.id);
+    expect(handedOff.selectedSourceTerritoryId).toBeNull();
+    expect(handedOff.selectedTargetTerritoryId).toBeNull();
   });
 
   it('blocks actions during handoff and begins without recalculating reinforcements', async () => {

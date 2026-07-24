@@ -56,6 +56,7 @@ import {
   commandFingerprint,
   fingerprintsEqual,
 } from '../core/controllers/observation';
+import { multiplayerInteractionCapabilities } from '../multiplayer/interactionCapabilities';
 
 function initializeSetupFromLocation() {
   if (typeof window === 'undefined') {
@@ -190,6 +191,7 @@ export interface GameState {
   saveError: string | null;
   saveMessage: string | null;
   hoveredTerritoryId: string | null;
+  inspectedTerritoryId: string | null;
   debugView: boolean;
   viewMode: PlanetViewMode;
   lastActionError: GameError | null;
@@ -247,7 +249,7 @@ export interface GameState {
 }
 
 export interface MultiplayerStoreSession {
-  ownPlayerId: string;
+  ownPlayerId: string | null;
   revision: number;
   stateFingerprint: string;
   connection: string;
@@ -427,6 +429,7 @@ export const useGameStore = create<GameState>((set, get) => {
     ...initialSaveStatus(),
     saveMessage: null,
     hoveredTerritoryId: null,
+    inspectedTerritoryId: null,
     debugView: false,
     viewMode: 'ownership',
     lastActionError: null,
@@ -1146,13 +1149,42 @@ export const useGameStore = create<GameState>((set, get) => {
         return;
       }
       if (state.applicationMode === 'playing') {
+        const capabilities = multiplayerInteractionCapabilities(
+          state.match,
+          state.multiplayerSession,
+        );
+        if (
+          state.multiplayerSession &&
+          capabilities.canInspectTerritories &&
+          !capabilities.canIssueGameplayActions
+        ) {
+          set({
+            inspectedTerritoryId: territoryId,
+            lastActionError: null,
+          });
+          return;
+        }
+        set({ inspectedTerritoryId: null });
         state.dispatchGameAction(createTerritorySelectionAction(territoryId));
       }
     },
     selectAndFocusTerritory: (territoryId) => {
       const state = get();
       if (state.applicationMode !== 'playing') return;
-      state.dispatchGameAction(createTerritorySelectionAction(territoryId));
+      const capabilities = multiplayerInteractionCapabilities(
+        state.match,
+        state.multiplayerSession,
+      );
+      if (
+        state.multiplayerSession &&
+        capabilities.canInspectTerritories &&
+        !capabilities.canIssueGameplayActions
+      ) {
+        set({ inspectedTerritoryId: territoryId, lastActionError: null });
+      } else {
+        set({ inspectedTerritoryId: null });
+        state.dispatchGameAction(createTerritorySelectionAction(territoryId));
+      }
       set((current) => ({
         focusTargetTerritoryId: territoryId,
         focusSequence: current.focusSequence + 1,
@@ -1174,7 +1206,14 @@ export const useGameStore = create<GameState>((set, get) => {
       ),
     focusSelectedTerritory: () => {
       const state = get();
-      const territoryId = selectedTerritory(state);
+      const territoryId =
+        state.multiplayerSession &&
+        !multiplayerInteractionCapabilities(
+          state.match,
+          state.multiplayerSession,
+        ).canIssueGameplayActions
+          ? state.inspectedTerritoryId
+          : selectedTerritory(state);
       if (territoryId !== null) state.requestTerritoryFocus(territoryId);
     },
     cancelTerritoryFocus: () =>

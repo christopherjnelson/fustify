@@ -20,6 +20,7 @@ import { useGameStore, type PlanetViewMode } from '../state/useGameStore';
 import { TerritoryNavigator } from './TerritoryNavigator';
 import { territoryDrawerReducer } from '../core/navigation/territoryNavigator';
 import { playerColorValue } from '../core/setup/playerConfig';
+import { PLAYER_COLORS } from '../core/setup/playerConfig';
 import { TERRITORY_NAVIGATOR_SHORTCUT } from '../core/input/controlBindings';
 import type { ActivityReactionController } from '../multiplayer/matchEventReactions';
 import { MatchDock } from './MatchDock';
@@ -30,6 +31,12 @@ import {
   playerViewMode,
   type PlayerViewMode,
 } from './playerViewModes';
+import {
+  multiplayerHudMode,
+  multiplayerInteractionCapabilities,
+} from '../multiplayer/interactionCapabilities';
+import type { LocalPlayerConfig } from '../core/setup/playerConfig';
+import type { GamePhase, MatchState } from '../core/game/types';
 
 const PHASE_LABELS = {
   reinforce: 'Reinforce',
@@ -39,6 +46,93 @@ const PHASE_LABELS = {
   'turn-end': 'End turn',
   'game-over': 'Game over',
 } as const;
+
+const WAITING_PHASE_LABELS: Record<GamePhase, string> = {
+  reinforce: 'Reinforcing',
+  attack: 'Attacking',
+  capture: 'Moving after capture',
+  fortify: 'Fortifying',
+  'turn-end': 'Ending turn',
+  'game-over': 'Game over',
+};
+
+export function MultiplayerWaitingPanel({
+  match,
+  activePlayer,
+  ownPlayer,
+}: {
+  match: MatchState;
+  activePlayer: LocalPlayerConfig;
+  ownPlayer: LocalPlayerConfig | null;
+}) {
+  const ownedTerritories = ownPlayer
+    ? getOwnedTerritories(match, ownPlayer.id)
+    : [];
+  const armyCount = ownedTerritories.reduce(
+    (total, territoryId) =>
+      total + (match.territories[territoryId]?.armyCount ?? 0),
+    0,
+  );
+  const ownColor = ownPlayer
+    ? PLAYER_COLORS.find((color) => color.id === ownPlayer.colorId)
+    : null;
+
+  return (
+    <section
+      className="phase-card multiplayer-waiting-panel"
+      aria-live="polite"
+      data-testid="multiplayer-waiting-panel"
+    >
+      <span className="eyebrow">Waiting for</span>
+      <h2>{activePlayer.name}</h2>
+      <p className="waiting-phase">
+        <span
+          className="color-swatch"
+          style={{ background: playerColorValue(activePlayer.colorId) }}
+          aria-hidden="true"
+        />
+        {WAITING_PHASE_LABELS[match.phase]}
+      </p>
+      <div className="waiting-faction">
+        <span className="eyebrow">Your faction</span>
+        {ownPlayer ? (
+          <>
+            <strong>
+              <span
+                className="color-swatch"
+                style={{ background: playerColorValue(ownPlayer.colorId) }}
+                aria-hidden="true"
+              />
+              {ownPlayer.name}
+            </strong>
+            <span>
+              {ownColor?.label ?? 'Player color'} · Seat{' '}
+              {ownPlayer.seatIndex + 1}
+            </span>
+          </>
+        ) : (
+          <span>Confirming your claimed seat…</span>
+        )}
+      </div>
+      {ownPlayer && (
+        <dl className="waiting-summary">
+          <div>
+            <dt>Territories</dt>
+            <dd>{ownedTerritories.length}</dd>
+          </div>
+          <div>
+            <dt>Armies</dt>
+            <dd>{armyCount}</dd>
+          </div>
+        </dl>
+      )}
+      <p className="waiting-message">
+        You’ll be notified when your turn begins. Explore the world while you
+        wait.
+      </p>
+    </section>
+  );
+}
 
 export function PlayerViewModeSelector({
   viewMode,
@@ -230,6 +324,9 @@ export function TerritoryHud({
   const error = useGameStore((state) => state.lastActionError);
   const botExecution = useGameStore((state) => state.botExecution);
   const multiplayerSession = useGameStore((state) => state.multiplayerSession);
+  const inspectedTerritoryId = useGameStore(
+    (state) => state.inspectedTerritoryId,
+  );
   const dispatch = useGameStore((state) => state.dispatchGameAction);
   const resetMatch = useGameStore((state) => state.resetMatch);
   const rematchNewOwnership = useGameStore(
@@ -301,20 +398,47 @@ export function TerritoryHud({
   )!;
   const botControlled = activePlayer.controllerType === 'heuristic-bot';
   const multiplayerPending = multiplayerSession?.pending ?? false;
+  const interactionCapabilities = multiplayerInteractionCapabilities(
+    match,
+    multiplayerSession,
+  );
+  const multiplayerMode = multiplayerHudMode(match, multiplayerSession);
   const canControl =
-    !botControlled &&
-    (multiplayerSession === null ||
-      multiplayerSession.ownPlayerId === match.activePlayerId);
+    !botControlled && interactionCapabilities.canIssueGameplayActions;
+  const ownPlayer =
+    configuredPlayers.find(
+      (player) => player.id === multiplayerSession?.ownPlayerId,
+    ) ?? null;
   const sourceId = match.selectedSourceTerritoryId;
   const targetId = match.selectedTargetTerritoryId;
   const source = sourceId ? territoryById.get(sourceId) : undefined;
   const target = targetId ? territoryById.get(targetId) : undefined;
   const sourceState = sourceId ? match.territories[sourceId] : undefined;
-  const selected = target ?? source;
+  const inspected =
+    multiplayerSession && !canControl && inspectedTerritoryId
+      ? territoryById.get(inspectedTerritoryId)
+      : undefined;
+  const selected = inspected ?? target ?? source;
   const selectedState = selected ? match.territories[selected.id] : undefined;
   const selectedOwner = configuredPlayers.find(
     (player) => player.id === selectedState?.ownerId,
   );
+  const inspectedSeaRoutes = inspected
+    ? planet.connections
+        .filter(
+          (connection) =>
+            connection.type === 'sea-route' &&
+            (connection.fromTerritoryId === inspected.id ||
+              connection.toTerritoryId === inspected.id),
+        )
+        .map((connection) =>
+          connection.fromTerritoryId === inspected.id
+            ? connection.toTerritoryId
+            : connection.fromTerritoryId,
+        )
+        .map((territoryId) => territoryById.get(territoryId)?.name)
+        .filter(Boolean)
+    : [];
   const owned = getOwnedTerritories(match, match.activePlayerId);
   const ownedContinents = getFullyOwnedContinents(
     planet,
@@ -354,6 +478,17 @@ export function TerritoryHud({
   const legalAttackRemains = getAttackSources(match).some(
     (territoryId) => getAttackTargets(planet, match, territoryId).length > 0,
   );
+  const previousCanControl = useRef(canControl);
+
+  useEffect(() => {
+    if (previousCanControl.current === canControl) return;
+    previousCanControl.current = canControl;
+    setAttackDice(1);
+    setReinforcementAmount({ turnKey: '', value: 1 });
+    setMoveAmount(1);
+    setFortifyAmount(1);
+    setConfirmingEndAttack(false);
+  }, [canControl]);
 
   useEffect(() => {
     if (!confirmingEndAttack) return;
@@ -423,27 +558,35 @@ export function TerritoryHud({
           )}
 
           {multiplayerSession && (
-            <section
-              className="phase-card multiplayer-authority-status"
-              aria-live="polite"
-              data-testid="multiplayer-authority-status"
-            >
-              <span className="eyebrow">
-                Authoritative revision {multiplayerSession.revision}
-              </span>
-              <p>
-                {match.phase === 'game-over'
-                  ? `Match completed. ${activePlayer.name} won.`
-                  : multiplayerPending
-                    ? 'Submitting command…'
-                    : canControl
-                      ? 'Your actions are enabled.'
-                      : `Waiting for ${activePlayer.name}.`}
-              </p>
-              <code data-testid="state-fingerprint">
-                {multiplayerSession.stateFingerprint}
-              </code>
-            </section>
+            <>
+              {multiplayerMode === 'waiting' ? (
+                <MultiplayerWaitingPanel
+                  match={match}
+                  activePlayer={activePlayer}
+                  ownPlayer={ownPlayer}
+                />
+              ) : (
+                <section
+                  className="phase-card multiplayer-authority-status"
+                  aria-live="polite"
+                  data-testid="multiplayer-authority-status"
+                >
+                  <span className="eyebrow">
+                    Authoritative revision {multiplayerSession.revision}
+                  </span>
+                  <p>
+                    {match.phase === 'game-over'
+                      ? `Match completed. ${activePlayer.name} won.`
+                      : multiplayerPending
+                        ? 'Submitting command…'
+                        : 'Your actions are enabled.'}
+                  </p>
+                  <code data-testid="state-fingerprint">
+                    {multiplayerSession.stateFingerprint}
+                  </code>
+                </section>
+              )}
+            </>
           )}
 
           {botControlled && match.phase !== 'game-over' && (
@@ -592,7 +735,7 @@ export function TerritoryHud({
             </section>
           )}
 
-          {confirmingEndAttack && match.phase === 'attack' && (
+          {canControl && confirmingEndAttack && match.phase === 'attack' && (
             <section
               className="phase-confirmation"
               role="dialog"
@@ -736,9 +879,11 @@ export function TerritoryHud({
                 />
                 <div>
                   <span className="eyebrow">
-                    {target?.id === selected.id
-                      ? 'Selected target'
-                      : 'Selected source'}
+                    {inspected?.id === selected.id
+                      ? 'Inspecting territory'
+                      : target?.id === selected.id
+                        ? 'Selected target'
+                        : 'Selected source'}
                   </span>
                   <h2>{selected.name}</h2>
                 </div>
@@ -783,6 +928,27 @@ export function TerritoryHud({
                       : '—'}
                   </dd>
                 </div>
+                {inspected && (
+                  <>
+                    <div>
+                      <dt>Adjacent</dt>
+                      <dd>
+                        {inspected.adjacentTerritoryIds
+                          .map((id) => territoryById.get(id)?.name)
+                          .filter(Boolean)
+                          .join(', ')}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Sea routes</dt>
+                      <dd>
+                        {inspectedSeaRoutes.length > 0
+                          ? inspectedSeaRoutes.join(', ')
+                          : 'None'}
+                      </dd>
+                    </div>
+                  </>
+                )}
               </dl>
             </section>
           )}

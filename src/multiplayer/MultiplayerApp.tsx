@@ -760,6 +760,10 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
           assignmentMode: 'random',
         },
         lastActionError: null,
+        inspectedTerritoryId:
+          current.match?.activePlayerId === snapshots.state.activePlayerId
+            ? current.inspectedTerritoryId
+            : null,
         multiplayerSession: {
           ownPlayerId: snapshots.ownPlayerId,
           revision: canonical.revision,
@@ -956,7 +960,10 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
       delete window.__FUSTIFY_MULTIPLAYER_TEST__;
       void client.removeChannel(channel);
       void client.removeChannel(reactionChannel);
-      useGameStore.setState({ multiplayerSession: null });
+      useGameStore.setState({
+        multiplayerSession: null,
+        inspectedTerritoryId: null,
+      });
     };
   }, [client, matchId, refresh, refreshReactions]);
 
