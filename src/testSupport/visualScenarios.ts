@@ -43,6 +43,7 @@ export type VisualScenario =
   | 'reinforcement'
   | 'multiplayer-authority'
   | 'multiplayer-reinforcement-active'
+  | 'multiplayer-game-over'
   | 'bot-turn'
   | 'bot-reinforcement'
   | 'human-after-bot'
@@ -568,7 +569,7 @@ export function applyScenario(scenario: VisualScenario) {
       territoryId: ownedConnection.toTerritoryId,
     }).state;
   }
-  if (scenario === 'game-over') {
+  if (scenario === 'game-over' || scenario === 'multiplayer-game-over') {
     scenarioMatch = wonMatch(match, planet);
     applicationMode = 'game-over';
   }

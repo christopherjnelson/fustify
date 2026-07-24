@@ -14,11 +14,43 @@ describe('multiplayer room creation', () => {
     const generateSeed = vi.fn(() => 'quiet-harbor-321');
     const client = { rpc } as unknown as SupabaseClient<Database>;
 
-    await expect(createRoom(client, 'Host', generateSeed)).resolves.toBe(room);
+    await expect(createRoom(client, 'Host', { generateSeed })).resolves.toBe(
+      room,
+    );
     expect(generateSeed).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenCalledWith('create_room', {
       display_name: 'Host',
       seed: 'quiet-harbor-321',
+      territory_count: 42,
+      continent_count: 5,
+      assignment_mode: 'random',
+      max_seats: 5,
+    });
+  });
+
+  it('passes validated explicit settings through the existing room RPC', async () => {
+    const room = { id: 'replacement-room' };
+    const rpc = vi.fn(async () => ({ data: room, error: null }));
+    const client = { rpc } as unknown as SupabaseClient<Database>;
+
+    await expect(
+      createRoom(client, 'Host', {
+        settings: {
+          seed: 'same-world-123',
+          territoryCount: 36,
+          continentCount: 5,
+          assignmentMode: 'random',
+          maxSeats: 4,
+        },
+      }),
+    ).resolves.toBe(room);
+    expect(rpc).toHaveBeenCalledWith('create_room', {
+      display_name: 'Host',
+      seed: 'same-world-123',
+      territory_count: 36,
+      continent_count: 5,
+      assignment_mode: 'random',
+      max_seats: 4,
     });
   });
 });

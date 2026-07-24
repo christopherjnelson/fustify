@@ -1,4 +1,5 @@
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
+import { z } from 'zod';
 import type { GameAction } from '../core/game/types';
 import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
 import type { Database, Tables } from './database.types';
@@ -15,6 +16,30 @@ export interface RoomState {
   seats: RoomSeat[];
   match: MultiplayerMatch | null;
 }
+
+export const multiplayerRoomSettingsSchema = z.object({
+  seed: z.string().trim().min(1).max(64),
+  territoryCount: z.number().int().min(12).max(48),
+  continentCount: z.number().int().min(2).max(5),
+  assignmentMode: z.literal('random'),
+  maxSeats: z.number().int().min(2).max(5),
+});
+
+export type MultiplayerRoomSettings = z.infer<
+  typeof multiplayerRoomSettingsSchema
+>;
+
+export interface CreateRoomOptions {
+  settings?: MultiplayerRoomSettings;
+  generateSeed?: () => string;
+}
+
+const DEFAULT_ROOM_SETTINGS = {
+  territoryCount: 42,
+  continentCount: 5,
+  assignmentMode: 'random',
+  maxSeats: 5,
+} as const;
 
 export const MULTIPLAYER_ERRORS: Record<string, string> = {
   already_joined: 'You already belong to this room.',
@@ -159,11 +184,21 @@ export async function fetchMatch(
 export async function createRoom(
   client: SupabaseClient<Database>,
   displayName: string,
-  generateSeed: () => string = generateReadableWorldSeed,
+  options: CreateRoomOptions = {},
 ): Promise<Room> {
+  const settings = multiplayerRoomSettingsSchema.parse(
+    options.settings ?? {
+      ...DEFAULT_ROOM_SETTINGS,
+      seed: (options.generateSeed ?? generateReadableWorldSeed)(),
+    },
+  );
   const { data, error } = await client.rpc('create_room', {
     display_name: displayName,
-    seed: generateSeed(),
+    seed: settings.seed,
+    territory_count: settings.territoryCount,
+    continent_count: settings.continentCount,
+    assignment_mode: settings.assignmentMode,
+    max_seats: settings.maxSeats,
   });
   if (error) throw multiplayerError(error);
   return data;

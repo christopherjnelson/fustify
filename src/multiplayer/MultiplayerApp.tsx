@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from 'react';
 import { z } from 'zod';
 import { BRAND } from '../branding';
@@ -37,6 +38,7 @@ import {
   subscribeToMatch,
   subscribeToRoom,
   updateRoomSettings,
+  multiplayerRoomSettingsSchema,
   type MultiplayerMatch,
   type Room,
   type RoomState,
@@ -58,6 +60,7 @@ import {
 } from '../components/setup/GameSetup';
 import { MultiplayerRoomRoster } from './MultiplayerRoomRoster';
 import { buildMultiplayerRosterDisplay } from './multiplayerRoomRosterViewModel';
+import { PostMatchActions } from './PostMatchActions';
 
 type Route =
   | { kind: 'lobby' }
@@ -665,10 +668,15 @@ export function MultiplayerGameScene({
   matchId,
   revision,
   connection = 'SUBSCRIBED',
+  renderPostMatchActions,
 }: {
   matchId: string;
   revision: number;
   connection?: string;
+  renderPostMatchActions?: (
+    reviewing: boolean,
+    onReviewingChange: (reviewing: boolean) => void,
+  ) => ReactNode;
 }) {
   return (
     <main
@@ -681,7 +689,9 @@ export function MultiplayerGameScene({
       <Minimap />
       <ControlLegend />
       <TurnNotificationController />
-      <TerritoryHud />
+      <TerritoryHud
+        renderMultiplayerPostMatchActions={renderPostMatchActions}
+      />
       <div className="multiplayer-game-connection">
         <ConnectionBadge status={connection} />
         <span data-testid="match-id">{matchId}</span>
@@ -696,7 +706,10 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
   const [match, setMatch] = useState<MultiplayerMatch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connection, setConnection] = useState('CONNECTING');
+  const [completedRoomState, setCompletedRoomState] =
+    useState<RoomState | null>(null);
   const matchRef = useRef<MultiplayerMatch | null>(null);
+  const completedRoomStateRef = useRef<RoomState | null>(null);
   const refreshSequence = useRef(0);
 
   const install = useCallback(
@@ -749,12 +762,23 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
     async (minimumRevision = -1) => {
       const sequence = ++refreshSequence.current;
       const canonical = await fetchMatch(client, matchId);
+      let recoveredRoomState = completedRoomStateRef.current;
+      if (
+        canonical.status === 'completed' &&
+        recoveredRoomState?.room.id !== canonical.room_id
+      ) {
+        recoveredRoomState = await fetchRoomState(client, canonical.room_id);
+      }
       if (sequence !== refreshSequence.current) return;
       const currentRevision = matchRef.current?.revision ?? -1;
       if (
         canonical.revision >= minimumRevision &&
         canonical.revision >= currentRevision
       ) {
+        if (recoveredRoomState !== completedRoomStateRef.current) {
+          completedRoomStateRef.current = recoveredRoomState;
+          setCompletedRoomState(recoveredRoomState);
+        }
         install(canonical);
       }
     },
@@ -850,6 +874,29 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
     }));
   }, [connection, dispatch, match]);
 
+  const postMatch = useMemo(() => {
+    if (!completedRoomState) return undefined;
+    const room = completedRoomState.room;
+    const member = completedRoomState.members.find(
+      (candidate) => candidate.user_id === userId,
+    );
+    return {
+      isHost: room.host_user_id === userId,
+      displayName:
+        member?.display_name ??
+        window.localStorage.getItem('fustify.multiplayer.displayName') ??
+        '',
+      settings: multiplayerRoomSettingsSchema.parse({
+        seed: room.seed,
+        territoryCount: room.territory_count,
+        continentCount: room.continent_count,
+        maxSeats: room.max_seats,
+        assignmentMode:
+          room.assignment_mode === 'random' ? room.assignment_mode : 'random',
+      }),
+    };
+  }, [completedRoomState, userId]);
+
   if (!match) {
     return (
       <StatusScreen
@@ -864,6 +911,22 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
       matchId={match.id}
       revision={match.revision}
       connection={connection}
+      renderPostMatchActions={
+        match.status === 'completed' && postMatch
+          ? (reviewing, onReviewingChange) => (
+              <PostMatchActions
+                reviewing={reviewing}
+                isHost={postMatch.isHost}
+                settings={postMatch.settings}
+                createRoom={(settings) =>
+                  createRoom(client, postMatch.displayName, { settings })
+                }
+                onReviewingChange={onReviewingChange}
+                navigate={navigate}
+              />
+            )
+          : undefined
+      }
     />
   );
 }

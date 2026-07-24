@@ -103,7 +103,14 @@ function ArmyAmountControl({
   );
 }
 
-export function TerritoryHud() {
+export function TerritoryHud({
+  renderMultiplayerPostMatchActions,
+}: {
+  renderMultiplayerPostMatchActions?: (
+    reviewing: boolean,
+    onReviewingChange: (reviewing: boolean) => void,
+  ) => ReactNode;
+} = {}) {
   const planet = useGameStore((state) => state.planet);
   const match = useGameStore((state) => state.match)!;
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
@@ -769,13 +776,20 @@ export function TerritoryHud() {
           {match.phase === 'game-over' && reviewingGameOver && (
             <section className="phase-card">
               <span className="eyebrow">Reviewing final world</span>
-              <button
-                type="button"
-                className="wide"
-                onClick={() => setReviewingGameOver(false)}
-              >
-                Show rematch options
-              </button>
+              {multiplayerSession && renderMultiplayerPostMatchActions ? (
+                renderMultiplayerPostMatchActions(
+                  reviewingGameOver,
+                  setReviewingGameOver,
+                )
+              ) : (
+                <button
+                  type="button"
+                  className="wide"
+                  onClick={() => setReviewingGameOver(false)}
+                >
+                  Show rematch options
+                </button>
+              )}
             </section>
           )}
 
@@ -795,36 +809,43 @@ export function TerritoryHud() {
                 }
               </h2>
               <p>Every playable territory is under one banner.</p>
-              <div className="victory-actions">
-                <button
-                  type="button"
-                  onClick={() => setReviewingGameOver(true)}
-                >
-                  Review world
-                </button>
-                {!multiplayerSession && (
-                  <>
-                    <button type="button" onClick={resetMatch}>
-                      Same ownership rematch
-                    </button>
-                    <button type="button" onClick={rematchNewOwnership}>
-                      {assignmentMode === 'random'
-                        ? 'Reroll ownership'
-                        : 'Restart player draft'}
-                    </button>
-                    <button type="button" onClick={backToWorldSetup}>
-                      Different world
-                    </button>
-                    <button
-                      type="button"
-                      className="danger"
-                      onClick={deleteSavedMatch}
-                    >
-                      Delete saved match
-                    </button>
-                  </>
-                )}
-              </div>
+              {multiplayerSession && renderMultiplayerPostMatchActions ? (
+                renderMultiplayerPostMatchActions(
+                  reviewingGameOver,
+                  setReviewingGameOver,
+                )
+              ) : (
+                <div className="victory-actions">
+                  <button
+                    type="button"
+                    onClick={() => setReviewingGameOver(true)}
+                  >
+                    Review world
+                  </button>
+                  {!multiplayerSession && (
+                    <>
+                      <button type="button" onClick={resetMatch}>
+                        Same ownership rematch
+                      </button>
+                      <button type="button" onClick={rematchNewOwnership}>
+                        {assignmentMode === 'random'
+                          ? 'Reroll ownership'
+                          : 'Restart player draft'}
+                      </button>
+                      <button type="button" onClick={backToWorldSetup}>
+                        Different world
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={deleteSavedMatch}
+                      >
+                        Delete saved match
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </section>
           )}
         </aside>
