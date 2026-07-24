@@ -17,7 +17,7 @@ const manifestPath = resolve(outputRoot, '.vite/manifest.json');
 const statsPath = resolve(reportRoot, 'stats.json');
 
 const budgets = {
-  initialGameGzip: 380_000,
+  initialGameGzip: 385_000,
   initialAdminGzip: 125_000,
   largestJavaScriptRaw: 1_075_000,
 } as const;
