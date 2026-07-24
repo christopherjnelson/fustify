@@ -1,9 +1,11 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { execFileSync } from 'node:child_process';
 import type { Database } from '../src/multiplayer/database.types';
 import {
   closeRoom,
   createRoom,
   fetchRoomState,
+  MULTIPLAYER_ERRORS,
 } from '../src/multiplayer/multiplayerApi';
 import {
   fetchCurrentProfile,
@@ -55,6 +57,15 @@ function authClient(): SupabaseClient<Database> {
       storage: memoryStorage(),
     },
   });
+}
+
+function localSql(statement: string) {
+  if (statement.includes('"')) throw new Error('local_fixture_sql_invalid');
+  execFileSync('sg', [
+    'docker',
+    '-c',
+    `docker exec supabase_db_fustify psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "${statement}"`,
+  ]);
 }
 
 async function latestMessageFor(
@@ -210,15 +221,69 @@ async function run() {
     if (!/^[A-Z][a-z]+[A-Z][a-z]+-[0-9]{3}$/u.test(guestProfile.displayName)) {
       throw new Error('local_guest_name_failed');
     }
-    const room = await createRoom(guest, guestProfile.displayName, {
-      settings: {
-        seed: 'email-upgrade-local',
-        territoryCount: 12,
-        continentCount: 2,
-        assignmentMode: 'random',
-        maxSeats: 2,
-      },
-    });
+    let anonymousCreateDenied = false;
+    let anonymousCreateError = 'no_error';
+    try {
+      await createRoom(guest, guestProfile.displayName, {
+        settings: {
+          seed: 'email-upgrade-local',
+          territoryCount: 12,
+          continentCount: 2,
+          assignmentMode: 'random',
+          maxSeats: 2,
+        },
+      });
+    } catch (error) {
+      anonymousCreateError =
+        error instanceof Error ? error.message : 'non_error_exception';
+      anonymousCreateDenied =
+        error instanceof Error &&
+        error.message === MULTIPLAYER_ERRORS.account_required;
+    }
+    if (!anonymousCreateDenied) {
+      const receivedError = Object.entries(MULTIPLAYER_ERRORS).find(
+        ([, message]) => message === anonymousCreateError,
+      )?.[0];
+      throw new Error(
+        anonymousCreateError === 'no_error'
+          ? 'local_guest_multiplayer_was_not_denied'
+          : `local_guest_multiplayer_wrong_error_${receivedError ?? 'unknown'}`,
+      );
+    }
+
+    // Model a room that predates account-required gameplay. The service client
+    // is used only by this isolated migration test to prove that upgrading the
+    // owner preserves the existing foreign-key identity and room rows.
+    const legacyRoomId = crypto.randomUUID();
+    const legacyJoinCode = crypto
+      .randomUUID()
+      .replaceAll('-', '')
+      .slice(0, 8)
+      .toUpperCase();
+    if (
+      !/^[0-9a-f-]{36}$/iu.test(guestUserId) ||
+      !/^[A-Za-z]+-[0-9]{3}$/u.test(guestProfile.displayName)
+    ) {
+      throw new Error('local_legacy_fixture_invalid');
+    }
+    localSql(`
+      insert into public.rooms (
+        id, join_code, host_user_id, seed, territory_count,
+        continent_count, assignment_mode, max_seats
+      ) values (
+        '${legacyRoomId}', '${legacyJoinCode}', '${guestUserId}',
+        'email-upgrade-local', 12, 2, 'random', 2
+      );
+      insert into public.room_members (
+        room_id, user_id, display_name, role
+      ) values (
+        '${legacyRoomId}', '${guestUserId}',
+        '${guestProfile.displayName}', 'host'
+      );
+      insert into public.room_seats (room_id, seat_index)
+      values ('${legacyRoomId}', 0), ('${legacyRoomId}', 1);
+    `);
+    const room = { id: legacyRoomId };
     roomIds.push(room.id);
 
     const upgradeEmail = `upgrade-${crypto.randomUUID()}@example.test`;
@@ -264,13 +329,16 @@ async function run() {
         registeredSignInRestored: true,
         passwordRecoveryCompleted: true,
         generatedGuestNameVerified: true,
+        anonymousMultiplayerDenied: true,
         guestUpgradePreservedUserId: true,
         guestUpgradePreservedRoomOwnership: true,
       }),
     );
   } finally {
     for (const roomId of roomIds) {
-      await admin.from('rooms').delete().eq('id', roomId);
+      if (/^[0-9a-f-]{36}$/iu.test(roomId)) {
+        localSql(`delete from public.rooms where id = '${roomId}'`);
+      }
     }
     for (const userId of userIds) {
       await admin.auth.admin.deleteUser(userId);

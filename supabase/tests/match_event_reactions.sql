@@ -87,17 +87,20 @@ select public.claim_room_seat(
 );
 
 reset role;
-select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000005', true);
-select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000005","is_anonymous":true}', true);
-set local role authenticated;
-select public.join_room(
-  (select join_code from reaction_fixture where label = 'primary'),
-  'Generated Guest'
-);
-select public.claim_room_seat(
+insert into public.room_members (room_id, user_id, display_name, role)
+values (
   (select room_id from reaction_fixture where label = 'primary'),
-  2
+  '60000000-0000-4000-8000-000000000005',
+  'Generated Guest',
+  'member'
 );
+update public.room_seats
+set
+  occupant_user_id = '60000000-0000-4000-8000-000000000005',
+  ready = true,
+  claimed_at = statement_timestamp()
+where room_id = (select room_id from reaction_fixture where label = 'primary')
+  and seat_index = 2;
 
 reset role;
 set local role service_role;
@@ -236,8 +239,8 @@ select extensions.is(
     from public.match_event_reactions
     where match_id = '70000000-0000-4000-8000-000000000001'
   ),
-  2,
-  'authorized guests can still read existing reaction counts'
+  0,
+  'anonymous users cannot read historical reaction rows'
 );
 select extensions.throws_ok(
   $$select public.set_match_event_reaction(
@@ -255,6 +258,7 @@ select extensions.throws_ok(
   'account_required',
   'anonymous participant cannot remove a historical reaction'
 );
+reset role;
 select extensions.is(
   (
     select reaction
@@ -262,10 +266,9 @@ select extensions.is(
     where user_id = '60000000-0000-4000-8000-000000000005'
   ),
   'fire',
-  'historical guest reactions remain stored and visible'
+  'historical guest reactions remain stored without anonymous visibility'
 );
 
-reset role;
 select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"60000000-0000-4000-8000-000000000001"}', true);
 set local role authenticated;

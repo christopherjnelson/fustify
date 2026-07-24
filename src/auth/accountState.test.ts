@@ -24,6 +24,10 @@ function accountClient(isAnonymous: boolean) {
   };
   return {
     auth: {
+      getSession: vi.fn(async () => ({
+        data: { session: { user: { id: userId } } },
+        error: null,
+      })),
       getUser: vi.fn(async () => ({
         data: { user: { id: userId, is_anonymous: isAnonymous } },
         error: null,
@@ -58,12 +62,14 @@ describe('account state', () => {
 
   it('represents a missing Auth user as unavailable without signing out', async () => {
     const signOut = vi.fn();
+    const getUser = vi.fn();
     const client = {
       auth: {
-        getUser: vi.fn(async () => ({
-          data: { user: null },
-          error: new Error('Auth session missing'),
+        getSession: vi.fn(async () => ({
+          data: { session: null },
+          error: null,
         })),
+        getUser,
         signOut,
       },
     } as unknown as SupabaseClient<Database>;
@@ -71,12 +77,17 @@ describe('account state', () => {
     await expect(deriveAccountState(client)).resolves.toEqual({
       status: 'unavailable',
     });
+    expect(getUser).not.toHaveBeenCalled();
     expect(signOut).not.toHaveBeenCalled();
   });
 
   it('represents non-session Auth failures as sanitized errors', async () => {
     const client = {
       auth: {
+        getSession: vi.fn(async () => ({
+          data: { session: { user: { id: userId } } },
+          error: null,
+        })),
         getUser: vi.fn(async () => ({
           data: { user: null },
           error: new Error('network endpoint and private response details'),
@@ -101,6 +112,10 @@ describe('account state', () => {
     };
     const client = {
       auth: {
+        getSession: vi.fn(async () => ({
+          data: { session: { user: { id: userId } } },
+          error: null,
+        })),
         getUser: vi.fn(async () => ({
           data: { user: { id: userId, is_anonymous: true } },
           error: null,
@@ -124,6 +139,10 @@ describe('account state', () => {
     const rpc = vi.fn(async () => ({ data: profileRow, error: null }));
     const client = {
       auth: {
+        getSession: vi.fn(async () => ({
+          data: { session: { user: { id: userId } } },
+          error: null,
+        })),
         getUser: vi.fn(async () => ({
           data: { user: { id: userId, is_anonymous: true } },
           error: null,
@@ -195,6 +214,10 @@ describe('account state', () => {
       ((event: 'SIGNED_OUT', session: null) => void) | undefined;
     const client = {
       auth: {
+        getSession: vi.fn(async () => ({
+          data: { session: { user: { id: userId } } },
+          error: null,
+        })),
         getUser,
         onAuthStateChange: vi.fn((listener) => {
           authListener = listener;

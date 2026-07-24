@@ -18,6 +18,25 @@ export type AccountState =
 export async function deriveAccountState(
   client: SupabaseClient<Database>,
 ): Promise<AccountState> {
+  let sessionResult: Awaited<ReturnType<typeof client.auth.getSession>>;
+  try {
+    sessionResult = await client.auth.getSession();
+  } catch (authError) {
+    return {
+      status: 'error',
+      message: profileApiError(authError).message,
+    };
+  }
+  if (sessionResult.error) {
+    return {
+      status: 'error',
+      message: profileApiError(sessionResult.error).message,
+    };
+  }
+  if (!sessionResult.data.session) {
+    return { status: 'unavailable' };
+  }
+
   let authResult: Awaited<ReturnType<typeof client.auth.getUser>>;
   try {
     authResult = await client.auth.getUser();

@@ -24,7 +24,6 @@ import {
   claimSeat,
   closeRoom,
   createRoom,
-  ensureAnonymousSession,
   fetchRoomState,
   formatRoomCode,
   joinRoom,
@@ -42,10 +41,7 @@ import {
   type RoomState,
 } from './multiplayerApi';
 import { MatchSynchronization } from './matchSynchronization';
-import {
-  getSupabaseClient,
-  readMultiplayerConfiguration,
-} from './supabaseClient';
+import { getSupabaseClient } from './supabaseClient';
 import { isMatchState } from './gameProtocol';
 import { ReadonlyMinimap } from './ReadonlyWorld';
 import { RoomCodeCopyButton } from './RoomCodeCopyButton';
@@ -125,7 +121,7 @@ function StatusScreen({ title, message }: { title: string; message: string }) {
   );
 }
 
-function Lobby({ userId }: { userId: string }) {
+function Lobby() {
   const client = useMemo(() => getSupabaseClient(), []);
   const [displayName, setDisplayName] = useState(
     () => window.localStorage.getItem('fustify.multiplayer.displayName') ?? '',
@@ -221,9 +217,7 @@ function Lobby({ userId }: { userId: string }) {
             {error}
           </p>
         )}
-        <p className="multiplayer-session-note">
-          Anonymous session ready · player {userId.slice(0, 8)}
-        </p>
+        <p className="multiplayer-session-note">Registered account ready.</p>
         <a href="/local">Return to local game</a>
       </section>
     </main>
@@ -1075,13 +1069,8 @@ function MatchView({
   );
 }
 
-export function MultiplayerApp() {
+export function MultiplayerApp({ userId }: { userId: string }) {
   const [route, setRoute] = useState<Route>(() => currentRoute());
-  const [userId, setUserId] = useState<string | null>(null);
-  const [isAnonymous, setIsAnonymous] = useState(true);
-  const [authRevision, setAuthRevision] = useState(0);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const configured = readMultiplayerConfiguration() !== null;
 
   useEffect(() => {
     const updateRoute = () => setRoute(currentRoute());
@@ -1089,75 +1078,11 @@ export function MultiplayerApp() {
     return () => window.removeEventListener('popstate', updateRoute);
   }, []);
 
-  useEffect(() => {
-    if (!configured) return;
-    let active = true;
-    const client = getSupabaseClient();
-    void ensureAnonymousSession(client)
-      .then(async (id) => {
-        const verified = await client.auth.getUser();
-        if (verified.error || !verified.data.user) {
-          throw verified.error ?? new Error('auth_session_unavailable');
-        }
-        if (active) {
-          setUserId(id);
-          setIsAnonymous(verified.data.user.is_anonymous !== false);
-        }
-      })
-      .catch((error: unknown) => {
-        if (active) setAuthError(multiplayerError(error).message);
-      });
-    const { data } = client.auth.onAuthStateChange((event, session) => {
-      if (!active) return;
-      if (session?.user) {
-        setUserId(session.user.id);
-        setIsAnonymous(session.user.is_anonymous !== false);
-        if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-          setAuthRevision((current) => current + 1);
-        }
-      }
-      if (event === 'SIGNED_OUT') setUserId(null);
-    });
-    return () => {
-      active = false;
-      data.subscription.unsubscribe();
-    };
-  }, [configured]);
-
-  if (!configured) {
-    return (
-      <StatusScreen
-        title="Multiplayer configuration unavailable"
-        message="Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to use multiplayer. Local play remains available."
-      />
-    );
-  }
-  if (authError) {
-    return (
-      <StatusScreen
-        title="Could not restore multiplayer session"
-        message={authError}
-      />
-    );
-  }
-  if (!userId) {
-    return (
-      <StatusScreen
-        title="Connecting anonymous player"
-        message="Restoring or creating a private anonymous session…"
-      />
-    );
-  }
   if (route.kind === 'room')
     return <RoomView roomId={route.id} userId={userId} />;
   if (route.kind === 'match')
     return (
-      <MatchView
-        key={`${route.id}:${authRevision}`}
-        matchId={route.id}
-        userId={userId}
-        canReact={!isAnonymous}
-      />
+      <MatchView key={route.id} matchId={route.id} userId={userId} canReact />
     );
-  return <Lobby userId={userId} />;
+  return <Lobby />;
 }

@@ -44,6 +44,7 @@ export class AuthFlowError extends Error {
     public readonly code:
       | 'invalid_form'
       | 'invalid_credentials'
+      | 'email_not_confirmed'
       | 'email_conflict'
       | 'account_required'
       | 'callback_failed'
@@ -200,6 +201,22 @@ export async function signInWithEmail(
     password: input.password,
   });
   if (error) {
+    const code =
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      typeof error.code === 'string'
+        ? error.code
+        : '';
+    if (
+      code === 'email_not_confirmed' ||
+      /email(?: address)? not confirmed/iu.test(errorText(error))
+    ) {
+      throw new AuthFlowError(
+        'email_not_confirmed',
+        'Confirm your email address before signing in.',
+      );
+    }
     throw new AuthFlowError(
       'invalid_credentials',
       'The email or password is incorrect.',
@@ -423,7 +440,9 @@ export async function requestPasswordRecovery(
   const { error } = await client.auth.resetPasswordForEmail(email, {
     redirectTo: callbackUrl('/auth/reset-password', input.returnPath),
   });
-  return error && isRateLimit(error) ? 'rate-limited' : 'sent';
+  if (!error) return 'sent';
+  if (isRateLimit(error)) return 'rate-limited';
+  throw authFlowError(error);
 }
 
 export function clearRecoveryState(): void {

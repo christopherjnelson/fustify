@@ -16,25 +16,25 @@ export function Home() {
           <article className="mode-card">
             <div>
               <span className="eyebrow">Play together here</span>
-              <h2>Local Game</h2>
+              <h2>Single Player</h2>
               <p>
                 Play with humans and deterministic bots. Supports solo play and
                 local hot-seat games.
               </p>
             </div>
             <a className="mode-action" href="/local">
-              Set up local game
+              Single Player
             </a>
           </article>
 
           <article className="mode-card">
             <div>
               <span className="eyebrow">Play together online</span>
-              <h2>Private Multiplayer</h2>
+              <h2>Multiplayer</h2>
               <p>Create or join a private room for 2–5 human players.</p>
             </div>
             <a className="mode-action" href="/multiplayer">
-              Play online
+              Multiplayer
             </a>
           </article>
         </div>

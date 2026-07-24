@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import {
   getSupabaseClient,
   readMultiplayerConfiguration,
@@ -21,7 +28,7 @@ import { updateCurrentProfile } from './profileApi';
 import type { UserProfile } from './profileModel';
 import { currentSafeReturnPath, validatedReturnPath } from './returnPath';
 
-type DialogView =
+export type DialogView =
   | 'sign-in'
   | 'register'
   | 'guest-upgrade'
@@ -83,7 +90,7 @@ function Field({
   );
 }
 
-function AuthDialog({
+export function AuthDialog({
   view,
   account,
   onClose,
@@ -152,7 +159,7 @@ function AuthDialog({
       if (view === 'sign-in') {
         await signInWithEmail(client, { email, password });
         setPassword('');
-        window.location.assign(returnPath);
+        window.location.assign(validatedReturnPath(returnPath));
         return;
       }
       if (view === 'guest-upgrade') {
@@ -214,7 +221,7 @@ function AuthDialog({
     view === 'register'
       ? 'Create account'
       : view === 'guest-upgrade'
-        ? 'Keep this guest identity'
+        ? 'Finish creating your account'
         : view === 'guest-switch-warning'
           ? 'Sign in to another account'
           : view === 'forgot-password'
@@ -464,31 +471,34 @@ export function AccountControl() {
       {account.status === 'unavailable' && (
         <div className="account-actions">
           <button type="button" onClick={() => open('sign-in')}>
-            Sign in
-          </button>
-          <button type="button" onClick={() => open('register')}>
-            Create account
+            Account
           </button>
         </div>
       )}
       {account.status === 'authenticated' && (
         <div className="account-summary">
-          <Avatar
-            displayName={account.profile.displayName}
-            avatarUrl={account.profile.avatarUrl}
-          />
+          {!account.isAnonymous && (
+            <Avatar
+              displayName={account.profile.displayName}
+              avatarUrl={account.profile.avatarUrl}
+            />
+          )}
           <div className="account-identity">
-            <strong>{account.profile.displayName}</strong>
+            <strong>
+              {account.isAnonymous
+                ? 'Finish account setup'
+                : account.profile.displayName}
+            </strong>
             <span>
               {account.isAnonymous
-                ? 'Guest account'
+                ? 'Required for gameplay'
                 : (account.email ?? 'Registered account')}
             </span>
           </div>
           {account.isAnonymous ? (
             <div className="account-actions">
               <button type="button" onClick={() => open('guest-upgrade')}>
-                Create account
+                Finish account setup
               </button>
               <button
                 type="button"
@@ -509,7 +519,7 @@ export function AccountControl() {
                 onClick={() => {
                   setSignOutError(null);
                   void signOutRegisteredAccount(client)
-                    .then(() => setDialog(null))
+                    .then(() => window.location.assign('/'))
                     .catch((error) =>
                       setSignOutError(authFlowError(error).message),
                     );
@@ -540,5 +550,146 @@ export function AccountControl() {
         />
       )}
     </aside>
+  );
+}
+
+export function AccountRequiredGate({
+  returnPath,
+  load,
+}: {
+  returnPath: string;
+  load: (userId: string) => Promise<ReactNode>;
+}) {
+  const configured = readMultiplayerConfiguration() !== null;
+  const client = useMemo(
+    () => (configured ? getSupabaseClient() : null),
+    [configured],
+  );
+  const [account, setAccount] = useState<AccountState>(
+    client ? { status: 'loading' } : { status: 'unavailable' },
+  );
+  const [dialog, setDialog] = useState<DialogView | null | undefined>(
+    undefined,
+  );
+  const [application, setApplication] = useState<{
+    userId: string;
+    node: ReactNode;
+  } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const safeReturnPath = useMemo(
+    () => validatedReturnPath(returnPath),
+    [returnPath],
+  );
+
+  useEffect(() => {
+    if (!client) return;
+    return observeAccountState(client, setAccount);
+  }, [client]);
+
+  useEffect(() => {
+    if (account.status !== 'authenticated' || account.isAnonymous) {
+      return;
+    }
+    let active = true;
+    void load(account.userId)
+      .then((loaded) => {
+        if (active) {
+          setApplication({ userId: account.userId, node: loaded });
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoadError('The game could not be loaded. Please try again.');
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [account, load]);
+
+  const visibleDialog =
+    dialog === undefined
+      ? client && account.status === 'unavailable'
+        ? 'sign-in'
+        : account.status === 'authenticated' && account.isAnonymous
+          ? 'guest-upgrade'
+          : null
+      : dialog;
+
+  if (
+    account.status === 'authenticated' &&
+    !account.isAnonymous &&
+    application?.userId === account.userId
+  ) {
+    return application.node;
+  }
+
+  const title =
+    account.status === 'authenticated' && account.isAnonymous
+      ? 'Finish creating your account to continue'
+      : 'Account required';
+  const message =
+    account.status === 'loading'
+      ? 'Checking your account…'
+      : account.status === 'authenticated' && account.isAnonymous
+        ? 'Keep this identity by attaching and verifying an email before entering gameplay.'
+        : account.status === 'error'
+          ? account.message
+          : client
+            ? 'Sign in or create an account to continue.'
+            : 'Account configuration is unavailable.';
+
+  return (
+    <main className="auth-route-shell">
+      <section className="auth-route-card" aria-live="polite">
+        <span className="eyebrow">Fustify account</span>
+        <h1>{title}</h1>
+        <p>{loadError ?? message}</p>
+        {client && account.status === 'unavailable' && (
+          <div className="account-actions">
+            <button type="button" onClick={() => setDialog('sign-in')}>
+              Sign in
+            </button>
+            <button type="button" onClick={() => setDialog('register')}>
+              Create account
+            </button>
+            <button type="button" onClick={() => setDialog('forgot-password')}>
+              Forgot password
+            </button>
+          </div>
+        )}
+        {account.status === 'authenticated' && account.isAnonymous && (
+          <div className="account-actions">
+            <button type="button" onClick={() => setDialog('guest-upgrade')}>
+              Finish creating account
+            </button>
+            <button
+              type="button"
+              onClick={() => setDialog('guest-switch-warning')}
+            >
+              Sign in to existing account
+            </button>
+          </div>
+        )}
+        <a href="/">Return home</a>
+      </section>
+      {visibleDialog && (
+        <AuthDialog
+          key={`${visibleDialog}:${account.status === 'authenticated' ? account.userId : 'signed-out'}`}
+          view={visibleDialog}
+          account={account}
+          onClose={() => setDialog(null)}
+          onView={setDialog}
+          onProfileUpdated={(profile) =>
+            setAccount((current) =>
+              current.status === 'authenticated'
+                ? { ...current, profile }
+                : current,
+            )
+          }
+          returnPath={safeReturnPath}
+        />
+      )}
+    </main>
   );
 }

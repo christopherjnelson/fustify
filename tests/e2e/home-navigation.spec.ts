@@ -2,19 +2,19 @@ import { expect, test } from '@playwright/test';
 
 test.use({ viewport: { width: 1920, height: 1080 } });
 
-test('home selects either mode and preserves legacy local setup URLs', async ({
+test('home choices route through the account-required shell without loading gameplay', async ({
   page,
 }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Fustify' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Local Game' })).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Private Multiplayer' }),
+    page.getByRole('heading', { name: 'Single Player' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'Set up local game' }),
+    page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Play online' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Single Player' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Multiplayer' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(
     1080,
   );
@@ -33,32 +33,26 @@ test('home selects either mode and preserves legacy local setup URLs', async ({
   ).toEqual([]);
 
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Sign in' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Account' })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(
-    page.getByRole('button', { name: 'Create account' }),
-  ).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(
-    page.getByRole('link', { name: 'Set up local game' }),
-  ).toBeFocused();
+  await expect(page.getByRole('link', { name: 'Single Player' })).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/local\?/);
+  await expect(page).toHaveURL(/\/local$/);
   await expect(
-    page.getByRole('heading', { name: 'Choose your world' }),
+    page.getByRole('heading', { name: 'Account required' }),
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByRole('heading', { name: 'Choose your world' }),
+    page.getByRole('heading', { name: 'Account required' }),
   ).toBeVisible();
 
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
-  await page.getByRole('link', { name: 'Play online' }).click();
+  await page.getByRole('link', { name: 'Multiplayer' }).click();
   await expect(page).toHaveURL(/\/multiplayer$/);
   await expect(
     page.getByRole('heading', {
-      name: /^(Private multiplayer rooms|Multiplayer configuration unavailable)$/,
+      name: /^(Account required|Multiplayer configuration unavailable)$/,
     }),
   ).toBeVisible();
 
@@ -66,11 +60,10 @@ test('home selects either mode and preserves legacy local setup URLs', async ({
     '/?v=1&seed=legacy-atlas&territories=42&continents=5&players=4&assignment=random#setup',
   );
   await expect(
-    page.getByRole('heading', { name: 'Choose your world' }),
+    page.getByRole('heading', { name: 'Account required' }),
   ).toBeVisible();
-  await expect(page.getByLabel('Planet seed')).toHaveValue('legacy-atlas');
   await expect(page).toHaveURL(/assignment=random#setup$/);
-  await expect(page.getByRole('heading', { name: 'Local Game' })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole('heading', { name: 'Single Player' }),
+  ).toHaveCount(0);
 });

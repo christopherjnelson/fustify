@@ -5,9 +5,9 @@ select extensions.plan(25);
 
 insert into auth.users (id, aud, role, is_anonymous, raw_app_meta_data, raw_user_meta_data)
 values
-  ('10000000-0000-4000-8000-000000000001', 'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb),
-  ('10000000-0000-4000-8000-000000000002', 'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb),
-  ('10000000-0000-4000-8000-000000000003', 'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb);
+  ('10000000-0000-4000-8000-000000000001', 'authenticated', 'authenticated', false, '{}'::jsonb, '{}'::jsonb),
+  ('10000000-0000-4000-8000-000000000002', 'authenticated', 'authenticated', false, '{}'::jsonb, '{}'::jsonb),
+  ('10000000-0000-4000-8000-000000000003', 'authenticated', 'authenticated', false, '{}'::jsonb, '{}'::jsonb);
 
 create temporary table test_rooms (
   label text primary key,
@@ -17,6 +17,7 @@ create temporary table test_rooms (
 grant all on test_rooms to authenticated, service_role;
 
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"10000000-0000-4000-8000-000000000001","is_anonymous":false}', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 
@@ -24,7 +25,7 @@ select extensions.lives_ok(
   $$insert into test_rooms
     select 'primary', id, join_code
     from public.create_room('Alpha')$$,
-  'anonymous authenticated user can create a room'
+  'registered authenticated user can create a room'
 );
 select extensions.is(
   (select count(*)::integer from public.room_members where role = 'host'),
@@ -56,13 +57,14 @@ select extensions.is(
 
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"10000000-0000-4000-8000-000000000002","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.lives_ok(
   $$select public.join_room(
     (select join_code from test_rooms where label = 'primary'),
     'Bravo'
   )$$,
-  'second anonymous user joins with the correct code'
+  'second registered user joins with the correct code'
 );
 select extensions.throws_ok(
   $$select public.update_room_settings(
@@ -84,6 +86,7 @@ select extensions.throws_ok(
 
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"10000000-0000-4000-8000-000000000003","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.is(
   (select count(*)::integer from public.rooms),
@@ -109,6 +112,7 @@ select extensions.throws_ok(
 
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"10000000-0000-4000-8000-000000000001","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.throws_ok(
   $$update public.rooms set seed = 'fabricated'$$,
@@ -128,6 +132,7 @@ select extensions.throws_ok(
 
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"10000000-0000-4000-8000-000000000002","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.throws_ok(
   $$select public.claim_room_seat(
@@ -141,6 +146,7 @@ select public.claim_room_seat((select room_id from test_rooms where label = 'pri
 
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"10000000-0000-4000-8000-000000000001","is_anonymous":false}', true);
 set local role authenticated;
 create temporary table test_matches (first_id uuid, second_id uuid) on commit drop;
 grant all on test_matches to authenticated, service_role;
@@ -179,6 +185,7 @@ select extensions.is(
 
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"10000000-0000-4000-8000-000000000001","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.throws_ok(
   $$update public.matches set setup_snapshot = '{}'::jsonb$$,
@@ -197,6 +204,7 @@ select extensions.throws_ok(
 );
 
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"10000000-0000-4000-8000-000000000001","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.lives_ok(
   $$insert into test_rooms
@@ -208,6 +216,7 @@ select public.close_room((select room_id from test_rooms where label = 'closed')
 
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"10000000-0000-4000-8000-000000000003","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.throws_ok(
   $$select public.join_room(

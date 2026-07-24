@@ -5,11 +5,12 @@ select extensions.plan(18);
 
 insert into auth.users (id, aud, role, is_anonymous, raw_app_meta_data, raw_user_meta_data)
 values
-  ('30000000-0000-4000-8000-000000000001', 'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb),
-  ('30000000-0000-4000-8000-000000000002', 'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb),
-  ('30000000-0000-4000-8000-000000000003', 'authenticated', 'authenticated', true, '{}'::jsonb, '{}'::jsonb);
+  ('30000000-0000-4000-8000-000000000001', 'authenticated', 'authenticated', false, '{}'::jsonb, '{}'::jsonb),
+  ('30000000-0000-4000-8000-000000000002', 'authenticated', 'authenticated', false, '{}'::jsonb, '{}'::jsonb),
+  ('30000000-0000-4000-8000-000000000003', 'authenticated', 'authenticated', false, '{}'::jsonb, '{}'::jsonb);
 
 select set_config('request.jwt.claim.sub', '30000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"30000000-0000-4000-8000-000000000001","is_anonymous":false}', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 
@@ -22,6 +23,7 @@ select public.claim_room_seat((select room_id from authority_fixture), 0);
 
 reset role;
 select set_config('request.jwt.claim.sub', '30000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"30000000-0000-4000-8000-000000000002","is_anonymous":false}', true);
 set local role authenticated;
 select public.join_room(
   (select join_code from authority_fixture),
@@ -161,6 +163,7 @@ select extensions.throws_ok(
 
 reset role;
 select set_config('request.jwt.claim.sub', '30000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"30000000-0000-4000-8000-000000000001","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.throws_ok(
   $$update public.matches set revision = 99$$,
@@ -195,6 +198,7 @@ select extensions.throws_ok(
 
 reset role;
 select set_config('request.jwt.claim.sub', '30000000-0000-4000-8000-000000000003', true);
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"30000000-0000-4000-8000-000000000003","is_anonymous":false}', true);
 set local role authenticated;
 select extensions.is(
   (select count(*)::integer from public.matches),

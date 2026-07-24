@@ -77,6 +77,61 @@ describe('email/password authentication flows', () => {
     expect(signInAnonymously).not.toHaveBeenCalled();
   });
 
+  it('builds registration and recovery redirects from each active application origin', async () => {
+    const signUp = vi.fn(async () => ({ data: {}, error: null }));
+    const resetPasswordForEmail = vi.fn(async () => ({
+      data: {},
+      error: null,
+    }));
+    const client = asClient({
+      auth: { signUp, resetPasswordForEmail },
+    });
+
+    for (const origin of [
+      'http://127.0.0.1:4173',
+      'http://localhost:5173',
+      'https://dev.fustify.com',
+    ]) {
+      Object.defineProperty(window.location, 'origin', {
+        configurable: true,
+        value: origin,
+      });
+      await registerWithEmail(client, {
+        displayName: 'Player One',
+        email: 'player@example.com',
+        password: 'correct horse',
+        confirmPassword: 'correct horse',
+        returnPath: '/local?seed=quiet#setup',
+      });
+      await requestPasswordRecovery(client, {
+        email: 'player@example.com',
+        returnPath: '/local',
+      });
+    }
+
+    const signUpCalls = signUp.mock.calls as unknown as Array<
+      [{ options: { emailRedirectTo: string } }]
+    >;
+    expect(signUpCalls.map(([input]) => input.options.emailRedirectTo)).toEqual(
+      [
+        'http://127.0.0.1:4173/auth/callback?returnPath=%2Flocal%3Fseed%3Dquiet%23setup',
+        'http://localhost:5173/auth/callback?returnPath=%2Flocal%3Fseed%3Dquiet%23setup',
+        'https://dev.fustify.com/auth/callback?returnPath=%2Flocal%3Fseed%3Dquiet%23setup',
+      ],
+    );
+    expect(
+      (
+        resetPasswordForEmail.mock.calls as unknown as Array<
+          [string, { redirectTo: string }]
+        >
+      ).map(([, options]) => options.redirectTo),
+    ).toEqual([
+      'http://127.0.0.1:4173/auth/reset-password?returnPath=%2Flocal',
+      'http://localhost:5173/auth/reset-password?returnPath=%2Flocal',
+      'https://dev.fustify.com/auth/reset-password?returnPath=%2Flocal',
+    ]);
+  });
+
   it('logs in, verifies the user, and fetches the profile', async () => {
     const query = {
       select: vi.fn(() => query),
@@ -123,6 +178,28 @@ describe('email/password authentication flows', () => {
     ).rejects.toMatchObject({
       code: 'invalid_credentials',
       message: 'The email or password is incorrect.',
+    });
+  });
+
+  it('uses safe confirmation wording for an unconfirmed email', async () => {
+    const client = asClient({
+      auth: {
+        signInWithPassword: vi.fn(async () => ({
+          error: {
+            code: 'email_not_confirmed',
+            message: 'private Auth provider detail',
+          },
+        })),
+      },
+    });
+    await expect(
+      signInWithEmail(client, {
+        email: 'player@example.com',
+        password: 'correct horse',
+      }),
+    ).rejects.toMatchObject({
+      code: 'email_not_confirmed',
+      message: 'Confirm your email address before signing in.',
     });
   });
 
@@ -344,6 +421,25 @@ describe('email/password authentication flows', () => {
         returnPath: '/',
       }),
     ).resolves.toBe('rate-limited');
+  });
+
+  it('reports a sanitized password-recovery network failure', async () => {
+    const client = asClient({
+      auth: {
+        resetPasswordForEmail: vi.fn(async () => ({
+          error: new Error('private SMTP or network detail'),
+        })),
+      },
+    });
+    await expect(
+      requestPasswordRecovery(client, {
+        email: 'player@example.com',
+        returnPath: '/',
+      }),
+    ).rejects.toMatchObject({
+      code: 'request_failed',
+      message: 'The account request could not be completed. Please try again.',
+    });
   });
 
   it('requires a recovery callback before changing a password', async () => {

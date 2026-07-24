@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(47);
+select extensions.plan(48);
 
 select extensions.ok(
   (
@@ -38,12 +38,12 @@ select extensions.hasnt_column(
   'profiles does not expose a role field'
 );
 select extensions.ok(
-  not has_function_privilege(
+  has_function_privilege(
     'authenticated',
     'profile_private.current_user_is_registered()',
     'EXECUTE'
   ),
-  'registered-user helper is not exposed to browser roles'
+  'RLS can execute only the narrow registered-user capability helper'
 );
 select extensions.ok(
   exists (
@@ -279,8 +279,17 @@ select set_config(
 set local role authenticated;
 select extensions.is(
   (select count(*)::integer from public.profiles),
-  6,
-  'an authenticated anonymous user can read public profile rows'
+  1,
+  'an authenticated anonymous user can read only their own profile row'
+);
+select extensions.is(
+  (
+    select count(*)::integer
+    from public.profiles
+    where user_id = '92000000-0000-4000-8000-000000000002'
+  ),
+  0,
+  'an authenticated anonymous user cannot read another profile'
 );
 select extensions.lives_ok(
   $$select public.ensure_own_profile()$$,
@@ -302,19 +311,37 @@ select extensions.throws_ok(
   'anonymous users cannot customize their profile even with capability-shaped metadata'
 );
 
+reset role;
 create temporary table profile_upgrade_fixture (
   room_id uuid primary key
 ) on commit drop;
 grant all on profile_upgrade_fixture to authenticated;
-insert into profile_upgrade_fixture
-select id
-from public.create_room(
-  'Stable Guest Room',
+insert into public.rooms (
+  id, join_code, host_user_id, seed, territory_count,
+  continent_count, assignment_mode, max_seats
+) values (
+  '96000000-0000-4000-8000-000000000006',
+  'ABCDEF12',
+  '91000000-0000-4000-8000-000000000001',
   'profile-upgrade-room',
   12,
   2,
   'random',
   2
+);
+insert into public.room_members (room_id, user_id, display_name, role)
+values (
+  '96000000-0000-4000-8000-000000000006',
+  '91000000-0000-4000-8000-000000000001',
+  'Stable Guest Room',
+  'host'
+);
+insert into public.room_seats (room_id, seat_index)
+values
+  ('96000000-0000-4000-8000-000000000006', 0),
+  ('96000000-0000-4000-8000-000000000006', 1);
+insert into profile_upgrade_fixture values (
+  '96000000-0000-4000-8000-000000000006'
 );
 
 reset role;

@@ -12,6 +12,7 @@ import {
   sha256Fingerprint,
   stableStringify,
 } from '../../../src/multiplayer/gameProtocol.ts';
+import { authorizeGameplayRequest } from './requestAuthorization.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,6 +32,7 @@ function errorCode(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const known = [
     'room_access_denied',
+    'account_required',
     'host_only',
     'not_enough_players',
     'multiplayer_draft_unsupported',
@@ -54,6 +56,7 @@ function statusFor(code: string): number {
     return 409;
   if (
     [
+      'account_required',
       'room_access_denied',
       'host_only',
       'seat_required',
@@ -80,19 +83,20 @@ Deno.serve(async (request) => {
   if (!url || !publishableKey || !serviceRoleKey) {
     return response(500, { code: 'server_configuration_error' });
   }
-  if (!authorization?.startsWith('Bearer ')) {
-    return response(401, { code: 'not_authenticated' });
-  }
-  const token = authorization.slice('Bearer '.length);
   const authClient = createClient(url, publishableKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data: authData, error: authError } =
-    await authClient.auth.getUser(token);
-  if (authError || !authData.user) {
-    return response(401, { code: 'not_authenticated' });
+  const authorized = await authorizeGameplayRequest(
+    authorization,
+    async (token) => {
+      const { data, error } = await authClient.auth.getUser(token);
+      return { user: data.user, error };
+    },
+  );
+  if (!authorized.ok) {
+    return response(authorized.status, { code: authorized.code });
   }
-  const actorUserId = authData.user.id;
+  const actorUserId = authorized.actorUserId;
   const admin = createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });

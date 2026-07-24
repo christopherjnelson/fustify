@@ -11,6 +11,7 @@ import {
 const isAdmin = isAdminRoute(window.location.pathname);
 const isAuth = isAuthRoute(window.location.pathname);
 const isMultiplayer = isMultiplayerRoute(window.location.pathname);
+const isLocal = window.location.pathname === '/local';
 const isLegacyLocalSetup =
   window.location.pathname === '/' &&
   (hasLocalSetupParameters(window.location.search) ||
@@ -92,10 +93,17 @@ async function bootstrap() {
       );
       return;
     }
-    const { MultiplayerApp } = await import('./multiplayer/MultiplayerApp');
+    const { AccountRequiredGate } = await import('./auth/AccountControl');
     root.render(
       <StrictMode>
-        <MultiplayerApp />
+        <AccountRequiredGate
+          returnPath={`${window.location.pathname}${window.location.search}${window.location.hash}`}
+          load={async (userId) => {
+            const { MultiplayerApp } =
+              await import('./multiplayer/MultiplayerApp');
+            return <MultiplayerApp userId={userId} />;
+          }}
+        />
       </StrictMode>,
     );
     return;
@@ -111,10 +119,29 @@ async function bootstrap() {
     return;
   }
 
-  const { App } = await import('./app/App');
+  if (
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).get('visual-review') === '1'
+  ) {
+    const { App } = await import('./app/App');
+    root.render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+    return;
+  }
+
+  const { AccountRequiredGate } = await import('./auth/AccountControl');
   root.render(
     <StrictMode>
-      <App />
+      <AccountRequiredGate
+        returnPath={`${isLocal ? '/local' : window.location.pathname}${window.location.search}${window.location.hash}`}
+        load={async () => {
+          const { App } = await import('./app/App');
+          return <App />;
+        }}
+      />
     </StrictMode>,
   );
 }

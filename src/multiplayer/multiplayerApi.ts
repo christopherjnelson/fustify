@@ -81,8 +81,8 @@ const DEFAULT_ROOM_SETTINGS = {
 export const MULTIPLAYER_ERRORS: Record<string, string> = {
   already_joined: 'You already belong to this room.',
   already_seated: 'Release your current seat before claiming another.',
-  auth_rate_limited:
-    'Anonymous sign-in is temporarily rate limited. Wait a moment and try again.',
+  account_required: 'A registered account is required for multiplayer.',
+  auth_rate_limited: 'Too many account requests. Wait a moment and try again.',
   closed_room: 'This room is closed.',
   full_room: 'This room is full.',
   host_only: 'Only the room host can do that.',
@@ -105,7 +105,7 @@ export const MULTIPLAYER_ERRORS: Record<string, string> = {
   match_not_active: 'This match is not active.',
   multiplayer_draft_unsupported:
     'Player draft is not available in multiplayer yet. Choose random assignment.',
-  not_authenticated: 'Your anonymous session expired. Reconnect and try again.',
+  not_authenticated: 'Your account session expired. Sign in and try again.',
   not_enough_players: 'Claim at least two human seats before starting.',
   not_your_turn: 'It is another player’s turn.',
   revision_conflict: 'The match changed before that action was accepted.',
@@ -118,10 +118,6 @@ export const MULTIPLAYER_ERRORS: Record<string, string> = {
     'Release affected seats or members before reducing capacity.',
 };
 
-const pendingSessionByClient = new WeakMap<
-  SupabaseClient<Database>,
-  Promise<string>
->();
 const pendingBootstrapByClient = new WeakMap<
   SupabaseClient<Database>,
   Map<string, Promise<MultiplayerMatch>>
@@ -156,7 +152,15 @@ function coalescedMatchRead<T>(
 }
 
 export function multiplayerError(error: unknown): Error {
-  const message = error instanceof Error ? error.message : String(error);
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' &&
+          error !== null &&
+          'message' in error &&
+          typeof error.message === 'string'
+        ? error.message
+        : String(error);
   const status =
     typeof error === 'object' && error !== null && 'status' in error
       ? error.status
@@ -173,36 +177,6 @@ export function multiplayerError(error: unknown): Error {
   return new Error(
     key ? MULTIPLAYER_ERRORS[key] : 'Multiplayer request failed.',
   );
-}
-
-async function restoreOrCreateAnonymousSession(
-  client: SupabaseClient<Database>,
-): Promise<string> {
-  const { data: sessionData } = await client.auth.getSession();
-  if (sessionData.session) {
-    const { data, error } = await client.auth.getUser();
-    if (!error && data.user) return data.user.id;
-    await client.auth.signOut({ scope: 'local' });
-  }
-
-  const { data, error } = await client.auth.signInAnonymously();
-  if (error || !data.user) throw multiplayerError(error ?? 'not_authenticated');
-  return data.user.id;
-}
-
-export function ensureAnonymousSession(
-  client: SupabaseClient<Database>,
-): Promise<string> {
-  const pending = pendingSessionByClient.get(client);
-  if (pending) return pending;
-
-  const request = restoreOrCreateAnonymousSession(client).finally(() => {
-    if (pendingSessionByClient.get(client) === request) {
-      pendingSessionByClient.delete(client);
-    }
-  });
-  pendingSessionByClient.set(client, request);
-  return request;
 }
 
 export async function fetchRoomState(
