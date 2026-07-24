@@ -1,4 +1,11 @@
-import type { MouseEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
+import { createPortal } from 'react-dom';
 import {
   MATCH_EVENT_REACTIONS,
   type EventReactionSummary,
@@ -28,6 +35,30 @@ export function EventReactions({
   onSetReaction: (reaction: MatchEventReaction | null) => void;
 }) {
   const ownReaction = summary?.ownReaction ?? null;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerPosition, setPickerPosition] = useState({ left: 0, top: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const firstOptionRef = useRef<HTMLButtonElement>(null);
+  const keyboardOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+
+    const closeOutside = (event: PointerEvent) => {
+      if (
+        !containerRef.current?.contains(event.target as Node) &&
+        !pickerRef.current?.contains(event.target as Node)
+      ) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    if (keyboardOpenRef.current) firstOptionRef.current?.focus();
+    keyboardOpenRef.current = false;
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [pickerOpen]);
 
   const choose = (
     clickEvent: MouseEvent<HTMLButtonElement>,
@@ -37,15 +68,36 @@ export function EventReactions({
     onSetReaction(desiredReactionAfterSelection(ownReaction, reaction));
   };
 
+  const selectFromPicker = (
+    clickEvent: MouseEvent<HTMLButtonElement>,
+    reaction: MatchEventReaction,
+  ) => {
+    clickEvent.stopPropagation();
+    onSetReaction(reaction);
+    setPickerOpen(false);
+  };
+
+  const closePicker = (keyEvent: KeyboardEvent<HTMLDivElement>) => {
+    if (keyEvent.key !== 'Escape') return;
+    keyEvent.stopPropagation();
+    setPickerOpen(false);
+    addButtonRef.current?.focus();
+  };
+
   return (
     <div
+      ref={containerRef}
       className={`event-reactions${pending ? ' pending' : ''}`}
       data-event-id={eventId}
       aria-busy={pending}
       onClick={(event) => event.stopPropagation()}
+      onKeyDown={closePicker}
     >
-      <div className="event-reaction-rail">
-        {MATCH_EVENT_REACTIONS.map((reaction) => {
+      <div className="event-reaction-line">
+        {MATCH_EVENT_REACTIONS.filter(
+          (reaction) =>
+            (summary?.counts[reaction] ?? 0) > 0 || ownReaction === reaction,
+        ).map((reaction) => {
           const presentation = REACTION_PRESENTATION[reaction];
           const count = summary?.counts[reaction] ?? 0;
           const selected = ownReaction === reaction;
@@ -77,6 +129,84 @@ export function EventReactions({
             </button>
           );
         })}
+        <button
+          ref={addButtonRef}
+          type="button"
+          className="event-add-reaction-button"
+          aria-label={ownReaction ? 'Change reaction' : 'Add reaction'}
+          aria-expanded={pickerOpen}
+          aria-haspopup="true"
+          disabled={pending}
+          onClick={(event) => {
+            event.stopPropagation();
+            keyboardOpenRef.current = event.detail === 0;
+            const panel = event.currentTarget.closest('.activity-panel');
+            if (panel) {
+              const button = event.currentTarget.getBoundingClientRect();
+              const bounds = panel.getBoundingClientRect();
+              const pickerWidth = 120;
+              const pickerHeight = 128;
+              const below = button.bottom + 4;
+              const top =
+                below + pickerHeight <= bounds.bottom - 4
+                  ? below
+                  : button.top - pickerHeight - 4;
+              setPickerPosition({
+                left: Math.max(
+                  bounds.left + 4,
+                  Math.min(
+                    button.right - pickerWidth,
+                    bounds.right - pickerWidth - 4,
+                  ),
+                ),
+                top: Math.max(
+                  bounds.top + 4,
+                  Math.min(top, bounds.bottom - pickerHeight - 4),
+                ),
+              });
+            }
+            setPickerOpen((open) => !open);
+          }}
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <circle cx="8.5" cy="9.5" r="5.5" />
+            <path d="M6.4 10.7c.8 1 1.4 1.3 2.2 1.3s1.5-.3 2.2-1.3M6.7 8h.1m3.5 0h.1M15 3.5v5m-2.5-2.5h5" />
+          </svg>
+        </button>
+        {pickerOpen &&
+          createPortal(
+            <div
+              ref={pickerRef}
+              className="event-reaction-picker"
+              aria-label="Choose a reaction"
+              style={pickerPosition}
+            >
+              {MATCH_EVENT_REACTIONS.map((reaction, index) => {
+                const presentation = REACTION_PRESENTATION[reaction];
+                const selected = ownReaction === reaction;
+                const action = selected
+                  ? 'Keep'
+                  : ownReaction
+                    ? 'Switch to'
+                    : 'Add';
+                return (
+                  <button
+                    key={reaction}
+                    ref={index === 0 ? firstOptionRef : undefined}
+                    type="button"
+                    aria-label={`${action} ${presentation.label.toLowerCase()} reaction`}
+                    aria-pressed={selected}
+                    disabled={pending}
+                    onClick={(event) => selectFromPicker(event, reaction)}
+                  >
+                    <span aria-hidden="true">{presentation.emoji}</span>
+                    <span>{presentation.label}</span>
+                  </button>
+                );
+              })}
+            </div>,
+            document.body,
+          )}
         {pending && (
           <span className="event-reaction-pending" aria-hidden="true" />
         )}

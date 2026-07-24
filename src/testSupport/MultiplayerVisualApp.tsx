@@ -22,6 +22,15 @@ applyScenario(
 );
 
 const activityEvents = useGameStore.getState().match?.events ?? [];
+const activityReactionSelections: Array<{
+  eventId: string;
+  reaction: 'fire' | 'laugh' | 'heart' | 'angry' | null;
+}> = [];
+(
+  window as typeof window & {
+    __FUSTIFY_ACTIVITY_REACTION_SELECTIONS__?: typeof activityReactionSelections;
+  }
+).__FUSTIFY_ACTIVITY_REACTION_SELECTIONS__ = activityReactionSelections;
 const activityReactions: ActivityReactionController | undefined =
   activityReactionFixture
     ? {
@@ -44,7 +53,9 @@ const activityReactions: ActivityReactionController | undefined =
         ),
         pendingEventIds: new Set([activityEvents.at(-1)!.id]),
         errors: {},
-        setReaction: () => undefined,
+        setReaction: (eventId, reaction) => {
+          activityReactionSelections.push({ eventId, reaction });
+        },
       }
     : undefined;
 

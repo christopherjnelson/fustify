@@ -169,7 +169,7 @@ describe('multiplayer Activity reaction eligibility', () => {
     setReaction: vi.fn(),
   };
 
-  it('shows the reaction rail only for canonical authoritative multiplayer events', () => {
+  it('shows Add reaction only for canonical authoritative multiplayer events', () => {
     const canonical = renderToStaticMarkup(
       createElement(EventLogEntry, {
         event: event('turn-started', { id: 'event-1' }),
@@ -187,9 +187,10 @@ describe('multiplayer Activity reaction eligibility', () => {
         onFocusTerritory: vi.fn(),
       }),
     );
-    expect(canonical).toContain('event-reaction-rail');
-    expect(canonical.match(/event-reaction-button/g)).toHaveLength(4);
-    expect(local).not.toContain('event-reaction-rail');
+    expect(canonical).toContain('aria-label="Add reaction"');
+    expect(canonical).not.toContain('event-reaction-button');
+    expect(canonical).not.toContain('class="event-turn"');
+    expect(local).not.toContain('event-reactions');
   });
 
   it('keeps legacy events rendering without an enabled reaction interface', () => {
@@ -208,12 +209,12 @@ describe('multiplayer Activity reaction eligibility', () => {
       }),
     );
     expect(markup).toContain('Legacy event message.');
-    expect(markup).not.toContain('event-reaction-rail');
+    expect(markup).not.toContain('event-reactions');
   });
 });
 
 describe('Activity player context', () => {
-  it('adds actor accent, icon tint, two-player markers, and structured name colors', () => {
+  it('adds actor accent, icon tint, and structured name colors without participant markers', () => {
     const markup = renderToStaticMarkup(
       createElement(EventLogEntry, {
         event: event('combat', {
@@ -234,7 +235,7 @@ describe('Activity player context', () => {
     expect(markup).toContain('--event-player-color:#e24f4f');
     expect(markup).toContain('data-player-id="player-1"');
     expect(markup).toContain('data-player-id="player-2"');
-    expect(markup.match(/event-participant-marker/g)).toHaveLength(2);
+    expect(markup).not.toContain('event-participant-marker');
     expect(markup).toContain(
       'class="event-player-name" data-player-id="player-1" style="color:#e24f4f"',
     );
@@ -244,7 +245,7 @@ describe('Activity player context', () => {
     expect(markup).toContain('class="event-territory-name"');
   });
 
-  it('uses one marker for reinforcement and same-owner movement', () => {
+  it('does not render participant markers for reinforcement or movement', () => {
     for (const type of [
       'armies-placed',
       'fortification-completed',
@@ -264,7 +265,7 @@ describe('Activity player context', () => {
           onFocusTerritory: vi.fn(),
         }),
       );
-      expect(markup.match(/event-participant-marker/g)).toHaveLength(1);
+      expect(markup).not.toContain('event-participant-marker');
       expect(markup).not.toContain('data-player-id="player-2"');
     }
   });

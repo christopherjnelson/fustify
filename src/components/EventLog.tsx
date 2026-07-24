@@ -65,21 +65,8 @@ export function EventLogEntry({
     >
       <span className="event-icon-context">
         <MatchEventIcon event={event} />
-        {presentation.participants.length > 0 && (
-          <span className="event-participants" aria-hidden="true">
-            {presentation.participants.map((participant) => (
-              <span
-                key={participant.playerId}
-                className="event-participant-marker"
-                data-player-id={participant.playerId}
-                style={{ backgroundColor: participant.color }}
-              />
-            ))}
-          </span>
-        )}
       </span>
       <span className="event-copy">
-        <span className="event-turn">T{event.turnNumber}</span>
         <span className="event-description">
           {formattedParts.map((part, index) => {
             if (part.type === 'player') {

@@ -1,18 +1,11 @@
-import {
-  Children,
-  createElement,
-  isValidElement,
-  type MouseEvent,
-  type ReactElement,
-  type ReactNode,
-} from 'react';
+import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { EventReactions } from './EventReactions';
 import { desiredReactionAfterSelection } from './eventReactionPresentation';
 
 describe('Activity reaction controls', () => {
-  it('always renders all four reactions while omitting visible zero counts', () => {
+  it('renders only counted reactions, the active reaction, and the picker trigger', () => {
     const markup = renderToStaticMarkup(
       createElement(EventReactions, {
         eventId: 'event-4',
@@ -27,15 +20,15 @@ describe('Activity reaction controls', () => {
     );
     expect(markup).toContain('🔥');
     expect(markup).toContain('❤️');
-    expect(markup).toContain('😂');
-    expect(markup).toContain('😡');
+    expect(markup).not.toContain('😂');
+    expect(markup).not.toContain('😡');
     expect(markup).not.toContain('>0<');
     expect(markup).toContain('remove your heart reaction');
     expect(markup).toContain('aria-pressed="true"');
     expect(markup).toContain('class="event-reaction-button active"');
-    expect(markup.match(/aria-pressed="false"/g)).toHaveLength(3);
-    expect(markup).not.toContain('React to this Activity entry');
-    expect(markup).not.toContain('role="menu"');
+    expect(markup.match(/aria-pressed="false"/g)).toHaveLength(1);
+    expect(markup).toContain('aria-label="Change reaction"');
+    expect(markup).not.toContain('event-reaction-picker');
   });
 
   it('models set, switch, and explicit removal without toggle semantics', () => {
@@ -44,38 +37,21 @@ describe('Activity reaction controls', () => {
     expect(desiredReactionAfterSelection('fire', 'fire')).toBeNull();
   });
 
-  it('calls the existing desired-state operation for set, switch, and removal', () => {
-    const click = {
-      stopPropagation: vi.fn(),
-    } as unknown as MouseEvent<HTMLButtonElement>;
-
-    const invoke = (
-      ownReaction: 'fire' | 'laugh' | 'heart' | 'angry' | null,
-      accessibleName: string,
-    ) => {
-      const onSetReaction = vi.fn();
-      const tree = EventReactions({
+  it('shows only Add reaction when there are no counts or current selection', () => {
+    const markup = renderToStaticMarkup(
+      createElement(EventReactions, {
         eventId: 'event-4',
         summary: {
           eventId: 'event-4',
           counts: { fire: 0, laugh: 0, heart: 0, angry: 0 },
-          ownReaction,
+          ownReaction: null,
         },
         pending: false,
-        onSetReaction,
-      });
-      findButton(tree, accessibleName).props.onClick(click);
-      return onSetReaction;
-    };
-
-    expect(invoke(null, 'add fire reaction')).toHaveBeenCalledWith('fire');
-    expect(invoke('fire', 'remove your fire reaction')).toHaveBeenCalledWith(
-      null,
+        onSetReaction: vi.fn(),
+      }),
     );
-    expect(invoke('fire', 'switch to laugh reaction')).toHaveBeenCalledWith(
-      'laugh',
-    );
-    expect(click.stopPropagation).toHaveBeenCalledTimes(3);
+    expect(markup).toContain('aria-label="Add reaction"');
+    expect(markup).not.toContain('event-reaction-button');
   });
 
   it('shows event-local pending and sanitized error state while retaining counts', () => {
@@ -95,41 +71,7 @@ describe('Activity reaction controls', () => {
     expect(markup).toContain('aria-busy="true"');
     expect(markup).toContain('Saving reaction');
     expect(markup).toContain('>2<');
-    expect(markup.match(/disabled=""/g)).toHaveLength(4);
+    expect(markup.match(/disabled=""/g)).toHaveLength(2);
     expect(markup).toContain('role="alert"');
   });
 });
-
-interface ReactionButtonProps {
-  'aria-label': string;
-  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
-}
-
-function findButton(
-  node: ReactNode,
-  accessibleName: string,
-): ReactElement<ReactionButtonProps> {
-  if (isValidElement<ReactionButtonProps>(node)) {
-    if (node.type === 'button' && node.props['aria-label'] === accessibleName) {
-      return node;
-    }
-    for (const child of Children.toArray(
-      (node.props as { children?: ReactNode }).children,
-    )) {
-      const match = findButtonOrNull(child, accessibleName);
-      if (match) return match;
-    }
-  }
-  throw new Error(`Could not find ${accessibleName}`);
-}
-
-function findButtonOrNull(
-  node: ReactNode,
-  accessibleName: string,
-): ReactElement<ReactionButtonProps> | null {
-  try {
-    return findButton(node, accessibleName);
-  } catch {
-    return null;
-  }
-}
