@@ -167,7 +167,7 @@ test('bot status locks gameplay selection and human controls return afterward', 
   await expect(page.getByTestId('bot-turn-status')).toHaveCount(0);
 });
 
-test('a configured heuristic seat starts automatically and returns control to a human', async ({
+test('local bot pacing changes pending playback without disrupting human handoff', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -175,9 +175,13 @@ test('a configured heuristic seat starts automatically and returns control to a 
     '/?v=1&seed=bot-e2e-world&territories=12&continents=2&players=2',
   );
   await page.getByRole('button', { name: 'Start Game' }).click();
+  const setupPacing = page.getByRole('group', { name: 'Bot pacing' });
+  await expect(setupPacing.getByLabel('Fast · 1 second')).toBeChecked();
+  await setupPacing.getByLabel('Deliberate · 5 seconds').check();
   await page
     .getByLabel(/Crimson League controller/i)
     .selectOption('heuristic-bot');
+  await page.getByLabel(/Azure Pact controller/i).selectOption('local-human');
   await page.getByRole('button', { name: 'Assign territories' }).click();
   page.on('dialog', (dialog) => void dialog.accept());
   await page.getByRole('button', { name: 'Begin Match' }).click();
@@ -185,7 +189,29 @@ test('a configured heuristic seat starts automatically and returns control to a 
     timeout: 15_000,
   });
   await expect(page.getByText(/Gameplay controls are locked/i)).toBeVisible();
-  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const savedEventCount = () =>
+    page.evaluate(() => {
+      const saved = window.localStorage.getItem('fustify.local-match');
+      return saved ? JSON.parse(saved).matchState.events.length : 0;
+    });
+  await page.getByText('Game', { exact: true }).click();
+  const menuPacing = page.getByRole('group', { name: 'Bot pacing' });
+  await expect(menuPacing.getByLabel('Deliberate · 5 seconds')).toBeChecked();
+  const beforeDeliberateAction = await savedEventCount();
+  await page.waitForTimeout(300);
+  expect(await savedEventCount()).toBe(beforeDeliberateAction);
+
+  await menuPacing.getByLabel('Instant').click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.localStorage.getItem('fustify.botPacing.mode'),
+      ),
+    )
+    .toBe('instant');
+  await expect
+    .poll(savedEventCount, { timeout: 3000 })
+    .toBeGreaterThan(beforeDeliberateAction);
   await expect(
     page.getByRole('heading', { name: /Pass the device to Azure Pact/i }),
   ).toBeVisible({ timeout: 30_000 });

@@ -14,6 +14,8 @@ import {
   SetupSummary,
   SetupWorldPanel,
 } from './setup/GameSetup';
+import { hasHeuristicBot } from '../browser/botPacingVisibility';
+import { BotPacingSelector } from './BotPacingSelector';
 
 export function PregamePanel() {
   const setup = useGameStore((state) => state.setup);
@@ -57,6 +59,7 @@ export function PregamePanel() {
     feedback?.includes('already') ||
     feedback?.includes('not part') ||
     feedback?.includes('before choosing');
+  const hasBots = hasHeuristicBot(orderedPlayers);
 
   return (
     <GameSetupShell
@@ -80,6 +83,7 @@ export function PregamePanel() {
       roster={
         <SetupRoster
           title="Players"
+          supplemental={hasBots ? <BotPacingSelector context="setup" /> : null}
           headerActions={
             <label className="player-count-control">
               <span>Players</span>

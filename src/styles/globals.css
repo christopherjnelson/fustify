@@ -672,6 +672,11 @@
   justify-content: center;
 }
 
+.game-setup-shell-overlay .bot-pacing-setup {
+  grid-column: 1 / -1;
+  margin: 7px 0 0;
+}
+
 .game-setup-shell-overlay .assignment-description {
   min-height: 1rem;
   margin: 0 0 8px;
@@ -1668,6 +1673,56 @@ select:focus-visible {
   cursor: pointer;
   font-size: 0.63rem;
   text-align: left;
+}
+
+.bot-pacing-selector {
+  padding: 0;
+  border: 0;
+}
+
+.bot-pacing-selector legend {
+  color: #b9ccdc;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.bot-pacing-selector label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #dce9f4;
+  cursor: pointer;
+  font-size: 0.63rem;
+}
+
+.bot-pacing-selector input {
+  margin: 0;
+  accent-color: #58b9df;
+}
+
+.bot-pacing-setup {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(153, 190, 224, 0.14);
+  border-radius: 8px;
+  background: rgba(2, 8, 16, 0.4);
+}
+
+.bot-pacing-setup legend {
+  grid-column: 1 / -1;
+  padding: 0 3px;
+}
+
+.bot-pacing-game-menu {
+  display: grid;
+  gap: 7px;
+  padding: 7px 8px;
+}
+
+.bot-pacing-game-menu legend {
+  margin-bottom: 2px;
 }
 
 .turn-sound-toggle {

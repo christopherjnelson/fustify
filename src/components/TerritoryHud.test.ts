@@ -11,6 +11,7 @@ import {
 import { PLAYER_VIEW_MODES, playerViewMode } from './playerViewModes';
 import { submitReinforcementPlacement } from './reinforcementPlacement';
 import { multiplayerHudMode } from '../multiplayer/interactionCapabilities';
+import { BotPacingSelector } from './BotPacingSelector';
 
 const initialState = useGameStore.getState();
 
@@ -19,6 +20,20 @@ afterEach(() => {
 });
 
 describe('active-match HUD utilities', () => {
+  it('offers the same accessible bot pacing preference in the Game menu', () => {
+    const markup = renderToStaticMarkup(
+      createElement(BotPacingSelector, { context: 'game-menu' }),
+    );
+
+    expect(markup).toContain('<legend>Bot pacing</legend>');
+    expect(markup).toContain('Instant');
+    expect(markup).toContain('Fast · 1 second');
+    expect(markup).toContain('Deliberate · 5 seconds');
+    expect(markup).toMatch(
+      /name="bot-pacing-game-menu"[^>]*checked=""[^>]*value="fast"/,
+    );
+  });
+
   it.each(['local', 'authoritative multiplayer'])(
     'omits debug access for %s play while retaining player utilities',
     () => {

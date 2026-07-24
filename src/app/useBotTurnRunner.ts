@@ -11,6 +11,8 @@ import { commandFingerprint } from '../core/controllers/observation';
 import type { GameCommand } from '../core/controllers/types';
 import { useGameStore } from '../state/useGameStore';
 import { BRAND } from '../branding';
+import { useBotPacingPreference } from '../browser/botPacingPreference';
+import { waitForBotPacing } from './botPacingDelay';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -40,38 +42,25 @@ function actionSummary(
   const name = (id: string) => names.get(id) ?? id;
   switch (action.type) {
     case 'PLACE_REINFORCEMENT':
-      return `Reinforced ${name(action.territoryId)} with ${action.amount}.`;
+      return `Reinforcing ${name(action.territoryId)} with ${action.amount}.`;
     case 'ATTACK':
-      return `Attacked ${name(action.toTerritoryId)} from ${name(action.fromTerritoryId)}.`;
+      return `Attacking ${name(action.toTerritoryId)} from ${name(action.fromTerritoryId)}.`;
     case 'MOVE_AFTER_CAPTURE':
-      return `Moved ${action.amount} armies into ${name(action.toTerritoryId)}.`;
+      return `Moving ${action.amount} armies into ${name(action.toTerritoryId)}.`;
     case 'FORTIFY':
-      return `Fortified ${name(action.toTerritoryId)} from ${name(action.fromTerritoryId)}.`;
+      return `Fortifying ${name(action.toTerritoryId)} from ${name(action.fromTerritoryId)}.`;
     case 'END_ATTACK_PHASE':
-      return 'Ended attack phase.';
+      return 'Ending the attack phase.';
     case 'SKIP_FORTIFY':
-      return 'Ended fortification without moving armies.';
+      return 'Ending fortification without moving armies.';
     case 'END_TURN':
-      return 'Ended turn.';
+      return 'Ending the turn.';
   }
-}
-
-function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(resolve, milliseconds);
-    signal.addEventListener(
-      'abort',
-      () => {
-        window.clearTimeout(timer);
-        reject(new DOMException('Bot action canceled.', 'AbortError'));
-      },
-      { once: true },
-    );
-  });
 }
 
 /** Runs at most one asynchronous decision per canonical state fingerprint. */
 export function useBotTurnRunner() {
+  const [pacingMode] = useBotPacingPreference();
   const mode = useGameStore((state) => state.applicationMode);
   const match = useGameStore((state) => state.match);
   const planet = useGameStore((state) => state.planet);
@@ -110,10 +99,6 @@ export function useBotTurnRunner() {
     }
     if (mode === 'game-over') return;
     const abort = new AbortController();
-    const reducedMotion = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
-    ).matches;
-    const pacing = reducedMotion ? 0 : 360;
     const playerId = activePlayer.id;
 
     const run = async () => {
@@ -126,7 +111,6 @@ export function useBotTurnRunner() {
           sourceTerritoryId: null,
           targetTerritoryId: null,
         });
-        await delay(pacing, abort.signal);
         beginBotTurn(match.matchId, playerId);
         return;
       }
@@ -192,17 +176,21 @@ export function useBotTurnRunner() {
       }
 
       const highlights = actionTerritories(command);
+      const summary = actionSummary(
+        command,
+        new Map(planet.territories.map((item) => [item.id, item.name])),
+      );
       setBotExecution({
         phase: 'applying',
         playerId,
-        summary: actionSummary(
-          command,
-          new Map(planet.territories.map((item) => [item.id, item.name])),
-        ),
+        summary:
+          pacingMode === 'instant'
+            ? summary
+            : `${summary} Waiting before this action for readability.`,
         error: null,
         ...highlights,
       });
-      await delay(pacing, abort.signal);
+      await waitForBotPacing(pacingMode, abort.signal);
       if (abort.signal.aborted) return;
       dispatchControllerAction(command, fingerprint, controllerEpoch);
     };
@@ -235,6 +223,7 @@ export function useBotTurnRunner() {
     fingerprint,
     match,
     mode,
+    pacingMode,
     planet,
     setBotExecution,
   ]);

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useGameStore } from '../state/useGameStore';
 import { PregamePanel } from './PregamePanel';
+import { hasHeuristicBot } from '../browser/botPacingVisibility';
 
 const initialState = useGameStore.getState();
 
@@ -23,8 +24,30 @@ describe('local pregame presentation', () => {
     expect(markup).toContain('aria-label="Crimson League color"');
     expect(markup).toContain('aria-label="Crimson League controller"');
     expect(markup).toContain('<option value="local-human" selected="">');
+    expect(markup).toContain('<legend>Bot pacing</legend>');
+    expect(markup).toContain('Instant');
+    expect(markup).toContain('Fast · 1 second');
+    expect(markup).toContain('Deliberate · 5 seconds');
+    expect(markup).toMatch(
+      /name="bot-pacing-setup"[^>]*checked=""[^>]*value="fast"/,
+    );
     expect(markup).not.toContain('no territories assigned');
     expect(markup).not.toContain('Add Seat');
+  });
+
+  it('hides bot pacing when every local seat is human', () => {
+    expect(
+      hasHeuristicBot([
+        { controllerType: 'local-human' },
+        { controllerType: 'local-human' },
+      ]),
+    ).toBe(false);
+    expect(
+      hasHeuristicBot([
+        { controllerType: 'local-human' },
+        { controllerType: 'heuristic-bot' },
+      ]),
+    ).toBe(true);
   });
 
   it('keeps assignment choices as a compact real radio group', () => {

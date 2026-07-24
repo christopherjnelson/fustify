@@ -37,6 +37,8 @@ import {
 } from '../multiplayer/interactionCapabilities';
 import type { LocalPlayerConfig } from '../core/setup/playerConfig';
 import type { GamePhase, MatchState } from '../core/game/types';
+import { hasHeuristicBot } from '../browser/botPacingVisibility';
+import { BotPacingSelector } from './BotPacingSelector';
 
 const PHASE_LABELS = {
   reinforce: 'Reinforce',
@@ -397,6 +399,8 @@ export function TerritoryHud({
     (player) => player.id === match.activePlayerId,
   )!;
   const botControlled = activePlayer.controllerType === 'heuristic-bot';
+  const hasLocalBots =
+    !multiplayerSession && hasHeuristicBot(configuredPlayers);
   const multiplayerPending = multiplayerSession?.pending ?? false;
   const interactionCapabilities = multiplayerInteractionCapabilities(
     match,
@@ -962,6 +966,7 @@ export function TerritoryHud({
               <summary>Game</summary>
               <div>
                 <TurnSoundToggle />
+                {hasLocalBots && <BotPacingSelector context="game-menu" />}
                 {!multiplayerSession && (
                   <>
                     <div className="game-menu-separator" />
