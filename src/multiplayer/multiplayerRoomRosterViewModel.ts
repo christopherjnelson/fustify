@@ -1,4 +1,7 @@
-import { PLAYER_COLORS, type PlayerColor } from '../core/setup/playerConfig';
+import {
+  playerColorForSeat,
+  type PlayerColor,
+} from '../core/setup/playerConfig';
 import type { RoomMember, RoomSeat } from './multiplayerApi';
 
 export interface MultiplayerSeatDisplay {
@@ -26,11 +29,6 @@ type SeatIdentity = Pick<
 >;
 type MemberIdentity = Pick<RoomMember, 'user_id' | 'display_name' | 'role'>;
 
-/**
- * Match initialization compacts claimed seats into player order after sorting
- * by seat index. Claimed rows therefore receive colors first in that exact
- * order. Remaining colors are shown on open rows in seat order.
- */
 export function buildMultiplayerRosterDisplay(
   seats: SeatIdentity[],
   members: MemberIdentity[],
@@ -39,13 +37,6 @@ export function buildMultiplayerRosterDisplay(
   const orderedSeats = seats
     .slice()
     .sort((a, b) => a.seat_index - b.seat_index);
-  const colorOrder = [
-    ...orderedSeats.filter((seat) => seat.occupant_user_id !== null),
-    ...orderedSeats.filter((seat) => seat.occupant_user_id === null),
-  ];
-  const colorBySeat = new Map(
-    colorOrder.map((seat, index) => [seat.seat_index, PLAYER_COLORS[index]!]),
-  );
   const memberById = new Map(members.map((member) => [member.user_id, member]));
   const seatedMemberIds = new Set(
     orderedSeats.flatMap((seat) =>
@@ -66,7 +57,7 @@ export function buildMultiplayerRosterDisplay(
           (seat.occupant_user_id ? 'Claimed player' : null),
         isHost: occupant?.role === 'host',
         isYou: seat.occupant_user_id === userId,
-        color: colorBySeat.get(seat.seat_index)!,
+        color: playerColorForSeat(seat.seat_index),
       };
     }),
     unseatedMembers: members

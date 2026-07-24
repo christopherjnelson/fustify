@@ -27,6 +27,14 @@ export const PLAYER_COLORS: readonly PlayerColor[] = PLAYER_PALETTE.map(
   }),
 );
 
+export function playerColorForSeat(seatIndex: number): PlayerColor {
+  const color = PLAYER_COLORS[seatIndex];
+  if (!color) {
+    throw new RangeError(`No player color exists for seat ${seatIndex + 1}.`);
+  }
+  return color;
+}
+
 const DEFAULT_NAMES = [
   'Crimson League',
   'Azure Pact',
@@ -42,7 +50,7 @@ export function createDefaultPlayerConfigs(
   return Array.from({ length: playerCount }, (_, seatIndex) => ({
     id: `player-${String(seatIndex + 1).padStart(2, '0')}`,
     name: DEFAULT_NAMES[seatIndex] ?? `Player ${seatIndex + 1}`,
-    colorId: PLAYER_COLORS[seatIndex]!.id,
+    colorId: playerColorForSeat(seatIndex).id,
     seatIndex,
     controllerType: seatIndex === 0 ? 'local-human' : 'heuristic-bot',
   }));

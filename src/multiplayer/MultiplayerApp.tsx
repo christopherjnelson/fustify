@@ -15,7 +15,6 @@ import { TerritoryHud } from '../components/TerritoryHud';
 import { ControlLegend } from '../components/ControlLegend';
 import type { MatchState } from '../core/game/types';
 import type { PlanetDefinition } from '../core/types/planet';
-import type { LocalPlayerConfig } from '../core/setup/playerConfig';
 import { createNeutralMatchSetup } from '../core/setup/startingPositions';
 import {
   reconcileMultiplayerSelection,
@@ -60,6 +59,7 @@ import {
 } from '../components/setup/GameSetup';
 import { MultiplayerRoomRoster } from './MultiplayerRoomRoster';
 import { buildMultiplayerRosterDisplay } from './multiplayerRoomRosterViewModel';
+import { createMultiplayerPlayerConfigs } from './multiplayerPlayerConfig';
 import { PostMatchActions } from './PostMatchActions';
 import {
   aggregateMatchEventReactions,
@@ -656,13 +656,7 @@ function authoritativeSnapshots(match: MultiplayerMatch, userId: string) {
     throw new Error('The authoritative world snapshot is unavailable.');
   }
   const seats = seatOrderSchema.parse(match.seat_order_snapshot);
-  const players: LocalPlayerConfig[] = seats.map((seat, index) => ({
-    id: seat.playerId,
-    name: seat.displayName,
-    colorId: `color-${index + 1}`,
-    seatIndex: index,
-    controllerType: 'local-human',
-  }));
+  const players = createMultiplayerPlayerConfigs(seats);
   const ownSeat = seats.find((seat) => seat.userId === userId);
   if (!ownSeat) throw new Error('Claimed seat membership is required.');
   return {

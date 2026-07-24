@@ -34,7 +34,7 @@ const seats = Array.from({ length: 5 }, (_, seat_index) => ({
 }));
 
 describe('multiplayer room roster presentation', () => {
-  it('uses authoritative claimed-player order for deterministic colors', () => {
+  it('keeps every open and claimed row tied to its seat color', () => {
     const roster = buildMultiplayerRosterDisplay(seats, members, hostId);
 
     expect(
@@ -45,11 +45,83 @@ describe('multiplayer room roster presentation', () => {
       ]),
     ).toEqual([
       [0, 'Crimson', 'redwurm'],
-      [1, 'Gold', null],
-      [2, 'Verdant', null],
-      [3, 'Azure', 'Alex'],
+      [1, 'Azure', null],
+      [2, 'Gold', null],
+      [3, 'Verdant', 'Alex'],
       [4, 'Violet', null],
     ]);
+  });
+
+  it('keeps Seat 5 Violet through claim, release, reclaim, and reconciliation', () => {
+    const openSeats = seats.map((seat) => ({
+      ...seat,
+      occupant_user_id: null,
+    }));
+    const claimedSeats = openSeats.map((seat) => ({
+      ...seat,
+      occupant_user_id: seat.seat_index === 4 ? hostId : null,
+    }));
+
+    for (const reconciledSeats of [
+      openSeats,
+      claimedSeats,
+      openSeats,
+      claimedSeats,
+    ]) {
+      expect(
+        buildMultiplayerRosterDisplay(reconciledSeats, members, hostId)
+          .seats[4],
+      ).toMatchObject({
+        color: { id: 'color-5', label: 'Violet' },
+      });
+    }
+
+    for (const userId of [hostId, observerId]) {
+      expect(
+        buildMultiplayerRosterDisplay(
+          claimedSeats.slice().reverse(),
+          members.slice().reverse(),
+          userId,
+        ).seats[4],
+      ).toMatchObject({
+        occupantName: 'redwurm',
+        isHost: true,
+        isYou: userId === hostId,
+        color: { id: 'color-5', label: 'Violet' },
+      });
+    }
+  });
+
+  it('uses Seat 2 Azure and Seat 5 Violet regardless of claim order', () => {
+    const sparseSeats = seats
+      .map((seat) => ({
+        ...seat,
+        occupant_user_id:
+          seat.seat_index === 1
+            ? playerId
+            : seat.seat_index === 4
+              ? hostId
+              : null,
+      }))
+      .reverse();
+    const roster = buildMultiplayerRosterDisplay(
+      sparseSeats,
+      members,
+      playerId,
+    );
+
+    expect(roster.seats[1]).toMatchObject({
+      occupantName: 'Alex',
+      isHost: false,
+      isYou: true,
+      color: { id: 'color-2', label: 'Azure' },
+    });
+    expect(roster.seats[4]).toMatchObject({
+      occupantName: 'redwurm',
+      isHost: true,
+      isYou: false,
+      color: { id: 'color-5', label: 'Violet' },
+    });
   });
 
   it('maps claimed members into rows and retains only genuinely unseated members', () => {
@@ -93,7 +165,7 @@ describe('multiplayer room roster presentation', () => {
     expect(markup).toContain('Claimed seat');
     expect(markup).toContain('>Host<');
     expect(markup).toContain('>You<');
-    expect(markup).toContain('Seat 2, Gold, Open');
+    expect(markup).toContain('Seat 2, Azure, Open');
     expect(markup).toContain('Available to claim');
     expect(markup).toContain('aria-label="Claim Seat 2"');
     expect(markup).toContain('aria-label="Release Seat 1"');

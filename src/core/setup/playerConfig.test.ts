@@ -2,10 +2,26 @@ import { describe, expect, it } from 'vitest';
 import {
   createDefaultPlayerConfigs,
   normalizePlayerName,
+  playerColorForSeat,
   validatePlayerConfigs,
 } from './playerConfig';
 
 describe('local player configuration', () => {
+  it('maps seat identity to the existing palette', () => {
+    expect(
+      [0, 1, 2, 3, 4].map((seatIndex) => {
+        const color = playerColorForSeat(seatIndex);
+        return [color.id, color.label];
+      }),
+    ).toEqual([
+      ['color-1', 'Crimson'],
+      ['color-2', 'Azure'],
+      ['color-3', 'Gold'],
+      ['color-4', 'Verdant'],
+      ['color-5', 'Violet'],
+    ]);
+  });
+
   it('creates the requested number in explicit seat order', () => {
     const players = createDefaultPlayerConfigs(6);
     expect(players).toHaveLength(6);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createAuthoritativeMatch } from './authoritativeEngine';
 import { sha256Fingerprint } from './gameProtocol';
+import { createMultiplayerPlayerConfigs } from './multiplayerPlayerConfig';
 
 const room = {
   id: '00000000-0000-4000-8000-000000000010',
@@ -11,13 +12,13 @@ const room = {
 };
 const seats = [
   {
-    seatIndex: 0,
+    seatIndex: 1,
     userId: '00000000-0000-4000-8000-000000000001',
     displayName: 'Alpha',
     controllerType: 'human' as const,
   },
   {
-    seatIndex: 3,
+    seatIndex: 4,
     userId: '00000000-0000-4000-8000-000000000002',
     displayName: 'Bravo',
     controllerType: 'human' as const,
@@ -55,6 +56,21 @@ describe('authoritative multiplayer initialization', () => {
     expect(first.seatOrderSnapshot.map((seat) => seat.playerId)).toEqual([
       'player-01',
       'player-02',
+    ]);
+    expect(first.seatOrderSnapshot.map((seat) => seat.seatIndex)).toEqual([
+      1, 4,
+    ]);
+    expect(
+      createMultiplayerPlayerConfigs(first.seatOrderSnapshot).map(
+        ({ id, colorId, seatIndex }) => ({
+          id,
+          colorId,
+          seatIndex,
+        }),
+      ),
+    ).toEqual([
+      { id: 'player-01', colorId: 'color-2', seatIndex: 0 },
+      { id: 'player-02', colorId: 'color-5', seatIndex: 1 },
     ]);
     await expect(sha256Fingerprint(first.state)).resolves.toBe(
       first.stateFingerprint,

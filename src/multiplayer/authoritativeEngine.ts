@@ -3,9 +3,9 @@ import type { MatchState } from '../core/game/types.ts';
 import { GENERATOR_VERSION } from '../core/generation/constants.ts';
 import { generatePlanet } from '../core/generation/generatePlanet.ts';
 import type { PlanetDefinition } from '../core/types/planet.ts';
-import type { LocalPlayerConfig } from '../core/setup/playerConfig.ts';
 import { generateStartingPosition } from '../core/setup/startingPositions.ts';
 import { sha256Fingerprint } from './gameProtocol.ts';
+import { createMultiplayerPlayerConfigs } from './multiplayerPlayerConfig.ts';
 
 export interface ClaimedSeat {
   seatIndex: number;
@@ -45,17 +45,11 @@ export async function createAuthoritativeMatch(
   if (seats.length < 2 || seats.length > 5) {
     throw new Error('not_enough_players');
   }
-  const players: LocalPlayerConfig[] = seats.map((seat, index) => ({
-    id: `player-${String(index + 1).padStart(2, '0')}`,
-    name: seat.displayName,
-    colorId: `color-${index + 1}`,
-    seatIndex: index,
-    controllerType: 'local-human',
-  }));
   const seatOrderSnapshot: AuthoritativeSeat[] = seats.map((seat, index) => ({
     ...seat,
-    playerId: players[index]!.id,
+    playerId: `player-${String(index + 1).padStart(2, '0')}`,
   }));
+  const players = createMultiplayerPlayerConfigs(seatOrderSnapshot);
   const planet = generatePlanet(room.seed, {
     territoryCount: room.territory_count,
     continentCount: room.continent_count,
