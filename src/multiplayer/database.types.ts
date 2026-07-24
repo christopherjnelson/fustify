@@ -14,6 +14,41 @@ export type Database = {
   };
   public: {
     Tables: {
+      match_event_reactions: {
+        Row: {
+          created_at: string;
+          event_id: string;
+          match_id: string;
+          reaction: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          event_id: string;
+          match_id: string;
+          reaction: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          event_id?: string;
+          match_id?: string;
+          reaction?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'match_event_reactions_match_id_fkey';
+            columns: ['match_id'];
+            isOneToOne: false;
+            referencedRelation: 'matches';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       match_commands: {
         Row: {
           actor_seat_index: number;
@@ -413,6 +448,14 @@ export type Database = {
       };
       leave_room: { Args: { room_id: string }; Returns: undefined };
       release_room_seat: { Args: { room_id: string }; Returns: undefined };
+      set_match_event_reaction: {
+        Args: {
+          p_event_id: string;
+          p_match_id: string;
+          p_reaction: string | null;
+        };
+        Returns: undefined;
+      };
       start_room_match: {
         Args: { room_id: string };
         Returns: {

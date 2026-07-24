@@ -43,6 +43,15 @@ describe('authoritative multiplayer initialization', () => {
     expect(first.state.phase).toBe('reinforce');
     expect(first.state.combatSequence).toBe(0);
     expect(first.state.remainingReinforcements).toBeGreaterThan(0);
+    expect(first.state.events.map((event) => event.id)).toEqual([
+      'event-1',
+      'event-2',
+    ]);
+    expect(
+      (
+        JSON.parse(JSON.stringify(first.state)) as typeof first.state
+      ).events.map((event) => event.id),
+    ).toEqual(['event-1', 'event-2']);
     expect(first.seatOrderSnapshot.map((seat) => seat.playerId)).toEqual([
       'player-01',
       'player-02',

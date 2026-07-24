@@ -56,12 +56,15 @@ export const MULTIPLAYER_ERRORS: Record<string, string> = {
   invalid_action: 'That action is no longer legal. The match was refreshed.',
   invalid_authoritative_state:
     'The authoritative match state is unavailable. Reconnect and try again.',
+  invalid_event_reaction: 'That Activity reaction is not available.',
   idempotency_conflict:
     'That request key was already used for a different action.',
   legacy_match_incomplete:
     'This earlier preview cannot become a playable match. Create a new room.',
   match_snapshot_immutable: 'The match setup snapshot cannot be changed.',
   match_completed: 'This match is complete. No more actions can be played.',
+  match_event_not_found:
+    'That Activity entry is no longer available for reactions.',
   match_not_active: 'This match is not active.',
   multiplayer_draft_unsupported:
     'Player draft is not available in multiplayer yet. Choose random assignment.',

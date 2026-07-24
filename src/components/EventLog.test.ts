@@ -7,6 +7,7 @@ import type { MatchEvent } from '../core/game/types';
 import { EventLogEntry } from './EventLog';
 import { MatchEventIcon } from './MatchEventIcon';
 import { matchEventIconName } from './matchEventIconName';
+import type { ActivityReactionController } from '../multiplayer/matchEventReactions';
 
 const planet = generatePlanet('event-log-focus-test', {
   territoryCount: 12,
@@ -149,5 +150,55 @@ describe('match event icons', () => {
     expect(
       renderToStaticMarkup(createElement(MatchEventIcon, { event: legacy })),
     ).toContain('data-event-icon="generic"');
+  });
+});
+
+describe('multiplayer Activity reaction eligibility', () => {
+  const reactions: ActivityReactionController = {
+    summaries: {},
+    pendingEventIds: new Set(),
+    errors: {},
+    setReaction: vi.fn(),
+  };
+
+  it('shows React only for canonical events in an authoritative multiplayer feed', () => {
+    const canonical = renderToStaticMarkup(
+      createElement(EventLogEntry, {
+        event: event('turn-started', { id: 'event-1' }),
+        planet,
+        players,
+        onFocusTerritory: vi.fn(),
+        reactions,
+      }),
+    );
+    const local = renderToStaticMarkup(
+      createElement(EventLogEntry, {
+        event: event('turn-started', { id: 'event-1' }),
+        planet,
+        players,
+        onFocusTerritory: vi.fn(),
+      }),
+    );
+    expect(canonical).toContain('React to this Activity entry');
+    expect(local).not.toContain('React to this Activity entry');
+  });
+
+  it('keeps legacy events rendering without an enabled reaction interface', () => {
+    const legacy = {
+      ...event('turn-ended'),
+      id: undefined,
+      type: 'legacy-event',
+    } as unknown as MatchEvent;
+    const markup = renderToStaticMarkup(
+      createElement(EventLogEntry, {
+        event: legacy,
+        planet,
+        players,
+        onFocusTerritory: vi.fn(),
+        reactions,
+      }),
+    );
+    expect(markup).toContain('Legacy event message.');
+    expect(markup).not.toContain('React to this Activity entry');
   });
 });

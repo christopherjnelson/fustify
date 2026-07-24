@@ -78,6 +78,23 @@ describe('activity feed tracking', () => {
     expect(restored.unreadCount).toBe(0);
   });
 
+  it('does not count reaction-only rerenders as new gameplay activity', () => {
+    const baseline = reconcileActivityFeed(
+      null,
+      'match-a',
+      events('event-1', 'event-2'),
+      false,
+    );
+    const afterReactionRefetch = reconcileActivityFeed(
+      baseline,
+      'match-a',
+      events('event-1', 'event-2'),
+      false,
+    );
+    expect(afterReactionRefetch.unreadCount).toBe(0);
+    expect(afterReactionRefetch.eventIds).toEqual(baseline.eventIds);
+  });
+
   it('keeps pinned appends read and explicitly clears accumulated unread', () => {
     const baseline = reconcileActivityFeed(
       null,

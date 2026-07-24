@@ -272,6 +272,14 @@ describe('hand-authored rules fixtures', () => {
       recentlyCapturedTerritoryId: 'b',
     });
     expect(state.players.p2.eliminated).toBe(true);
+    expect(new Set(state.events.map((event) => event.id)).size).toBe(
+      state.events.length,
+    );
+    expect(
+      (JSON.parse(JSON.stringify(state)) as MatchState).events.map(
+        (event) => event.id,
+      ),
+    ).toEqual(state.events.map((event) => event.id));
     expect(state.events.slice(-2).map(({ type }) => type)).toEqual([
       'territory-captured',
       'player-eliminated',

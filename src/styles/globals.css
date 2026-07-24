@@ -2247,6 +2247,106 @@ button:disabled {
   font-weight: 700;
 }
 
+.event-reactions {
+  position: relative;
+  min-width: 0;
+}
+
+.event-reaction-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.event-reaction-chip,
+.event-reaction-trigger {
+  min-height: 24px;
+  padding: 2px 6px;
+  color: #b8cfdf;
+  border: 1px solid rgba(124, 190, 229, 0.18);
+  border-radius: 999px;
+  background: rgba(31, 67, 91, 0.32);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.event-reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.event-reaction-chip.selected {
+  color: #e8f6ff;
+  border-color: rgba(124, 207, 251, 0.62);
+  background: rgba(37, 117, 160, 0.46);
+}
+
+.event-reaction-chip.selected::after {
+  content: '✓';
+  font-size: 0.52rem;
+}
+
+.event-reaction-trigger {
+  padding-inline: 7px;
+  color: #a9cce4;
+}
+
+.event-reaction-chip:disabled,
+.event-reaction-trigger:disabled,
+.event-reaction-picker button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.event-reaction-picker {
+  position: absolute;
+  z-index: 8;
+  right: 0;
+  bottom: calc(100% + 5px);
+  display: grid;
+  width: max-content;
+  min-width: 118px;
+  padding: 4px;
+  border: 1px solid rgba(124, 190, 229, 0.3);
+  border-radius: 9px;
+  background: rgba(8, 20, 32, 0.98);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.event-reaction-picker button {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  color: #c5d8e6;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.event-reaction-picker button:hover,
+.event-reaction-picker button:focus-visible,
+.event-reaction-picker button.selected {
+  background: rgba(54, 116, 153, 0.42);
+  outline: none;
+}
+
+.event-reaction-error {
+  display: block;
+  padding-top: 3px;
+  color: #efaaa0;
+  font-size: 0.58rem;
+}
+
 @keyframes activity-dock-open {
   from {
     opacity: 0;

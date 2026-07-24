@@ -61,6 +61,15 @@ import {
 import { MultiplayerRoomRoster } from './MultiplayerRoomRoster';
 import { buildMultiplayerRosterDisplay } from './multiplayerRoomRosterViewModel';
 import { PostMatchActions } from './PostMatchActions';
+import {
+  aggregateMatchEventReactions,
+  fetchMatchEventReactions,
+  setMatchEventReaction,
+  subscribeToMatchEventReactions,
+  type ActivityReactionController,
+  type MatchEventReaction,
+  type MatchEventReactionRow,
+} from './matchEventReactions';
 
 type Route =
   | { kind: 'lobby' }
@@ -669,6 +678,7 @@ export function MultiplayerGameScene({
   revision,
   connection = 'SUBSCRIBED',
   renderPostMatchActions,
+  activityReactions,
 }: {
   matchId: string;
   revision: number;
@@ -677,6 +687,7 @@ export function MultiplayerGameScene({
     reviewing: boolean,
     onReviewingChange: (reviewing: boolean) => void,
   ) => ReactNode;
+  activityReactions?: ActivityReactionController;
 }) {
   return (
     <main
@@ -691,6 +702,7 @@ export function MultiplayerGameScene({
       <TurnNotificationController />
       <TerritoryHud
         renderMultiplayerPostMatchActions={renderPostMatchActions}
+        activityReactions={activityReactions}
       />
       <div className="multiplayer-game-connection">
         <ConnectionBadge status={connection} />
@@ -708,9 +720,18 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
   const [connection, setConnection] = useState('CONNECTING');
   const [completedRoomState, setCompletedRoomState] =
     useState<RoomState | null>(null);
+  const [reactionRows, setReactionRows] = useState<MatchEventReactionRow[]>([]);
+  const [pendingReactionEventIds, setPendingReactionEventIds] = useState<
+    ReadonlySet<string>
+  >(new Set());
+  const [reactionErrors, setReactionErrors] = useState<
+    Readonly<Record<string, string>>
+  >({});
   const matchRef = useRef<MultiplayerMatch | null>(null);
   const completedRoomStateRef = useRef<RoomState | null>(null);
   const refreshSequence = useRef(0);
+  const reactionRefreshSequence = useRef(0);
+  const pendingReactionEventIdsRef = useRef(new Set<string>());
 
   const install = useCallback(
     (canonical: MultiplayerMatch) => {
@@ -807,8 +828,49 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
     [client, matchId, refresh],
   );
 
+  const refreshReactions = useCallback(async () => {
+    const sequence = ++reactionRefreshSequence.current;
+    const canonicalRows = await fetchMatchEventReactions(client, matchId);
+    if (sequence === reactionRefreshSequence.current) {
+      setReactionRows(canonicalRows);
+    }
+  }, [client, matchId]);
+
+  const setReaction = useCallback(
+    (eventId: string, reaction: MatchEventReaction | null) => {
+      if (pendingReactionEventIdsRef.current.has(eventId)) return;
+      pendingReactionEventIdsRef.current.add(eventId);
+      setPendingReactionEventIds(new Set(pendingReactionEventIdsRef.current));
+      setReactionErrors((current) => {
+        if (!(eventId in current)) return current;
+        const next = { ...current };
+        delete next[eventId];
+        return next;
+      });
+      void (async () => {
+        try {
+          await setMatchEventReaction(client, matchId, eventId, reaction);
+          await refreshReactions();
+        } catch (requestError) {
+          await refreshReactions().catch(() => undefined);
+          setReactionErrors((current) => ({
+            ...current,
+            [eventId]: multiplayerError(requestError).message,
+          }));
+        } finally {
+          pendingReactionEventIdsRef.current.delete(eventId);
+          setPendingReactionEventIds(
+            new Set(pendingReactionEventIdsRef.current),
+          );
+        }
+      })();
+    },
+    [client, matchId, refreshReactions],
+  );
+
   useEffect(() => {
     let active = true;
+    let reactionRefreshTimer: number | null = null;
     let channel = subscribeToMatch(
       client,
       matchId,
@@ -827,10 +889,31 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
         if (status === 'SUBSCRIBED') void refresh();
       },
     );
-    void refresh().catch((requestError: unknown) => {
-      if (active) setError(multiplayerError(requestError).message);
-    });
-    const recover = () => void refresh();
+    let reactionChannel = subscribeToMatchEventReactions(
+      client,
+      matchId,
+      () => {
+        if (reactionRefreshTimer !== null) {
+          window.clearTimeout(reactionRefreshTimer);
+        }
+        reactionRefreshTimer = window.setTimeout(
+          () => void refreshReactions(),
+          40,
+        );
+      },
+      (status) => {
+        if (active && status === 'SUBSCRIBED') void refreshReactions();
+      },
+    );
+    void Promise.all([refresh(), refreshReactions()]).catch(
+      (requestError: unknown) => {
+        if (active) setError(multiplayerError(requestError).message);
+      },
+    );
+    const recover = () => {
+      void refresh();
+      void refreshReactions();
+    };
     const reconcile = window.setInterval(recover, 2_000);
     window.addEventListener('focus', recover);
     window.addEventListener('online', recover);
@@ -838,10 +921,15 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
     if (import.meta.env.DEV) {
       window.__FUSTIFY_MULTIPLAYER_TEST__ = {
         getRealtimeEventCount: () => matchRef.current?.revision ?? 0,
-        refreshCanonical: () => refresh(),
+        refreshCanonical: async () => {
+          await Promise.all([refresh(), refreshReactions()]);
+        },
         interruptRealtime: async () => {
           setConnection('RECONNECTING');
-          await client.removeChannel(channel);
+          await Promise.all([
+            client.removeChannel(channel),
+            client.removeChannel(reactionChannel),
+          ]);
           channel = subscribeToMatch(
             client,
             matchId,
@@ -851,20 +939,32 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
               if (status === 'SUBSCRIBED') void refresh();
             },
           );
-          await refresh();
+          reactionChannel = subscribeToMatchEventReactions(
+            client,
+            matchId,
+            () => void refreshReactions(),
+            (status) => {
+              if (status === 'SUBSCRIBED') void refreshReactions();
+            },
+          );
+          await Promise.all([refresh(), refreshReactions()]);
         },
       };
     }
     return () => {
       active = false;
+      if (reactionRefreshTimer !== null) {
+        window.clearTimeout(reactionRefreshTimer);
+      }
       window.clearInterval(reconcile);
       window.removeEventListener('focus', recover);
       window.removeEventListener('online', recover);
       delete window.__FUSTIFY_MULTIPLAYER_TEST__;
       void client.removeChannel(channel);
+      void client.removeChannel(reactionChannel);
       useGameStore.setState({ multiplayerSession: null });
     };
-  }, [client, matchId, refresh]);
+  }, [client, matchId, refresh, refreshReactions]);
 
   useEffect(() => {
     useGameStore.setState((current) => ({
@@ -897,6 +997,22 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
     };
   }, [completedRoomState, userId]);
 
+  const activityReactions = useMemo<ActivityReactionController>(
+    () => ({
+      summaries: aggregateMatchEventReactions(reactionRows, userId),
+      pendingEventIds: pendingReactionEventIds,
+      errors: reactionErrors,
+      setReaction,
+    }),
+    [
+      pendingReactionEventIds,
+      reactionErrors,
+      reactionRows,
+      setReaction,
+      userId,
+    ],
+  );
+
   if (!match) {
     return (
       <StatusScreen
@@ -911,6 +1027,7 @@ function MatchView({ matchId, userId }: { matchId: string; userId: string }) {
       matchId={match.id}
       revision={match.revision}
       connection={connection}
+      activityReactions={activityReactions}
       renderPostMatchActions={
         match.status === 'completed' && postMatch
           ? (reviewing, onReviewingChange) => (

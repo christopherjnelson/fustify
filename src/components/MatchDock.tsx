@@ -9,6 +9,7 @@ import {
 import type { MatchEvent } from '../core/game/types';
 import type { PlanetDefinition } from '../core/types/planet';
 import type { LocalPlayerConfig } from '../core/setup/playerConfig';
+import type { ActivityReactionController } from '../multiplayer/matchEventReactions';
 import { EventLog } from './EventLog';
 import {
   markActivityRead,
@@ -43,12 +44,14 @@ export function MatchDock({
   planet,
   players,
   onFocusTerritory,
+  reactions,
 }: {
   matchId: string;
   events: MatchEvent[];
   planet: PlanetDefinition;
   players: LocalPlayerConfig[];
   onFocusTerritory: (territoryId: string) => void;
+  reactions?: ActivityReactionController;
 }) {
   const [open, setOpen] = useState(readOpenPreference);
   const trackingRef = useRef<ActivityFeedTracking>(
@@ -155,6 +158,7 @@ export function MatchDock({
             onFocusTerritory={onFocusTerritory}
             listRef={listRef}
             onScroll={handleScroll}
+            reactions={reactions}
           />
         </section>
       ) : (

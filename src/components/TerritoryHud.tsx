@@ -21,6 +21,7 @@ import { TerritoryNavigator } from './TerritoryNavigator';
 import { territoryDrawerReducer } from '../core/navigation/territoryNavigator';
 import { playerColorValue } from '../core/setup/playerConfig';
 import { TERRITORY_NAVIGATOR_SHORTCUT } from '../core/input/controlBindings';
+import type { ActivityReactionController } from '../multiplayer/matchEventReactions';
 import { MatchDock } from './MatchDock';
 import { TurnSoundToggle } from './TurnNotificationController';
 
@@ -111,11 +112,13 @@ function ArmyAmountControl({
 
 export function TerritoryHud({
   renderMultiplayerPostMatchActions,
+  activityReactions,
 }: {
   renderMultiplayerPostMatchActions?: (
     reviewing: boolean,
     onReviewingChange: (reviewing: boolean) => void,
   ) => ReactNode;
+  activityReactions?: ActivityReactionController;
 } = {}) {
   const planet = useGameStore((state) => state.planet);
   const match = useGameStore((state) => state.match)!;
@@ -905,6 +908,7 @@ export function TerritoryHud({
           planet={planet}
           players={configuredPlayers}
           onFocusTerritory={requestTerritoryFocus}
+          reactions={activityReactions}
         />
       </div>
       <TerritoryNavigator open={navigatorOpen} onClose={closeNavigator} />
