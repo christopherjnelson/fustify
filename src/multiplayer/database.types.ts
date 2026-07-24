@@ -167,6 +167,30 @@ export type Database = {
           },
         ];
       };
+      profiles: {
+        Row: {
+          avatar_url: string | null;
+          created_at: string;
+          display_name: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          avatar_url?: string | null;
+          created_at?: string;
+          display_name: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          avatar_url?: string | null;
+          created_at?: string;
+          display_name?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       room_members: {
         Row: {
           display_name: string;
@@ -423,6 +447,22 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      ensure_own_profile: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          avatar_url: string | null;
+          created_at: string;
+          display_name: string;
+          updated_at: string;
+          user_id: string;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'profiles';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       join_room: {
         Args: { display_name: string; join_code: string };
         Returns: {
@@ -508,6 +548,25 @@ export type Database = {
         SetofOptions: {
           from: '*';
           to: 'rooms';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      update_own_profile: {
+        Args: {
+          p_avatar_url: string | null;
+          p_display_name: string;
+        };
+        Returns: {
+          avatar_url: string | null;
+          created_at: string;
+          display_name: string;
+          updated_at: string;
+          user_id: string;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'profiles';
           isOneToOne: true;
           isSetofReturn: false;
         };

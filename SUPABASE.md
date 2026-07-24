@@ -22,6 +22,7 @@ Migration order:
 6. `20260722192905_harden_match_command_grants.sql`
 7. `20260722201731_finalize_after_capture_movement.sql`
 8. `20260724032701_add_match_event_reactions.sql`
+9. `20260724062455_create_profile_foundation.sql`
 
 The authority migration extends `matches`, creates append-only
 `match_commands`, adds member-scoped read RLS, removes browser execution of the
@@ -39,10 +40,17 @@ validation, direct-DML denial, and Realtime publication membership. Reaction
 rows are social metadata and never update `matches`, `match_commands`, gameplay
 revision, state fingerprint, or winner fields.
 
-The hosted history contains all eight migrations in this order. Edge Function
+The profile migration adds application-owned `profiles` keyed directly by
+`auth.users.id`, creates rows for new anonymous or permanent Auth users,
+backfills existing users, and exposes authenticated reads plus controlled
+own-profile ensure/update RPCs. Browser roles have no direct profile write
+grants. Display names and HTTPS avatar URLs are presentation data only; profiles
+contain no role, permission, or administrator fields.
+
+The hosted history contains all nine migrations in this order. Edge Function
 `multiplayer-game` is active at version 3 with `verify_jwt=false`. The Activity
-reaction work does not change authority-imported source and therefore does not
-redeploy this function.
+reaction and profile-foundation work do not change authority-imported source
+and therefore do not redeploy this function.
 
 ## Secrets and browser configuration
 
@@ -115,6 +123,8 @@ permit weakening grants or policies.
 - Migration history exactly matches Git.
 - `matches` and `match_commands` RLS are enabled.
 - `match_event_reactions` RLS is enabled and browser roles have `SELECT` only.
+- `profiles` RLS is enabled, authenticated users have `SELECT` only, and the
+  trigger/backfill leave one profile per Auth user.
 - Member reads and non-member zero-row behavior pass.
 - Browser writes and authority-function execution fail.
 - Reaction writes validate canonical event ownership, participant identity, and
