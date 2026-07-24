@@ -267,11 +267,12 @@ describe('setup and match store integration', () => {
     const command = {
       type: 'PLACE_REINFORCEMENT' as const,
       territoryId: target.id,
-      amount: 1,
+      amount: 2,
     };
     useGameStore.getState().dispatchGameAction(command);
     useGameStore.getState().dispatchGameAction(command);
     expect(authoritativeDispatch).toHaveBeenCalledOnce();
+    expect(authoritativeDispatch).toHaveBeenCalledWith(command);
     expect(useGameStore.getState().multiplayerSession?.pending).toBe(true);
 
     finishCommand();

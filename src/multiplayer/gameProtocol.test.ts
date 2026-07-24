@@ -39,4 +39,25 @@ describe('authoritative multiplayer protocol', () => {
       }),
     ).toThrow('invalid_action');
   });
+
+  it('accepts arbitrary whole-number reinforcement amounts and rejects fractions', () => {
+    expect(
+      parseGameAction({
+        type: 'PLACE_REINFORCEMENT',
+        territoryId: 'territory-1',
+        amount: 8,
+      }),
+    ).toEqual({
+      type: 'PLACE_REINFORCEMENT',
+      territoryId: 'territory-1',
+      amount: 8,
+    });
+    expect(() =>
+      parseGameAction({
+        type: 'PLACE_REINFORCEMENT',
+        territoryId: 'territory-1',
+        amount: 1.5,
+      }),
+    ).toThrow('invalid_action');
+  });
 });

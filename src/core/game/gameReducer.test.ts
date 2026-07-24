@@ -187,6 +187,51 @@ describe('local match rules', () => {
     expect(result.state).toBe(state);
   });
 
+  it('places an arbitrary valid reinforcement amount in one transition and event', () => {
+    const planet = smallPlanet();
+    const state = {
+      ...createMatch(planet),
+      remainingReinforcements: 8,
+    };
+    const beforeArmies = state.territories.a!.armyCount;
+    const beforeEvents = state.events.length;
+
+    const result = gameReducer(planet, state, {
+      type: 'PLACE_REINFORCEMENT',
+      territoryId: 'a',
+      amount: 5,
+    });
+
+    expect(result.error).toBeNull();
+    expect(result.state.territories.a!.armyCount).toBe(beforeArmies + 5);
+    expect(result.state.remainingReinforcements).toBe(3);
+    expect(result.state.events).toHaveLength(beforeEvents + 1);
+    expect(result.state.events.at(-1)).toMatchObject({
+      type: 'armies-placed',
+      territoryId: 'a',
+      armyCount: 5,
+    });
+  });
+
+  it.each([0, -1, 1.5, 9])(
+    'rejects invalid reinforcement amount %s without mutation',
+    (amount) => {
+      const planet = smallPlanet();
+      const state = {
+        ...createMatch(planet),
+        remainingReinforcements: 8,
+      };
+      const result = gameReducer(planet, state, {
+        type: 'PLACE_REINFORCEMENT',
+        territoryId: 'a',
+        amount,
+      });
+
+      expect(result.error?.code).toBe('INVALID_AMOUNT');
+      expect(result.state).toBe(state);
+    },
+  );
+
   it('cannot end reinforcement while armies remain', () => {
     const planet = smallPlanet();
     const state = createMatch(planet);

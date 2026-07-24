@@ -73,14 +73,18 @@ function ArmyAmountControl({
   maximum,
   value,
   onChange,
+  alwaysShowSlider = false,
+  disabled = false,
 }: {
   label: string;
   minimum: number;
   maximum: number;
   value: number;
   onChange: (value: number) => void;
+  alwaysShowSlider?: boolean;
+  disabled?: boolean;
 }) {
-  if (minimum === maximum)
+  if (minimum === maximum && !alwaysShowSlider)
     return (
       <p className="fixed-amount" aria-label={`${label}: ${value}`}>
         <span>{label}</span>
@@ -96,9 +100,11 @@ function ArmyAmountControl({
         min={minimum}
         max={maximum}
         value={value}
+        disabled={disabled}
+        aria-valuetext={`${value} ${value === 1 ? 'army' : 'armies'}`}
         onChange={(event) => onChange(Number(event.target.value))}
       />
-      <strong>{value}</strong>
+      <strong aria-live="polite">{value}</strong>
     </label>
   );
 }
@@ -139,6 +145,10 @@ export function TerritoryHud({
     (state) => state.requestTerritoryFocus,
   );
   const [attackDice, setAttackDice] = useState(1);
+  const [reinforcementAmount, setReinforcementAmount] = useState({
+    turnKey: '',
+    value: 1,
+  });
   const [moveAmount, setMoveAmount] = useState(1);
   const [fortifyAmount, setFortifyAmount] = useState(1);
   const [reviewingGameOver, setReviewingGameOver] = useState(false);
@@ -150,6 +160,11 @@ export function TerritoryHud({
   const navigatorTriggerRef = useRef<HTMLButtonElement>(null);
   const endAttackTriggerRef = useRef<HTMLButtonElement>(null);
   const endAttackConfirmRef = useRef<HTMLButtonElement>(null);
+  const reinforcementTurnKey = `${match.turnNumber}:${match.activePlayerId}`;
+  const selectedReinforcementAmount =
+    reinforcementAmount.turnKey === reinforcementTurnKey
+      ? reinforcementAmount.value
+      : 1;
 
   const closeNavigator = () => {
     dispatchNavigator('close');
@@ -225,6 +240,10 @@ export function TerritoryHud({
   const effectiveFortifyAmount = Math.min(
     fortifyMax,
     Math.max(1, fortifyAmount),
+  );
+  const effectiveReinforcementAmount = Math.min(
+    match.remainingReinforcements,
+    Math.max(1, selectedReinforcementAmount),
   );
   const legalAttackRemains = getAttackSources(match).some(
     (territoryId) => getAttackTargets(planet, match, territoryId).length > 0,
@@ -374,37 +393,68 @@ export function TerritoryHud({
                     .join(', ')}
                 </p>
               )}
-              <p className="phase-instruction">
+              <p
+                id="reinforcement-placement-instruction"
+                className="phase-instruction"
+              >
                 Select one of your dashed markers, then place armies.
               </p>
-              <div className="action-row">
+              <ArmyAmountControl
+                label="Armies to place"
+                minimum={1}
+                maximum={match.remainingReinforcements}
+                value={effectiveReinforcementAmount}
+                onChange={(value) =>
+                  setReinforcementAmount({
+                    turnKey: reinforcementTurnKey,
+                    value,
+                  })
+                }
+                alwaysShowSlider
+                disabled={multiplayerPending}
+              />
+              <div className="reinforcement-actions">
                 <button
                   type="button"
-                  disabled={!sourceId || multiplayerPending}
+                  className="amount-shortcut"
+                  aria-label={`Max: ${match.remainingReinforcements} armies`}
+                  disabled={
+                    effectiveReinforcementAmount ===
+                      match.remainingReinforcements || multiplayerPending
+                  }
                   onClick={() =>
-                    sourceId &&
-                    dispatch({
-                      type: 'PLACE_REINFORCEMENT',
-                      territoryId: sourceId,
-                      amount: 1,
+                    setReinforcementAmount({
+                      turnKey: reinforcementTurnKey,
+                      value: match.remainingReinforcements,
                     })
                   }
                 >
-                  Place 1
+                  Max
                 </button>
                 <button
                   type="button"
+                  aria-busy={multiplayerPending}
+                  aria-describedby="reinforcement-placement-instruction"
                   disabled={!sourceId || multiplayerPending}
+                  title={
+                    !sourceId
+                      ? 'Select an owned territory before placing armies.'
+                      : multiplayerPending
+                        ? 'A reinforcement placement is being submitted.'
+                        : undefined
+                  }
                   onClick={() =>
                     sourceId &&
                     dispatch({
                       type: 'PLACE_REINFORCEMENT',
                       territoryId: sourceId,
-                      amount: match.remainingReinforcements,
+                      amount: effectiveReinforcementAmount,
                     })
                   }
                 >
-                  Place all ({match.remainingReinforcements})
+                  {multiplayerPending ? 'Placing' : 'Place'}{' '}
+                  {effectiveReinforcementAmount}{' '}
+                  {effectiveReinforcementAmount === 1 ? 'army' : 'armies'}
                 </button>
               </div>
             </section>

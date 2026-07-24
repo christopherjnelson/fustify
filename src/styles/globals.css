@@ -1903,6 +1903,7 @@ select:focus-visible {
 }
 
 .action-row,
+.reinforcement-actions,
 .combat-control,
 .utility-row {
   display: flex;
@@ -1911,6 +1912,7 @@ select:focus-visible {
 }
 
 .action-row button,
+.reinforcement-actions button,
 .combat-control button,
 .phase-card > button,
 .victory-panel button {
@@ -1931,6 +1933,15 @@ button:disabled {
 
 .action-row button {
   flex: 1;
+}
+
+.reinforcement-actions button:last-child {
+  flex: 1;
+}
+
+.reinforcement-actions .amount-shortcut {
+  color: #b9cad9;
+  background: rgba(44, 65, 85, 0.42);
 }
 
 .wide {

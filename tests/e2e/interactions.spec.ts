@@ -149,7 +149,9 @@ test('bot status locks gameplay selection and human controls return afterward', 
   const status = page.getByTestId('bot-turn-status');
   await expect(status).toBeVisible();
   await expect(status).toHaveAttribute('data-bot-state', 'thinking');
-  await expect(page.getByRole('button', { name: 'Place 1' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Place 1 army' })).toHaveCount(
+    0,
+  );
   await page.keyboard.press('Control+K');
   const navigator = page.getByRole('dialog');
   await expect(navigator).toBeVisible();
@@ -159,7 +161,9 @@ test('bot status locks gameplay selection and human controls return afterward', 
     .click();
 
   await openScenario(page, 'human-after-bot');
-  await expect(page.getByRole('button', { name: 'Place 1' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Place 1 army' }),
+  ).toBeVisible();
   await expect(page.getByTestId('bot-turn-status')).toHaveCount(0);
 });
 
@@ -659,13 +663,68 @@ test('keyboard shortcut opens and Escape closes the navigator', async ({
   await expect(page.getByRole('dialog')).toBeHidden();
 });
 
-test('reinforcement controls advance to attack', async ({ page }) => {
+test('reinforcement amount selection submits once, clamps, and supports Max', async ({
+  page,
+}) => {
   await openScenario(page, 'reinforcement');
+  const initial = await stateSnapshot(page);
+  const initialEvents = initial.match.events.length;
+  const initialPool = initial.match.remainingReinforcements;
+  expect(initialPool).toBeGreaterThan(2);
+
   await page.getByRole('button', { name: /Territory list/i }).click();
   const dialog = page.getByRole('dialog');
   await dialog.locator('ul button:not(:disabled)').first().click();
   await page.getByRole('button', { name: /Close and view globe/i }).click();
-  await page.getByRole('button', { name: /Place all/i }).click();
+  const selected = await stateSnapshot(page);
+  expect(selected.match.events).toHaveLength(initialEvents);
+
+  const amount = page.getByLabel('Armies to place');
+  await page.getByRole('button', { name: /^Max:/ }).click();
+  await expect(amount).toHaveValue(String(initialPool));
+  expect((await stateSnapshot(page)).match.events).toHaveLength(initialEvents);
+
+  const placedAmount = initialPool - 1;
+  await amount.fill(String(placedAmount));
+  await expect(
+    page.getByRole('button', {
+      name: `Place ${placedAmount} armies`,
+    }),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: /Territory list/i }).click();
+  await dialog
+    .locator('ul button:not([aria-current="true"]):not(:disabled)')
+    .first()
+    .click();
+  await page.getByRole('button', { name: /Close and view globe/i }).click();
+  await expect(amount).toHaveValue(String(placedAmount));
+  const placementTarget = await stateSnapshot(page);
+  const territoryId = placementTarget.match.selectedSourceTerritoryId!;
+  const initialArmies =
+    placementTarget.match.territories[territoryId]!.armyCount;
+  expect((await stateSnapshot(page)).match.events).toHaveLength(initialEvents);
+
+  await page
+    .getByRole('button', { name: `Place ${placedAmount} armies` })
+    .click();
+  const afterPlacement = await stateSnapshot(page);
+  expect(afterPlacement.match.territories[territoryId]!.armyCount).toBe(
+    initialArmies + placedAmount,
+  );
+  expect(afterPlacement.match.remainingReinforcements).toBe(1);
+  expect(afterPlacement.match.events).toHaveLength(initialEvents + 1);
+  expect(afterPlacement.match.events.at(-1)).toMatchObject({
+    type: 'armies-placed',
+    territoryId,
+    armyCount: placedAmount,
+  });
+  await expect(amount).toHaveValue('1');
+  await expect(
+    page.getByRole('button', { name: 'Place 1 army' }),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'Place 1 army' }).click();
   await expect(page.getByText('Attack phase', { exact: true })).toBeVisible();
   expect((await stateSnapshot(page)).phase).toBe('attack');
 });
