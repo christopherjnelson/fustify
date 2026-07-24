@@ -2,6 +2,10 @@ import type { AuthChangeEvent, SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../multiplayer/database.types';
 import { fetchOwnProfileForVerifiedUser, profileApiError } from './profileApi';
 import type { UserProfile } from './profileModel';
+import {
+  ensureRegisteredSessionReady,
+  invalidateRegisteredSessionPreparation,
+} from './registeredSession';
 
 export type AccountState =
   | { status: 'loading' }
@@ -18,62 +22,20 @@ export type AccountState =
 export async function deriveAccountState(
   client: SupabaseClient<Database>,
 ): Promise<AccountState> {
-  let sessionResult: Awaited<ReturnType<typeof client.auth.getSession>>;
-  try {
-    sessionResult = await client.auth.getSession();
-  } catch (authError) {
-    return {
-      status: 'error',
-      message: profileApiError(authError).message,
-    };
+  const prepared = await ensureRegisteredSessionReady(client);
+  if (prepared.status === 'signed-out') return { status: 'unavailable' };
+  if (prepared.status === 'unavailable' || prepared.status === 'error') {
+    return { status: 'error', message: prepared.message };
   }
-  if (sessionResult.error) {
-    return {
-      status: 'error',
-      message: profileApiError(sessionResult.error).message,
-    };
-  }
-  if (!sessionResult.data.session) {
-    return { status: 'unavailable' };
-  }
-
-  let authResult: Awaited<ReturnType<typeof client.auth.getUser>>;
-  try {
-    authResult = await client.auth.getUser();
-  } catch (authError) {
-    return {
-      status: 'error',
-      message: profileApiError(authError).message,
-    };
-  }
-  const { data, error } = authResult;
-  if (!data.user) {
-    if (
-      !error ||
-      error.name === 'AuthSessionMissingError' ||
-      /auth session missing/i.test(error.message)
-    ) {
-      return { status: 'unavailable' };
-    }
-    return {
-      status: 'error',
-      message: profileApiError(error).message,
-    };
-  }
-  if (error) {
-    return {
-      status: 'error',
-      message: profileApiError(error).message,
-    };
-  }
+  const user = prepared.user;
 
   try {
-    const profile = await fetchOwnProfileForVerifiedUser(client, data.user.id);
+    const profile = await fetchOwnProfileForVerifiedUser(client, user.id);
     return {
       status: 'authenticated',
-      userId: data.user.id,
-      isAnonymous: data.user.is_anonymous !== false,
-      email: data.user.email ?? null,
+      userId: user.id,
+      isAnonymous: prepared.status === 'legacy-guest',
+      email: user.email ?? null,
       profile,
     };
   } catch (profileError) {
@@ -132,6 +94,7 @@ export function observeAccountState(
     if (!active) return;
     if (event === 'INITIAL_SESSION' && initialRefreshPending) return;
     if (event === 'SIGNED_OUT') {
+      invalidateRegisteredSessionPreparation(client);
       stateVersion += 1;
       refreshQueued = false;
       lastAuthenticatedUserId = null;

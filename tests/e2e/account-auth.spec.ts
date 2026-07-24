@@ -3,13 +3,22 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 type AuthFixture =
-  'signed-out' | 'guest' | 'registered' | 'callback' | 'recovery';
+  | 'signed-out'
+  | 'guest'
+  | 'registered'
+  | 'stale-registered'
+  | 'callback'
+  | 'recovery';
 
 async function installAuthFixture(page: Page, fixture: AuthFixture) {
   await page.addInitScript(
     ({ fixtureName }) => {
       const userId = '10000000-0000-4000-8000-000000000001';
       const calls: Array<{ method: string; payload?: unknown }> = [];
+      const testState: {
+        calls: typeof calls;
+        releaseRefresh?: () => void;
+      } = { calls };
       const listeners: Array<(event: string, session: unknown) => void> = [];
       let profile = {
         user_id: userId,
@@ -37,12 +46,26 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
                   : '2026-07-24T08:00:00.000Z',
               user_metadata: {},
             };
+      let tokenIsAnonymous =
+        fixtureName === 'guest' || fixtureName === 'stale-registered';
 
       const auth = {
         getSession: async () => {
           calls.push({ method: 'getSession' });
           return {
-            data: { session: user ? { user } : null },
+            data: {
+              session: user
+                ? {
+                    access_token: tokenIsAnonymous
+                      ? 'anonymous-token'
+                      : 'permanent-token',
+                    user: {
+                      ...user,
+                      is_anonymous: tokenIsAnonymous,
+                    },
+                  }
+                : null,
+            },
             error: null,
           };
         },
@@ -57,6 +80,45 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
                   message: 'Auth session missing',
                 },
               };
+        },
+        getClaims: async (token?: string) => {
+          calls.push({ method: 'getClaims' });
+          return user
+            ? {
+                data: {
+                  claims: {
+                    sub: user.id,
+                    is_anonymous:
+                      token === 'anonymous-token' || tokenIsAnonymous,
+                  },
+                },
+                error: null,
+              }
+            : { data: null, error: null };
+        },
+        refreshSession: async () => {
+          calls.push({ method: 'refreshSession' });
+          if (!user) {
+            return {
+              data: { session: null, user: null },
+              error: new Error('Auth session missing'),
+            };
+          }
+          const finishRefresh = () => {
+            tokenIsAnonymous = false;
+            const session = {
+              access_token: 'permanent-token',
+              user,
+            };
+            listeners.forEach((listener) =>
+              listener('TOKEN_REFRESHED', session),
+            );
+            return { data: { session, user }, error: null };
+          };
+          if (fixtureName !== 'stale-registered') return finishRefresh();
+          return new Promise((resolve) => {
+            testState.releaseRefresh = () => resolve(finishRefresh());
+          });
         },
         onAuthStateChange: (
           listener: (event: string, session: unknown) => void,
@@ -87,6 +149,7 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
             email_confirmed_at: '2026-07-24T08:00:00.000Z',
             user_metadata: {},
           };
+          tokenIsAnonymous = false;
           window.sessionStorage.setItem('fustify-auth-test-registered', '1');
           window.sessionStorage.removeItem('fustify-auth-test-signed-out');
           listeners.forEach((listener) => listener('SIGNED_IN', { user }));
@@ -127,6 +190,7 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
             email_confirmed_at: '2026-07-24T08:00:00.000Z',
             user_metadata: {},
           };
+          tokenIsAnonymous = false;
           return {
             data: {
               user,
@@ -139,6 +203,7 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
         signOut: async () => {
           calls.push({ method: 'signOut' });
           user = null;
+          tokenIsAnonymous = false;
           window.sessionStorage.removeItem('fustify-auth-test-registered');
           window.sessionStorage.setItem('fustify-auth-test-signed-out', '1');
           listeners.forEach((listener) => listener('SIGNED_OUT', null));
@@ -178,7 +243,7 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
       });
       Object.defineProperty(window, '__FUSTIFY_AUTH_TEST_STATE__', {
         configurable: true,
-        value: { calls },
+        value: testState,
       });
     },
     { fixtureName: fixture },
@@ -397,6 +462,64 @@ test('legacy anonymous sessions cannot bypass a protected gameplay route', async
   await expect(
     page.getByRole('heading', { name: 'Choose your world' }),
   ).toHaveCount(0);
+});
+
+test('stale upgraded sessions refresh once before loading protected gameplay', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'stale-registered');
+  await page.goto('/multiplayer');
+  await expect
+    .poll(async () => (await called(page, 'refreshSession')).length)
+    .toBe(1);
+  expect(
+    await page.evaluate(() =>
+      performance
+        .getEntriesByType('resource')
+        .map((entry) => entry.name)
+        .filter(
+          (name) => name.includes('MultiplayerApp') || name.includes('three'),
+        ),
+    ),
+  ).toEqual([]);
+  await page.evaluate(() => {
+    (
+      window as typeof window & {
+        __FUSTIFY_AUTH_TEST_STATE__: { releaseRefresh?: () => void };
+      }
+    ).__FUSTIFY_AUTH_TEST_STATE__.releaseRefresh?.();
+  });
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toBeVisible();
+  expect(await called(page, 'refreshSession')).toHaveLength(1);
+  await expect(
+    page.getByRole('heading', { name: 'Account required' }),
+  ).toHaveCount(0);
+
+  await page.goto('/local');
+  await expect
+    .poll(async () => (await called(page, 'refreshSession')).length)
+    .toBe(1);
+  expect(
+    await page.evaluate(() =>
+      performance
+        .getEntriesByType('resource')
+        .map((entry) => entry.name)
+        .filter((name) => name.includes('/app/App') || name.includes('three')),
+    ),
+  ).toEqual([]);
+  await page.evaluate(() => {
+    (
+      window as typeof window & {
+        __FUSTIFY_AUTH_TEST_STATE__: { releaseRefresh?: () => void };
+      }
+    ).__FUSTIFY_AUTH_TEST_STATE__.releaseRefresh?.();
+  });
+  await expect(
+    page.getByRole('heading', { name: 'Choose your world' }),
+  ).toBeVisible();
+  expect(await called(page, 'refreshSession')).toHaveLength(1);
 });
 
 test('callback validates locally and password recovery completes without exposing the code', async ({

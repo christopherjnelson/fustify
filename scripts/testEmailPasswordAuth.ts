@@ -11,6 +11,7 @@ import {
   fetchCurrentProfile,
   updateCurrentProfile,
 } from '../src/auth/profileApi';
+import { ensureRegisteredSessionReady } from '../src/auth/registeredSession';
 
 const url = process.env.VITE_SUPABASE_URL;
 const publishableKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -118,13 +119,20 @@ async function exchangeNewestEmail(
   address: string,
   seenMessageIds: Set<string>,
 ) {
-  const message = await latestMessageFor(address, seenMessageIds);
-  seenMessageIds.add(message.ID);
-  const code = await confirmationCode(message.ID);
+  const code = await confirmNewestEmail(address, seenMessageIds);
   const exchanged = await client.auth.exchangeCodeForSession(code);
   if (exchanged.error || !exchanged.data.user) {
     throw new Error('auth_code_exchange_failed');
   }
+}
+
+async function confirmNewestEmail(
+  address: string,
+  seenMessageIds: Set<string>,
+): Promise<string> {
+  const message = await latestMessageFor(address, seenMessageIds);
+  seenMessageIds.add(message.ID);
+  return confirmationCode(message.ID);
 }
 
 async function run() {
@@ -205,6 +213,21 @@ async function run() {
     ) {
       throw new Error('local_recovery_sign_in_failed');
     }
+    const normalRoom = await createRoom(
+      registration,
+      'Local Registered Player',
+      {
+        settings: {
+          seed: 'registered-login-local',
+          territoryCount: 12,
+          continentCount: 2,
+          assignmentMode: 'random',
+          maxSeats: 2,
+        },
+      },
+    );
+    roomIds.push(normalRoom.id);
+    await closeRoom(registration, normalRoom.id);
 
     const guest = authClient();
     const anonymous = await guest.auth.signInAnonymously();
@@ -294,21 +317,62 @@ async function run() {
       },
     );
     if (upgradeStarted.error) throw new Error('local_guest_upgrade_failed');
-    await exchangeNewestEmail(guest, upgradeEmail, seenMessageIds);
+    await confirmNewestEmail(upgradeEmail, seenMessageIds);
     const upgraded = await guest.auth.getUser();
+    const staleSession = await guest.auth.getSession();
+    const staleClaims = await guest.auth.getClaims(
+      staleSession.data.session?.access_token,
+    );
     if (
       upgraded.error ||
       !upgraded.data.user ||
       upgraded.data.user.id !== guestUserId ||
-      upgraded.data.user.is_anonymous !== false
+      upgraded.data.user.is_anonymous !== false ||
+      staleSession.error ||
+      !staleSession.data.session ||
+      staleSession.data.session.user.is_anonymous !== true ||
+      staleClaims.error ||
+      staleClaims.data?.claims.is_anonymous !== true ||
+      staleClaims.data?.claims.sub !== guestUserId
     ) {
-      throw new Error('local_guest_upgrade_identity_failed');
+      throw new Error('local_guest_upgrade_stale_state_not_reproduced');
     }
     const upgradePassword = `Upgrade-${crypto.randomUUID()}-A1`;
     const passwordSet = await guest.auth.updateUser({
       password: upgradePassword,
     });
     if (passwordSet.error) throw new Error('local_guest_password_failed');
+
+    const staleCreate = await guest.rpc('create_room', {
+      display_name: 'Local Upgraded Player',
+      seed: 'stale-upgrade-direct-rpc',
+      territory_count: 12,
+      continent_count: 2,
+      assignment_mode: 'random',
+      max_seats: 2,
+    });
+    if (
+      staleCreate.data ||
+      !staleCreate.error ||
+      staleCreate.error.message !== 'account_required'
+    ) {
+      throw new Error('local_stale_room_error_not_reproduced');
+    }
+
+    const recoveredRoom = await createRoom(guest, 'Local Upgraded Player', {
+      settings: {
+        seed: 'stale-upgrade-recovered',
+        territoryCount: 12,
+        continentCount: 2,
+        assignmentMode: 'random',
+        maxSeats: 2,
+      },
+    });
+    roomIds.push(recoveredRoom.id);
+    const ready = await ensureRegisteredSessionReady(guest);
+    if (ready.status !== 'registered-ready' || ready.user.id !== guestUserId) {
+      throw new Error('local_stale_session_refresh_failed');
+    }
     const upgradedProfile = await updateCurrentProfile(guest, {
       displayName: 'Local Upgraded Player',
       avatarUrl: null,
@@ -316,6 +380,8 @@ async function run() {
     if (upgradedProfile.userId !== guestUserId) {
       throw new Error('local_guest_profile_identity_failed');
     }
+    await closeRoom(guest, recoveredRoom.id);
+
     const preservedRoom = await fetchRoomState(guest, room.id);
     if (preservedRoom.room.host_user_id !== guestUserId) {
       throw new Error('local_guest_room_ownership_failed');
@@ -332,6 +398,12 @@ async function run() {
         anonymousMultiplayerDenied: true,
         guestUpgradePreservedUserId: true,
         guestUpgradePreservedRoomOwnership: true,
+        staleUserPermanent: true,
+        staleJwtAnonymous: true,
+        staleCreateRoomAccountRequired: true,
+        refreshedJwtPermanent: true,
+        upgradedRoomCreated: true,
+        normalRegisteredRoomCreated: true,
       }),
     );
   } finally {

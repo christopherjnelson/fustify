@@ -7,6 +7,10 @@ import {
 } from './profileApi';
 import { profileDisplayNameSchema, type UserProfile } from './profileModel';
 import { validatedReturnPath } from './returnPath';
+import {
+  ensureRegisteredSessionReady,
+  invalidateRegisteredSessionPreparation,
+} from './registeredSession';
 
 const GUEST_UPGRADE_KEY = 'fustify.auth.guest-email-upgrade';
 const RECOVERY_SESSION_KEY = 'fustify.auth.password-recovery';
@@ -413,6 +417,24 @@ export async function completeGuestUpgrade(
   const passwordUpdate = await client.auth.updateUser({ password });
   if (passwordUpdate.error) throw authFlowError(passwordUpdate.error);
 
+  const prepared = await ensureRegisteredSessionReady(client, {
+    forceRefresh: true,
+    expectedUserId: input.expectedUserId,
+  });
+  if (
+    prepared.status !== 'registered-ready' ||
+    prepared.user.id !== input.expectedUserId
+  ) {
+    throw new AuthFlowError(
+      prepared.status === 'error' && prepared.reason === 'identity-changed'
+        ? 'identity_changed'
+        : 'request_failed',
+      prepared.status === 'error'
+        ? prepared.message
+        : 'Your account session could not be refreshed. Please try again.',
+    );
+  }
+
   const profile = await updateCurrentProfile(client, {
     displayName,
     avatarUrl: null,
@@ -515,6 +537,7 @@ export async function signOutRegisteredAccount(
 ): Promise<void> {
   clearGuestUpgradeIntent();
   clearRecoveryState();
+  invalidateRegisteredSessionPreparation(client);
   const { error } = await client.auth.signOut();
   if (error) throw authFlowError(error);
 }

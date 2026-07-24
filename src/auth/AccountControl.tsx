@@ -627,7 +627,9 @@ export function AccountRequiredGate({
   const title =
     account.status === 'authenticated' && account.isAnonymous
       ? 'Finish creating your account to continue'
-      : 'Account required';
+      : account.status === 'error'
+        ? 'Account session unavailable'
+        : 'Account required';
   const message =
     account.status === 'loading'
       ? 'Checking your account…'

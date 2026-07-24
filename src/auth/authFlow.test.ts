@@ -371,10 +371,38 @@ describe('email/password authentication flows', () => {
     const calls: string[] = [];
     const client = asClient({
       auth: {
+        getSession: vi.fn(async () => ({
+          data: {
+            session: {
+              access_token: 'current-token',
+              user: { id: userId, is_anonymous: false },
+            },
+          },
+          error: null,
+        })),
         getUser: vi.fn(async () => ({
           data: { user: { id: userId, is_anonymous: false } },
           error: null,
         })),
+        getClaims: vi.fn(async () => ({
+          data: {
+            claims: { sub: userId, is_anonymous: false },
+          },
+          error: null,
+        })),
+        refreshSession: vi.fn(async () => {
+          calls.push('refresh');
+          return {
+            data: {
+              session: {
+                access_token: 'refreshed-token',
+                user: { id: userId, is_anonymous: false },
+              },
+              user: { id: userId, is_anonymous: false },
+            },
+            error: null,
+          };
+        }),
         updateUser: vi.fn(async () => {
           calls.push('password');
           return { error: null };
@@ -395,7 +423,7 @@ describe('email/password authentication flows', () => {
       password: 'correct horse',
       confirmPassword: 'correct horse',
     });
-    expect(calls).toEqual(['password', 'profile']);
+    expect(calls).toEqual(['password', 'refresh', 'profile']);
   });
 
   it('returns generic forgot-password success and safe rate-limit wording', async () => {

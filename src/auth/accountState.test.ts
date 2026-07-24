@@ -32,6 +32,13 @@ function accountClient(isAnonymous: boolean) {
         data: { user: { id: userId, is_anonymous: isAnonymous } },
         error: null,
       })),
+      getClaims: vi.fn(async () => ({
+        data: {
+          claims: { sub: userId, is_anonymous: isAnonymous },
+        },
+        error: null,
+      })),
+      refreshSession: vi.fn(),
     },
     from: vi.fn(() => query),
   };
@@ -92,12 +99,13 @@ describe('account state', () => {
           data: { user: null },
           error: new Error('network endpoint and private response details'),
         })),
+        getClaims: vi.fn(),
       },
     } as unknown as SupabaseClient<Database>;
 
     await expect(deriveAccountState(client)).resolves.toEqual({
       status: 'error',
-      message: 'Profile request failed.',
+      message: 'Your account session could not be verified. Please try again.',
     });
   });
 
@@ -118,6 +126,10 @@ describe('account state', () => {
         })),
         getUser: vi.fn(async () => ({
           data: { user: { id: userId, is_anonymous: true } },
+          error: null,
+        })),
+        getClaims: vi.fn(async () => ({
+          data: { claims: { sub: userId, is_anonymous: true } },
           error: null,
         })),
       },
@@ -145,6 +157,10 @@ describe('account state', () => {
         })),
         getUser: vi.fn(async () => ({
           data: { user: { id: userId, is_anonymous: true } },
+          error: null,
+        })),
+        getClaims: vi.fn(async () => ({
+          data: { claims: { sub: userId, is_anonymous: true } },
           error: null,
         })),
       },
@@ -219,6 +235,10 @@ describe('account state', () => {
           error: null,
         })),
         getUser,
+        getClaims: vi.fn(async () => ({
+          data: { claims: { sub: userId, is_anonymous: true } },
+          error: null,
+        })),
         onAuthStateChange: vi.fn((listener) => {
           authListener = listener;
           return {

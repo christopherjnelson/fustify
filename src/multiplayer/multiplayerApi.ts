@@ -4,6 +4,7 @@ import type { GameAction } from '../core/game/types';
 import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
 import type { Database, Tables } from './database.types';
 import type { AuthoritativeCommandResult } from './gameProtocol';
+import { ensureRegisteredSessionReady } from '../auth/registeredSession';
 
 export type Room = Tables<'rooms'>;
 export type RoomMember = Tables<'room_members'>;
@@ -152,15 +153,7 @@ function coalescedMatchRead<T>(
 }
 
 export function multiplayerError(error: unknown): Error {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'object' &&
-          error !== null &&
-          'message' in error &&
-          typeof error.message === 'string'
-        ? error.message
-        : String(error);
+  const message = multiplayerErrorText(error);
   const status =
     typeof error === 'object' && error !== null && 'status' in error
       ? error.status
@@ -177,6 +170,17 @@ export function multiplayerError(error: unknown): Error {
   return new Error(
     key ? MULTIPLAYER_ERRORS[key] : 'Multiplayer request failed.',
   );
+}
+
+function multiplayerErrorText(error: unknown): string {
+  return error instanceof Error
+    ? error.message
+    : typeof error === 'object' &&
+        error !== null &&
+        'message' in error &&
+        typeof error.message === 'string'
+      ? error.message
+      : String(error);
 }
 
 export async function fetchRoomState(
@@ -237,6 +241,17 @@ function permanentMatchReadFailure(
     /(?:jwt|token|api key).*(?:expired|invalid)|invalid api key|permission denied|not authenticated/i.test(
       message,
     )
+  );
+}
+
+function isAccountRequiredError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'P0001' &&
+    'message' in error &&
+    error.message === 'account_required'
   );
 }
 
@@ -328,15 +343,30 @@ export async function createRoom(
       seed: (options.generateSeed ?? generateReadableWorldSeed)(),
     },
   );
-  const { data, error } = await client.rpc('create_room', {
+  const args = {
     display_name: displayName,
     seed: settings.seed,
     territory_count: settings.territoryCount,
     continent_count: settings.continentCount,
     assignment_mode: settings.assignmentMode,
     max_seats: settings.maxSeats,
-  });
+  };
+  let { data, error } = await client.rpc('create_room', args);
+  if (isAccountRequiredError(error)) {
+    const prepared = await ensureRegisteredSessionReady(client);
+    if (prepared.status === 'registered-ready') {
+      ({ data, error } = await client.rpc('create_room', args));
+    } else if (
+      prepared.status === 'error' ||
+      prepared.status === 'unavailable'
+    ) {
+      throw new Error(prepared.message);
+    } else if (prepared.status === 'signed-out') {
+      throw new Error(MULTIPLAYER_ERRORS.not_authenticated);
+    }
+  }
   if (error) throw multiplayerError(error);
+  if (!data) throw multiplayerError('room_creation_failed');
   return data;
 }
 
