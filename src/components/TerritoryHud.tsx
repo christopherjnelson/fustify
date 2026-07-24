@@ -25,6 +25,11 @@ import type { ActivityReactionController } from '../multiplayer/matchEventReacti
 import { MatchDock } from './MatchDock';
 import { TurnSoundToggle } from './TurnNotificationController';
 import { submitReinforcementPlacement } from './reinforcementPlacement';
+import {
+  PLAYER_VIEW_MODES,
+  playerViewMode,
+  type PlayerViewMode,
+} from './playerViewModes';
 
 const PHASE_LABELS = {
   reinforce: 'Reinforce',
@@ -35,11 +40,31 @@ const PHASE_LABELS = {
   'game-over': 'Game over',
 } as const;
 
-const VIEW_MODES: { id: PlanetViewMode; label: string }[] = [
-  { id: 'ownership', label: 'Ownership' },
-  { id: 'continents', label: 'Continents' },
-  { id: 'terrain', label: 'Terrain' },
-];
+export function PlayerViewModeSelector({
+  viewMode,
+  onViewModeChange,
+}: {
+  viewMode: PlanetViewMode;
+  onViewModeChange: (mode: PlayerViewMode) => void;
+}) {
+  const selectedMode = playerViewMode(viewMode);
+
+  return (
+    <div className="view-modes" aria-label="Globe display mode">
+      {PLAYER_VIEW_MODES.map((mode) => (
+        <button
+          key={mode.id}
+          type="button"
+          className={selectedMode === mode.id ? 'active' : ''}
+          onClick={() => onViewModeChange(mode.id)}
+          aria-pressed={selectedMode === mode.id}
+        >
+          {mode.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function HudUtilityRow({
   navigatorOpen,
@@ -262,6 +287,10 @@ export function TerritoryHud({
     return () => window.removeEventListener('keydown', openFromShortcut);
   }, []);
 
+  useEffect(() => {
+    if (viewMode === 'terrain') setViewMode('ownership');
+  }, [setViewMode, viewMode]);
+
   const territoryById = useMemo(
     () =>
       new Map(planet.territories.map((territory) => [territory.id, territory])),
@@ -381,19 +410,10 @@ export function TerritoryHud({
             </div>
           </section>
 
-          <div className="view-modes" aria-label="Globe display mode">
-            {VIEW_MODES.map((mode) => (
-              <button
-                key={mode.id}
-                type="button"
-                className={viewMode === mode.id ? 'active' : ''}
-                onClick={() => setViewMode(mode.id)}
-                aria-pressed={viewMode === mode.id}
-              >
-                {mode.label}
-              </button>
-            ))}
-          </div>
+          <PlayerViewModeSelector
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+          />
 
           {error && (
             <div className="action-feedback error" role="alert">

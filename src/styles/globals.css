@@ -1753,7 +1753,7 @@ select:focus-visible {
 
 .view-modes {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 5px;
   margin-bottom: 10px;
   padding: 4px;

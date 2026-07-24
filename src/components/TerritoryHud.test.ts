@@ -2,7 +2,12 @@ import { createElement, createRef } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useGameStore } from '../state/useGameStore';
-import { HudUtilityRow, ReinforcementPlacementControls } from './TerritoryHud';
+import {
+  HudUtilityRow,
+  PlayerViewModeSelector,
+  ReinforcementPlacementControls,
+} from './TerritoryHud';
+import { PLAYER_VIEW_MODES, playerViewMode } from './playerViewModes';
 import { submitReinforcementPlacement } from './reinforcementPlacement';
 
 const initialState = useGameStore.getState();
@@ -42,6 +47,70 @@ describe('active-match HUD utilities', () => {
     expect(useGameStore.getState().debugView).toBe(false);
     useGameStore.getState().toggleDebugView();
     expect(useGameStore.getState().debugView).toBe(true);
+  });
+});
+
+describe('player globe view modes', () => {
+  it.each(['local', 'authoritative multiplayer'])(
+    'offers only Ownership and Continents in the %s HUD',
+    () => {
+      const markup = renderToStaticMarkup(
+        createElement(PlayerViewModeSelector, {
+          viewMode: 'ownership',
+          onViewModeChange: () => undefined,
+        }),
+      );
+
+      expect(PLAYER_VIEW_MODES.map((mode) => mode.id)).toEqual([
+        'ownership',
+        'continents',
+      ]);
+      expect(markup).toContain('>Ownership</button>');
+      expect(markup).toContain('>Continents</button>');
+      expect(markup).not.toContain('Terrain');
+      expect(markup.match(/<button/g)).toHaveLength(2);
+    },
+  );
+
+  it('retains selection behavior for both player-facing modes', () => {
+    const ownershipMarkup = renderToStaticMarkup(
+      createElement(PlayerViewModeSelector, {
+        viewMode: 'ownership',
+        onViewModeChange: () => undefined,
+      }),
+    );
+    const continentsMarkup = renderToStaticMarkup(
+      createElement(PlayerViewModeSelector, {
+        viewMode: 'continents',
+        onViewModeChange: () => undefined,
+      }),
+    );
+
+    expect(ownershipMarkup).toContain(
+      'class="active" aria-pressed="true">Ownership',
+    );
+    expect(continentsMarkup).toContain(
+      'class="active" aria-pressed="true">Continents',
+    );
+  });
+
+  it('normalizes an existing Terrain selection to Ownership', () => {
+    expect(playerViewMode('terrain')).toBe('ownership');
+
+    const markup = renderToStaticMarkup(
+      createElement(PlayerViewModeSelector, {
+        viewMode: 'terrain',
+        onViewModeChange: () => undefined,
+      }),
+    );
+
+    expect(markup).not.toContain('Terrain');
+    expect(markup).toContain('class="active" aria-pressed="true">Ownership');
+  });
+
+  it('preserves direct internal access to Terrain rendering mode', () => {
+    useGameStore.getState().setViewMode('terrain');
+    expect(useGameStore.getState().viewMode).toBe('terrain');
   });
 });
 
