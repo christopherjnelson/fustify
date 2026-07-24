@@ -21,6 +21,7 @@ Migration order:
 5. `20260722190224_authoritative_multiplayer_gameplay.sql`
 6. `20260722192905_harden_match_command_grants.sql`
 7. `20260722201731_finalize_after_capture_movement.sql`
+8. `20260724032701_add_match_event_reactions.sql`
 
 The authority migration extends `matches`, creates append-only
 `match_commands`, adds member-scoped read RLS, removes browser execution of the
@@ -32,7 +33,13 @@ a winning capture active until its mandatory movement reaches the reducer's
 historical preview/audit rows; an old preview cannot silently become playable
 and reports `legacy_match_incomplete`.
 
-The hosted history contains all seven migrations in this order. Edge Function
+The reaction migration adds participant-readable `match_event_reactions`,
+explicit desired-state `set_match_event_reaction`, canonical snapshot event-ID
+validation, direct-DML denial, and Realtime publication membership. Reaction
+rows are social metadata and never update `matches`, `match_commands`, gameplay
+revision, state fingerprint, or winner fields.
+
+The hosted history contains all eight migrations in this order. Edge Function
 `multiplayer-game` is active at version 2 with `verify_jwt=false` and source hash
 `43a9ed43a579286be60938827e5ff2c89e47c6356418ae93b1d5665cc44993a6`.
 The connector-returned entrypoint and 25 shared runtime dependencies match the
@@ -84,9 +91,13 @@ Do not use `--prune`, reset, or dashboard-only DDL.
 
 RLS is enabled on every exposed application table. Authenticated room members
 receive explicit read grants and policies; non-members see no room, seat, match,
-or command rows. There are no browser insert/update/delete grants for canonical
-match state or commands. Authority RPC execute is revoked from `PUBLIC`, `anon`,
-and `authenticated`, then granted only to `service_role`.
+command, or reaction rows. There are no browser insert/update/delete grants for
+canonical match state, commands, or reactions. Authority RPC execute is revoked
+from `PUBLIC`, `anon`, and `authenticated`, then granted only to `service_role`.
+The reaction RPC is the narrow exception: only `authenticated` may execute it,
+it derives the caller from `auth.uid()`, requires current room membership and
+the claimed human seat recorded in the immutable seat snapshot, and accepts no
+caller-supplied user ID.
 
 The Edge Function derives `actor_user_id` from the verified JWT, never request
 JSON. Both TypeScript and SQL validate current seat membership; SQL locks the
@@ -104,8 +115,11 @@ permit weakening grants or policies.
 
 - Migration history exactly matches Git.
 - `matches` and `match_commands` RLS are enabled.
+- `match_event_reactions` RLS is enabled and browser roles have `SELECT` only.
 - Member reads and non-member zero-row behavior pass.
 - Browser writes and authority-function execution fail.
+- Reaction writes validate canonical event ownership, participant identity, and
+  explicit set/remove semantics without changing gameplay state.
 - Edge calls without/with invalid JWTs return 401.
 - Unseated, non-member, and out-of-turn commands fail.
 - One duplicate key produces one command row/revision.
