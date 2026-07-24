@@ -19,7 +19,12 @@ import {
   signInWithEmail,
   signOutRegisteredAccount,
 } from './authFlow';
-import type { AccountState, RegisteredAccount } from './accountState';
+import {
+  BACKEND_ACCOUNT_REQUIRED_MESSAGE,
+  PROFILE_UNAVAILABLE_MESSAGE,
+  type AccountState,
+  type RegisteredAccount,
+} from './accountState';
 import { useAccount } from './accountContext';
 import { profileInitials } from './guestName';
 import { updateCurrentProfile } from './profileApi';
@@ -33,6 +38,8 @@ export type DialogView =
   | 'guest-switch-warning'
   | 'forgot-password'
   | 'edit-profile';
+
+export const OPEN_PROFILE_EDITOR_EVENT = 'fustify:open-profile-editor';
 
 type FormStatus =
   | { kind: 'idle' }
@@ -454,6 +461,17 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
     return () => window.clearTimeout(timer);
   }, [account]);
 
+  useEffect(() => {
+    const openProfileEditor = () => {
+      if (account.status !== 'registered-ready') return;
+      setSignOutError(null);
+      setDialog('edit-profile');
+    };
+    window.addEventListener(OPEN_PROFILE_EDITOR_EVENT, openProfileEditor);
+    return () =>
+      window.removeEventListener(OPEN_PROFILE_EDITOR_EVENT, openProfileEditor);
+  }, [account.status]);
+
   if (!client) {
     return (
       <aside className="account-control" aria-label="Account">
@@ -650,7 +668,12 @@ export function AccountRequiredGate({
         loadError ?? 'Your registered account is ready. Loading gameplay.';
       break;
     case 'error':
-      title = 'Account session problem';
+      title =
+        account.message === PROFILE_UNAVAILABLE_MESSAGE
+          ? 'Profile unavailable'
+          : account.message === BACKEND_ACCOUNT_REQUIRED_MESSAGE
+            ? 'Account session invalidated'
+            : 'Account session problem';
       message = account.message;
       break;
     default:

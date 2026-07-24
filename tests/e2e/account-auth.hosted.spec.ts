@@ -42,6 +42,8 @@ test.describe('hosted account boundary acceptance', () => {
   }) => {
     const credentials = hostedCredentials();
     let roomCreated = false;
+    let originalDisplayName: string | null = null;
+    let profileRenamed = false;
     let testError: unknown;
 
     try {
@@ -52,10 +54,11 @@ test.describe('hosted account boundary acceptance', () => {
       await signIn.getByLabel('Password').fill(credentials.password);
       await signIn.getByRole('button', { name: 'Sign in' }).click();
       await expect(page).toHaveURL(/\/$/);
-      const homeDisplayName = await page
-        .locator('.account-identity strong')
-        .textContent();
-      expect(homeDisplayName?.trim()).toBeTruthy();
+      originalDisplayName =
+        (
+          await page.locator('.account-identity strong').textContent()
+        )?.trim() ?? null;
+      expect(originalDisplayName).toBeTruthy();
 
       await page.evaluate(() => {
         const headings: string[] = [];
@@ -81,7 +84,12 @@ test.describe('hosted account boundary acceptance', () => {
         page.getByRole('heading', { name: 'Private multiplayer rooms' }),
       ).toBeVisible();
       await expect(page.locator('.account-identity strong')).toHaveText(
-        homeDisplayName!.trim(),
+        originalDisplayName!,
+      );
+      await expect(page.getByLabel('Room display name')).toHaveCount(0);
+      await expect(page.getByText('Playing as', { exact: true })).toBeVisible();
+      await expect(page.locator('.multiplayer-playing-as strong')).toHaveText(
+        originalDisplayName!,
       );
       expect(
         await page.evaluate(
@@ -94,17 +102,19 @@ test.describe('hosted account boundary acceptance', () => {
         ),
       ).not.toContain('Account required');
 
-      const roomAlias = `Acceptance ${Date.now().toString().slice(-8)}`;
-      await page.getByLabel('Room display name').fill(roomAlias);
       await page.getByRole('button', { name: 'Create private room' }).click();
       roomCreated = true;
       await expect(page).toHaveURL(/\/multiplayer\/room\/[0-9a-f-]+$/iu);
       await expect(
         page.getByRole('heading', { name: 'Multiplayer lobby' }),
       ).toBeVisible();
-      await expect(page.getByText(roomAlias, { exact: true })).toBeVisible();
+      await expect(
+        page
+          .getByLabel('In room without a seat')
+          .getByText(originalDisplayName!, { exact: true }),
+      ).toBeVisible();
       await expect(page.locator('.account-identity strong')).toHaveText(
-        homeDisplayName!.trim(),
+        originalDisplayName!,
       );
 
       await page.getByRole('button', { name: 'Close room' }).click();
@@ -115,6 +125,45 @@ test.describe('hosted account boundary acceptance', () => {
       await expect(
         page.getByRole('heading', { name: 'Private multiplayer rooms' }),
       ).toBeVisible();
+
+      const updatedDisplayName = `Acceptance Player ${Date.now()
+        .toString()
+        .slice(-6)}`;
+      await page.getByRole('button', { name: 'Edit profile' }).click();
+      let edit = page.getByRole('dialog', { name: 'Edit profile' });
+      await edit.getByLabel('Display name').fill(updatedDisplayName);
+      await edit.getByRole('button', { name: 'Save profile' }).click();
+      await expect(edit.getByText('Profile updated.')).toBeVisible();
+      profileRenamed = true;
+      await edit.getByRole('button', { name: 'Close account dialog' }).click();
+      await expect(page.locator('.multiplayer-playing-as strong')).toHaveText(
+        updatedDisplayName,
+      );
+
+      await page.getByRole('button', { name: 'Create private room' }).click();
+      roomCreated = true;
+      await expect(page).toHaveURL(/\/multiplayer\/room\/[0-9a-f-]+$/iu);
+      await expect(
+        page
+          .getByLabel('In room without a seat')
+          .getByText(updatedDisplayName, { exact: true }),
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Close room' }).click();
+      await expect(page.getByText(/Closed · Revision/iu)).toBeVisible();
+      await page.getByRole('button', { name: 'Leave room' }).click();
+      roomCreated = false;
+      await expect(page).toHaveURL(/\/multiplayer$/);
+
+      await page.getByRole('button', { name: 'Edit profile' }).click();
+      edit = page.getByRole('dialog', { name: 'Edit profile' });
+      await edit.getByLabel('Display name').fill(originalDisplayName!);
+      await edit.getByRole('button', { name: 'Save profile' }).click();
+      await expect(edit.getByText('Profile updated.')).toBeVisible();
+      profileRenamed = false;
+      await edit.getByRole('button', { name: 'Close account dialog' }).click();
+      await expect(page.locator('.multiplayer-playing-as strong')).toHaveText(
+        originalDisplayName!,
+      );
     } catch (error) {
       testError = error;
     }
@@ -127,6 +176,26 @@ test.describe('hosted account boundary acceptance', () => {
       const leaveRoom = page.getByRole('button', { name: 'Leave room' });
       if (await leaveRoom.isVisible().catch(() => false)) {
         await leaveRoom.click().catch(() => undefined);
+      }
+    }
+    if (profileRenamed && originalDisplayName) {
+      if (!/\/multiplayer$/u.test(page.url())) {
+        await page.goto('/multiplayer').catch(() => undefined);
+      }
+      const editProfile = page.getByRole('button', { name: 'Edit profile' });
+      if (await editProfile.isVisible().catch(() => false)) {
+        await editProfile.click().catch(() => undefined);
+        const edit = page.getByRole('dialog', { name: 'Edit profile' });
+        if (await edit.isVisible().catch(() => false)) {
+          await edit
+            .getByLabel('Display name')
+            .fill(originalDisplayName)
+            .catch(() => undefined);
+          await edit
+            .getByRole('button', { name: 'Save profile' })
+            .click()
+            .catch(() => undefined);
+        }
       }
     }
     if (testError) throw testError;

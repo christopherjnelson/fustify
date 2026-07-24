@@ -94,6 +94,8 @@ export const MULTIPLAYER_ERRORS: Record<string, string> = {
   invalid_authoritative_state:
     'The authoritative match state is unavailable. Reconnect and try again.',
   invalid_event_reaction: 'That Activity reaction is not available.',
+  invalid_profile_display_name:
+    'Your profile display name is invalid. Edit your profile and try again.',
   idempotency_conflict:
     'That request key was already used for a different action.',
   legacy_match_incomplete:
@@ -108,6 +110,8 @@ export const MULTIPLAYER_ERRORS: Record<string, string> = {
   not_authenticated: 'Your account session expired. Sign in and try again.',
   not_enough_players: 'Claim at least two human seats before starting.',
   not_your_turn: 'It is another player’s turn.',
+  profile_unavailable:
+    'Your player profile could not be loaded. Please try again.',
   revision_conflict: 'The match changed before that action was accepted.',
   room_access_denied: 'This private room is unavailable to this player.',
   room_active: 'This room has already started.',
@@ -339,7 +343,6 @@ export function fetchMatchMutableState(
 
 export async function createRoom(
   client: SupabaseClient<Database>,
-  displayName: string,
   options: CreateRoomOptions = {},
 ): Promise<Room> {
   const settings = multiplayerRoomSettingsSchema.parse(
@@ -349,7 +352,8 @@ export async function createRoom(
     },
   );
   const args = {
-    display_name: displayName,
+    // Retained for the deployed RPC signature; the server ignores this value.
+    display_name: '',
     seed: settings.seed,
     territory_count: settings.territoryCount,
     continent_count: settings.continentCount,
@@ -365,11 +369,11 @@ export async function createRoom(
 export async function joinRoom(
   client: SupabaseClient<Database>,
   joinCode: string,
-  displayName: string,
 ): Promise<Room> {
   const { data, error } = await client.rpc('join_room', {
     join_code: joinCode,
-    display_name: displayName,
+    // Retained for the deployed RPC signature; the server ignores this value.
+    display_name: '',
   });
   if (error) throw multiplayerError(error);
   return data;

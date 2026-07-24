@@ -47,6 +47,7 @@ function errorCode(error: unknown): string {
     'invalid_action',
     'invalid_request',
     'invalid_authoritative_state',
+    'profile_unavailable',
   ].find((candidate) => message.includes(candidate));
   return known ?? 'multiplayer_request_failed';
 }
@@ -121,31 +122,37 @@ Deno.serve(async (request) => {
       if (existing?.state_snapshot) return response(200, { match: existing });
       if (existing) throw new Error('legacy_match_incomplete');
 
-      const [
-        { data: seats, error: seatsError },
-        { data: members, error: membersError },
-      ] = await Promise.all([
-        admin
-          .from('room_seats')
-          .select('seat_index, occupant_user_id, controller_type')
-          .eq('room_id', body.roomId)
-          .not('occupant_user_id', 'is', null)
-          .order('seat_index'),
-        admin
-          .from('room_members')
-          .select('user_id, display_name')
-          .eq('room_id', body.roomId),
-      ]);
-      if (seatsError || membersError) throw new Error('room_access_denied');
-      const names = new Map(
-        (members ?? []).map((member) => [member.user_id, member.display_name]),
+      const { data: seats, error: seatsError } = await admin
+        .from('room_seats')
+        .select('seat_index, occupant_user_id, controller_type')
+        .eq('room_id', body.roomId)
+        .not('occupant_user_id', 'is', null)
+        .order('seat_index');
+      if (seatsError) throw new Error('room_access_denied');
+      const occupantUserIds = (seats ?? []).map(
+        (seat) => seat.occupant_user_id!,
       );
-      const claimedSeats = (seats ?? []).map((seat): ClaimedSeat => ({
-        seatIndex: seat.seat_index,
-        userId: seat.occupant_user_id!,
-        displayName: names.get(seat.occupant_user_id!) ?? 'Player',
-        controllerType: 'human',
-      }));
+      const { data: profiles, error: profilesError } = await admin
+        .from('profiles')
+        .select('user_id, display_name')
+        .in('user_id', occupantUserIds);
+      if (profilesError) throw new Error('profile_unavailable');
+      const names = new Map(
+        (profiles ?? []).map((profile) => [
+          profile.user_id,
+          profile.display_name,
+        ]),
+      );
+      const claimedSeats = (seats ?? []).map((seat): ClaimedSeat => {
+        const displayName = names.get(seat.occupant_user_id!);
+        if (!displayName) throw new Error('profile_unavailable');
+        return {
+          seatIndex: seat.seat_index,
+          userId: seat.occupant_user_id!,
+          displayName,
+          controllerType: 'human',
+        };
+      });
       const matchId = crypto.randomUUID();
       const initialized = await createAuthoritativeMatch(
         matchId,

@@ -59,6 +59,8 @@ import { MultiplayerRoomRoster } from './MultiplayerRoomRoster';
 import { buildMultiplayerRosterDisplay } from './multiplayerRoomRosterViewModel';
 import { createMultiplayerPlayerConfigs } from './multiplayerPlayerConfig';
 import { PostMatchActions } from './PostMatchActions';
+import { OPEN_PROFILE_EDITOR_EVENT } from '../auth/AccountControl';
+import { profileInitials } from '../auth/guestName';
 import {
   aggregateMatchEventReactions,
   fetchMatchEventReactions,
@@ -89,7 +91,7 @@ const seatOrderSchema = z.array(
     seatIndex: z.number().int().min(0).max(4),
     userId: z.string().uuid(),
     playerId: z.string().min(1),
-    displayName: z.string().min(1).max(32),
+    displayName: z.string().min(1).max(40),
     controllerType: z.literal('human'),
   }),
 );
@@ -126,13 +128,11 @@ function StatusScreen({ title, message }: { title: string; message: string }) {
 function Lobby() {
   const client = useMemo(() => getSupabaseClient(), []);
   const { controller, state: account } = useAccount();
-  const [displayName, setDisplayName] = useState(
-    () => window.localStorage.getItem('fustify.multiplayer.displayName') ?? '',
-  );
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'create' | 'join' | null>(null);
   const accountReady = account.status === 'registered-ready';
+  const profile = accountReady ? account.account.profile : null;
 
   const runAuthorized = async <T,>(request: () => Promise<T>): Promise<T> => {
     if (!controller) {
@@ -149,19 +149,11 @@ function Lobby() {
     }
   };
 
-  const rememberName = () => {
-    window.localStorage.setItem(
-      'fustify.multiplayer.displayName',
-      displayName.trim(),
-    );
-  };
-
   const create = async () => {
     setBusy('create');
     setError(null);
     try {
-      const room = await runAuthorized(() => createRoom(client, displayName));
-      rememberName();
+      const room = await runAuthorized(() => createRoom(client));
       navigate(`/multiplayer/room/${room.id}`);
     } catch (requestError) {
       setError(multiplayerError(requestError).message);
@@ -175,10 +167,7 @@ function Lobby() {
     setBusy('join');
     setError(null);
     try {
-      const room = await runAuthorized(() =>
-        joinRoom(client, joinCode, displayName),
-      );
-      rememberName();
+      const room = await runAuthorized(() => joinRoom(client, joinCode));
       navigate(`/multiplayer/room/${room.id}`);
     } catch (requestError) {
       setError(multiplayerError(requestError).message);
@@ -197,19 +186,33 @@ function Lobby() {
           commands, combat, reconnect, and victory are synchronized through the
           authoritative server boundary.
         </p>
-        <label>
-          Room display name
-          <input
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-            maxLength={32}
-            autoComplete="nickname"
-          />
-        </label>
+        {profile && (
+          <div className="multiplayer-playing-as">
+            <span>Playing as</span>
+            <div>
+              {profile.avatarUrl ? (
+                <img src={profile.avatarUrl} alt="" />
+              ) : (
+                <span aria-hidden="true">
+                  {profileInitials(profile.displayName)}
+                </span>
+              )}
+              <strong>{profile.displayName}</strong>
+              <button
+                type="button"
+                onClick={() =>
+                  window.dispatchEvent(new Event(OPEN_PROFILE_EDITOR_EVENT))
+                }
+              >
+                Edit profile
+              </button>
+            </div>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => void create()}
-          disabled={busy !== null || !accountReady}
+          disabled={busy !== null || !accountReady || !profile}
         >
           {busy === 'create' ? 'Creating…' : 'Create private room'}
         </button>
@@ -229,7 +232,10 @@ function Lobby() {
               spellCheck={false}
             />
           </label>
-          <button type="submit" disabled={busy !== null || !accountReady}>
+          <button
+            type="submit"
+            disabled={busy !== null || !accountReady || !profile}
+          >
             {busy === 'join' ? 'Joining…' : 'Join room'}
           </button>
         </form>
@@ -1077,9 +1083,7 @@ function MatchView({
                 reviewing={reviewing}
                 isHost={postMatch.isHost}
                 settings={postMatch.settings}
-                createRoom={(settings) =>
-                  createRoom(client, postMatch.displayName, { settings })
-                }
+                createRoom={(settings) => createRoom(client, { settings })}
                 onReviewingChange={onReviewingChange}
                 navigate={navigate}
               />

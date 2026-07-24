@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { Database } from './database.types';
-import { createRoom, multiplayerError } from './multiplayerApi';
+import { createRoom, joinRoom, multiplayerError } from './multiplayerApi';
 
 describe('multiplayer room creation', () => {
   it('persists one freshly generated readable seed during room creation', async () => {
@@ -10,12 +10,10 @@ describe('multiplayer room creation', () => {
     const generateSeed = vi.fn(() => 'quiet-harbor-321');
     const client = { rpc } as unknown as SupabaseClient<Database>;
 
-    await expect(createRoom(client, 'Host', { generateSeed })).resolves.toBe(
-      room,
-    );
+    await expect(createRoom(client, { generateSeed })).resolves.toBe(room);
     expect(generateSeed).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenCalledWith('create_room', {
-      display_name: 'Host',
+      display_name: '',
       seed: 'quiet-harbor-321',
       territory_count: 42,
       continent_count: 5,
@@ -30,7 +28,7 @@ describe('multiplayer room creation', () => {
     const client = { rpc } as unknown as SupabaseClient<Database>;
 
     await expect(
-      createRoom(client, 'Host', {
+      createRoom(client, {
         settings: {
           seed: 'same-world-123',
           territoryCount: 36,
@@ -41,7 +39,7 @@ describe('multiplayer room creation', () => {
       }),
     ).resolves.toBe(room);
     expect(rpc).toHaveBeenCalledWith('create_room', {
-      display_name: 'Host',
+      display_name: '',
       seed: 'same-world-123',
       territory_count: 36,
       continent_count: 5,
@@ -85,7 +83,7 @@ describe('multiplayer room creation', () => {
       },
     } as unknown as SupabaseClient<Database>;
 
-    await expect(createRoom(client, 'Host')).rejects.toThrow(
+    await expect(createRoom(client)).rejects.toThrow(
       'A registered account is required for multiplayer.',
     );
     expect(rpc).toHaveBeenCalledTimes(1);
@@ -98,10 +96,22 @@ describe('multiplayer room creation', () => {
     }));
     const client = { rpc, auth: {} } as unknown as SupabaseClient<Database>;
 
-    await expect(createRoom(client, 'Host')).rejects.toThrow(
-      'This room is full.',
-    );
+    await expect(createRoom(client)).rejects.toThrow('This room is full.');
     expect(rpc).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('multiplayer room joining', () => {
+  it('passes only the room code plus the deprecated empty RPC argument', async () => {
+    const room = { id: 'joined-room' };
+    const rpc = vi.fn(async () => ({ data: room, error: null }));
+    const client = { rpc } as unknown as SupabaseClient<Database>;
+
+    await expect(joinRoom(client, 'ABCD-1234')).resolves.toBe(room);
+    expect(rpc).toHaveBeenCalledWith('join_room', {
+      join_code: 'ABCD-1234',
+      display_name: '',
+    });
   });
 });
 
@@ -124,6 +134,14 @@ describe('multiplayer errors', () => {
     );
     expect(multiplayerError(new Error('revision_conflict')).message).toBe(
       'The match changed before that action was accepted.',
+    );
+    expect(multiplayerError(new Error('profile_unavailable')).message).toBe(
+      'Your player profile could not be loaded. Please try again.',
+    );
+    expect(
+      multiplayerError(new Error('invalid_profile_display_name')).message,
+    ).toBe(
+      'Your profile display name is invalid. Edit your profile and try again.',
     );
   });
 });

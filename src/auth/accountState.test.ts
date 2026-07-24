@@ -153,19 +153,38 @@ describe('protected account state', () => {
     });
   });
 
-  it('does not mutate a missing profile while account verification is checking', async () => {
+  it('recovers a missing profile before publishing registered readiness', async () => {
     const fixture = accountClient({});
     const query = fixture.client.from('profiles') as unknown as {
       maybeSingle: ReturnType<typeof vi.fn>;
     };
     query.maybeSingle.mockResolvedValue({ data: null, error: null });
-    const rpc = vi.fn();
+    const rpc = vi.fn(async () => ({ data: profileRow, error: null }));
     (fixture.client as unknown as { rpc: typeof rpc }).rpc = rpc;
 
     await expect(deriveAccountState(fixture.client)).resolves.toMatchObject({
-      status: 'error',
+      status: 'registered-ready',
+      account: { profile: { displayName: 'Player One' } },
     });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith('ensure_own_profile');
+  });
+
+  it('fails closed with a safe message when profile recovery fails', async () => {
+    const fixture = accountClient({});
+    const query = fixture.client.from('profiles') as unknown as {
+      maybeSingle: ReturnType<typeof vi.fn>;
+    };
+    query.maybeSingle.mockResolvedValue({ data: null, error: null });
+    const rpc = vi.fn(async () => ({
+      data: null,
+      error: new Error('private database detail'),
+    }));
+    (fixture.client as unknown as { rpc: typeof rpc }).rpc = rpc;
+
+    await expect(deriveAccountState(fixture.client)).resolves.toEqual({
+      status: 'error',
+      message: 'Your player profile could not be loaded. Please try again.',
+    });
   });
 
   it('publishes signed-out immediately and cannot restore stale readiness', async () => {

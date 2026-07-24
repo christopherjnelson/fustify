@@ -522,6 +522,55 @@ html.game-route .protected-route-shell {
   width: min(520px, 100%);
 }
 
+.multiplayer-playing-as {
+  display: grid;
+  gap: 7px;
+  margin: 18px 0;
+  color: #91a8b9;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.multiplayer-playing-as > div {
+  display: flex;
+  min-width: 0;
+  padding: 10px 12px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(155, 187, 219, 0.18);
+  border-radius: 12px;
+  background: rgba(17, 29, 42, 0.72);
+}
+
+.multiplayer-playing-as img,
+.multiplayer-playing-as > div > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(122, 202, 234, 0.25);
+  border-radius: 50%;
+  background: linear-gradient(145deg, #174b65, #283951);
+  object-fit: cover;
+  font-size: 0.68rem;
+}
+
+.multiplayer-playing-as strong {
+  overflow: hidden;
+  margin-right: auto;
+  color: #eef7ff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multiplayer-playing-as button {
+  padding: 6px 9px;
+  background: transparent;
+  color: #b9dff0;
+  font-size: 0.7rem;
+}
+
 .multiplayer-entry-card > label,
 .multiplayer-join-form label,
 .settings-card > label,
@@ -580,6 +629,7 @@ html.game-route .protected-route-shell {
 }
 
 .multiplayer-session-note {
+  margin: 14px 0 8px;
   font-size: 0.7rem;
 }
 

@@ -9,6 +9,8 @@ type AuthFixture =
   | 'stale-registered'
   | 'slow-registered'
   | 'slow-signed-out'
+  | 'missing-profile-recovered'
+  | 'missing-profile-error'
   | 'verification-error'
   | 'callback'
   | 'recovery';
@@ -34,6 +36,7 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
         created_at: '2026-07-24T06:00:00.000Z',
         updated_at: '2026-07-24T06:00:00.000Z',
       };
+      let profileExists = !fixtureName.startsWith('missing-profile');
       const explicitlySignedOut =
         window.sessionStorage.getItem('fustify-auth-test-signed-out') === '1';
       let user =
@@ -245,7 +248,10 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
         eq: () => query,
         in: () => query,
         order: () => query,
-        maybeSingle: async () => ({ data: user ? profile : null, error: null }),
+        maybeSingle: async () => ({
+          data: user && profileExists ? profile : null,
+          error: null,
+        }),
         then: (
           resolve: (value: { data: (typeof profile)[]; error: null }) => void,
         ) => resolve({ data: user ? [profile] : [], error: null }),
@@ -255,6 +261,16 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
         from: () => query,
         rpc: async (method: string, payload?: Record<string, string>) => {
           calls.push({ method, payload });
+          if (method === 'ensure_own_profile') {
+            if (fixtureName === 'missing-profile-error') {
+              return {
+                data: null,
+                error: { code: 'P0001', message: 'profile_unavailable' },
+              };
+            }
+            profileExists = true;
+            return { data: profile, error: null };
+          }
           if (
             testState.rejectRoomActions &&
             (method === 'create_room' || method === 'join_room')
@@ -519,7 +535,20 @@ test('registered home-to-multiplayer navigation keeps one ready account without 
   await expect(page.locator('.account-identity strong')).toHaveText(
     'Player One',
   );
-  await expect(page.getByLabel('Room display name')).toBeVisible();
+  await expect(page.getByText('Playing as', { exact: true })).toBeVisible();
+  await expect(page.locator('.multiplayer-playing-as strong')).toHaveText(
+    'Player One',
+  );
+  await expect(page.locator('.multiplayer-playing-as > div > span')).toHaveText(
+    'PO',
+  );
+  await expect(page.getByLabel('Room display name')).toHaveCount(0);
+  await expect(
+    page.getByRole('textbox', { name: /name|alias|nickname/iu }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Edit profile' }),
+  ).toBeVisible();
   await capture(page, testInfo.project.name, 'account-multiplayer-registered');
 
   const headings = await page.evaluate(
@@ -559,6 +588,80 @@ test('slow verification renders only checking and does not import protected code
   await expect(
     page.getByRole('heading', { name: 'Account required' }),
   ).toHaveCount(0);
+});
+
+test('missing registered profile is recovered before room controls load', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'missing-profile-recovered');
+  await page.goto('/multiplayer');
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toBeVisible();
+  await expect(page.locator('.multiplayer-playing-as strong')).toHaveText(
+    'Player One',
+  );
+  expect(await called(page, 'ensure_own_profile')).toHaveLength(1);
+});
+
+test('unrecoverable registered profile fails closed with a safe profile error', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'missing-profile-error');
+  await page.goto('/multiplayer');
+  await expect(
+    page.getByRole('heading', { name: 'Profile unavailable' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      'Your player profile could not be loaded. Please try again.',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+  ).toHaveCount(0);
+  expect(await called(page, 'create_room')).toHaveLength(0);
+  expect(await called(page, 'join_room')).toHaveLength(0);
+});
+
+test('profile identity updates before create and room RPC payload has no alias state', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'registered');
+  await page.goto('/multiplayer');
+  await page.getByRole('button', { name: 'Edit profile' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit profile' });
+  await edit.getByLabel('Display name').fill('Renamed Player');
+  await edit.getByRole('button', { name: 'Save profile' }).click();
+  await expect(edit.getByText('Profile updated.')).toBeVisible();
+  await edit.getByRole('button', { name: 'Close account dialog' }).click();
+  await expect(page.locator('.multiplayer-playing-as strong')).toHaveText(
+    'Renamed Player',
+  );
+
+  await page.getByRole('button', { name: 'Create private room' }).click();
+  await expect
+    .poll(async () => (await called(page, 'create_room')).length)
+    .toBe(1);
+  expect((await called(page, 'create_room'))[0]?.payload).toMatchObject({
+    display_name: '',
+  });
+});
+
+test('join uses only the room code and sends no editable alias state', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'registered');
+  await page.goto('/multiplayer');
+  await page.getByLabel('Room code').fill('ABCD-1234');
+  await page.getByRole('button', { name: 'Join room' }).click();
+  await expect
+    .poll(async () => (await called(page, 'join_room')).length)
+    .toBe(1);
+  expect((await called(page, 'join_room'))[0]?.payload).toEqual({
+    join_code: 'ABCD-1234',
+    display_name: '',
+  });
 });
 
 test('direct signed-out navigation remains account-required with zero multiplayer bootstrap', async ({
@@ -670,10 +773,9 @@ test('account_required room rejection revalidates and fails closed without retry
     ).__FUSTIFY_AUTH_TEST_STATE__.rejectRoomActions = true;
   });
 
-  await page.getByLabel('Room display name').fill('Room Alias');
   await page.getByRole('button', { name: 'Create private room' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Account session problem' }),
+    page.getByRole('heading', { name: 'Account session invalidated' }),
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Private multiplayer rooms' }),

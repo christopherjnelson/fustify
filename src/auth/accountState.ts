@@ -5,7 +5,7 @@ import type {
   User,
 } from '@supabase/supabase-js';
 import type { Database } from '../multiplayer/database.types';
-import { fetchProfileByUserId, profileApiError } from './profileApi';
+import { fetchOwnProfileForVerifiedUser, profileApiError } from './profileApi';
 import type { UserProfile } from './profileModel';
 import {
   ensureRegisteredSessionReady,
@@ -34,9 +34,9 @@ export type AccountState = ProtectedAccountState;
 
 const UNKNOWN_ACCOUNT_STATE_MESSAGE =
   'Your account state could not be verified. Please try again.';
-const PROFILE_UNAVAILABLE_MESSAGE =
-  'Your account profile is temporarily unavailable. Please try again.';
-const BACKEND_ACCOUNT_REQUIRED_MESSAGE =
+export const PROFILE_UNAVAILABLE_MESSAGE =
+  'Your player profile could not be loaded. Please try again.';
+export const BACKEND_ACCOUNT_REQUIRED_MESSAGE =
   'The server no longer accepts this account session. Please retry verification.';
 
 type Client = SupabaseClient<Database>;
@@ -94,11 +94,7 @@ async function loadProfile(
   userId: string,
 ): Promise<UserProfile> {
   try {
-    const result = await fetchProfileByUserId(client, userId);
-    if (result.status === 'missing') {
-      throw new Error(PROFILE_UNAVAILABLE_MESSAGE);
-    }
-    return result.profile;
+    return await fetchOwnProfileForVerifiedUser(client, userId);
   } catch (error) {
     const safe = profileApiError(error);
     throw new Error(
