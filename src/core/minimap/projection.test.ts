@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMatch } from '../game/createMatch';
 import { generatePlanet } from '../generation/generatePlanet';
 import { CURRENT_GENERATOR_VERSION } from '../generation/constants';
+import { getPlanetSurfaceSphere } from '../geometry/planetSurface';
 import {
   parseLocalMatchSave,
   SAVE_SCHEMA_VERSION,
@@ -43,6 +44,15 @@ const DEFAULT_SETUP: WorldSetup = {
   assignmentMode: 'random',
 };
 
+// These seeds classify v3 topology so the test isolates projection behavior.
+const GENERATED_SEAM_FIXTURE_OPTIONS = {
+  generatorVersion: CURRENT_GENERATOR_VERSION,
+  territoryCount: 42,
+  continentCount: 6,
+  playerCount: 4,
+  landCoverage: 0.52,
+} as const;
+
 function assertSeamSafe(points: readonly { x: number; y: number }[]) {
   expect(points.every(({ x }) => x >= 0 && x <= 360)).toBe(true);
   expect(points.every(({ y }) => y >= 0 && y <= 180)).toBe(true);
@@ -51,6 +61,44 @@ function assertSeamSafe(points: readonly { x: number; y: number }[]) {
       Math.abs(points[index]!.x - points[index - 1]!.x),
     ).toBeLessThanOrEqual(180);
   }
+}
+
+function sourceLandCellProjection(planet: ReturnType<typeof generatePlanet>): {
+  landCellCount: number;
+  seamCrossingCellCount: number;
+  fragmentsByTerritory: Record<string, number>;
+} {
+  const sphere = getPlanetSurfaceSphere(planet);
+  const fragmentsByTerritory = Object.fromEntries(
+    planet.territories.map(({ id }) => [id, 0]),
+  );
+  let landCellCount = 0;
+  let seamCrossingCellCount = 0;
+  sphere.faces.forEach((face, faceIndex) => {
+    const cell = planet.surfaceCells[faceIndex]!;
+    if (cell.terrainType !== 'land') return;
+    landCellCount += 1;
+    const fragments = splitPolygonAtAntimeridian(
+      face.map((vertexIndex) =>
+        vectorToGeographicPoint(sphere.vertices[vertexIndex]!),
+      ),
+      cell.territoryId!,
+    );
+    fragmentsByTerritory[cell.territoryId!]! += fragments.length;
+    if (fragments.length > 1) seamCrossingCellCount += 1;
+  });
+  return { landCellCount, seamCrossingCellCount, fragmentsByTerritory };
+}
+
+function projectedFragmentsByTerritory(
+  projection: ReturnType<typeof projectWorldGeometry>,
+): Record<string, number> {
+  return Object.fromEntries(
+    projection.territories.map(({ territoryId, fragments }) => [
+      territoryId,
+      fragments.length,
+    ]),
+  );
 }
 
 describe('equirectangular minimap projection', () => {
@@ -148,32 +196,42 @@ describe('equirectangular minimap projection', () => {
   });
 
   it('handles generated worlds with and without land seam crossings', () => {
-    const withoutSeam = generatePlanet('minimap-fixture-58');
+    const withoutSeam = generatePlanet(
+      'minimap-fixture-58',
+      GENERATED_SEAM_FIXTURE_OPTIONS,
+    );
     const withoutProjection = projectWorldGeometry(withoutSeam);
-    const withoutLandCellCount = withoutSeam.surfaceCells.filter(
-      ({ terrainType }) => terrainType === 'land',
-    ).length;
+    const withoutSource = sourceLandCellProjection(withoutSeam);
+    expect(withoutSource.seamCrossingCellCount).toBe(0);
     expect(
-      withoutProjection.territories.reduce(
-        (total, territory) => total + territory.fragments.length,
+      Object.values(withoutSource.fragmentsByTerritory).reduce(
+        (total, count) => total + count,
         0,
       ),
-    ).toBe(withoutLandCellCount);
+    ).toBe(withoutSource.landCellCount);
+    expect(projectedFragmentsByTerritory(withoutProjection)).toEqual(
+      withoutSource.fragmentsByTerritory,
+    );
     expect(
       withoutProjection.routes.every(({ fragments }) => fragments.length === 1),
     ).toBe(true);
 
-    const withSeam = generatePlanet('minimap-fixture-0');
+    const withSeam = generatePlanet(
+      'minimap-fixture-0',
+      GENERATED_SEAM_FIXTURE_OPTIONS,
+    );
     const withProjection = projectWorldGeometry(withSeam);
-    const withLandCellCount = withSeam.surfaceCells.filter(
-      ({ terrainType }) => terrainType === 'land',
-    ).length;
+    const withSource = sourceLandCellProjection(withSeam);
+    expect(withSource.seamCrossingCellCount).toBeGreaterThan(0);
     expect(
-      withProjection.territories.reduce(
-        (total, territory) => total + territory.fragments.length,
+      Object.values(withSource.fragmentsByTerritory).reduce(
+        (total, count) => total + count,
         0,
       ),
-    ).toBeGreaterThan(withLandCellCount);
+    ).toBeGreaterThan(withSource.landCellCount);
+    expect(projectedFragmentsByTerritory(withProjection)).toEqual(
+      withSource.fragmentsByTerritory,
+    );
     expect(
       withProjection.routes.some(({ fragments }) => fragments.length > 1),
     ).toBe(true);

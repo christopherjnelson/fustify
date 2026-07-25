@@ -109,11 +109,31 @@ describe('continent quality', () => {
   });
 
   it('does not reject a naturally small compact continent', () => {
-    const compact = analyzeContinentQuality(
-      generatePlanet('radiant-tundra-146'),
-    ).metrics.find((metric) => metric.territoryCount === 1);
-    expect(compact).toBeDefined();
-    expect(severeContinentQualityFailures([compact!])).toEqual([]);
+    const compact: ContinentShapeMetrics = {
+      continentId: 'continent-compact',
+      territoryCount: 1,
+      approximateSurfaceAreaSteradians: 0.1571,
+      landComponentCount: 1,
+      graphDiameter: 0,
+      meanInternalGraphDistance: 0,
+      internalAdjacencyEdgeCount: 0,
+      boundaryEdgeCount: 3,
+      boundaryToTerritoryRatio: 3,
+      articulationTerritoryCount: 0,
+      leafTerritoryCount: 0,
+      longestOneTerritoryWideChain: 1,
+      centroid: [-0.8411, -0.3555, -0.4075],
+      maximumAngularDistanceDegrees: 0,
+      meanAngularDistanceDegrees: 0,
+      compactness: 0,
+      narrowNeckCount: 0,
+      neighboringContinentCount: 1,
+      seaRouteConnectionCount: 0,
+      internalSeaRouteCount: 0,
+      dominatedTerritoryCount: 1,
+      protrusionTerritoryCount: 1,
+    };
+    expect(severeContinentQualityFailures([compact])).toEqual([]);
   });
 });
 
