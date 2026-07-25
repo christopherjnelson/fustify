@@ -23,7 +23,6 @@ import {
 } from '../state/useGameStore';
 import {
   claimSeat,
-  closeRoom,
   createRoom,
   fetchPublicRooms,
   fetchRoomState,
@@ -76,6 +75,12 @@ import {
   type MultiplayerBrowserServices,
 } from './MultiplayerBrowser';
 import { replaceRoomThumbnail, roomThumbnailPublicUrl } from './worldThumbnail';
+import {
+  installWaitingRoomNavigationGuard,
+  runWaitingRoomExit,
+  WaitingRoomExitDialog,
+  type WaitingRoomExitIntent,
+} from './WaitingRoomExitDialog';
 
 type Route =
   | { kind: 'lobby' }
@@ -113,8 +118,12 @@ function currentRoute(): Route {
   return { kind: 'lobby' };
 }
 
-function navigate(path: string, replace = false) {
-  window.history[replace ? 'replaceState' : 'pushState'](null, '', path);
+function navigate(path: string, replace = false, notice?: string) {
+  window.history[replace ? 'replaceState' : 'pushState'](
+    notice ? { multiplayerNotice: notice } : null,
+    '',
+    path,
+  );
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
@@ -134,6 +143,14 @@ function StatusScreen({ title, message }: { title: string; message: string }) {
 function Lobby() {
   const client = useMemo(() => getSupabaseClient(), []);
   const { controller, state: account } = useAccount();
+  const [notice] = useState<string | null>(() => {
+    const value = (
+      window.history.state as { multiplayerNotice?: unknown } | null
+    )?.multiplayerNotice;
+    if (typeof value !== 'string') return null;
+    window.history.replaceState(null, '', window.location.href);
+    return value;
+  });
   const runAuthorized = useCallback(
     async <T,>(request: () => Promise<T>): Promise<T> => {
       if (!controller) {
@@ -204,7 +221,17 @@ function Lobby() {
   }
 
   return (
-    <MultiplayerBrowser profile={account.account.profile} services={services} />
+    <>
+      {notice && (
+        <p className="multiplayer-browser-notice" role="status">
+          {notice}
+        </p>
+      )}
+      <MultiplayerBrowser
+        profile={account.account.profile}
+        services={services}
+      />
+    </>
   );
 }
 
@@ -264,6 +291,29 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   const realtimeEventCount = useRef(0);
   const settingsDirty = useRef(false);
   const busyRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const guardCleanupRef = useRef<(() => void) | null>(null);
+  const [exitIntent, setExitIntent] = useState<WaitingRoomExitIntent | null>(
+    null,
+  );
+  const [exitError, setExitError] = useState<string | null>(null);
+  const exitingRef = useRef(false);
+  const transitionedRef = useRef(false);
+
+  const clearExitGuard = useCallback(() => {
+    guardCleanupRef.current?.();
+    guardCleanupRef.current = null;
+    setExitIntent(null);
+    setExitError(null);
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      guardCleanupRef.current?.();
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     const sequence = ++requestSequence.current;
@@ -338,9 +388,83 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
 
   useEffect(() => {
     if (state?.match) {
+      transitionedRef.current = true;
+      guardCleanupRef.current?.();
+      guardCleanupRef.current = null;
       navigate(`/multiplayer/match/${state.match.id}`, true);
     }
   }, [state?.match]);
+
+  const waitingMember =
+    state?.room.status === 'waiting' &&
+    state.members.some((member) => member.user_id === userId);
+
+  useEffect(() => {
+    guardCleanupRef.current?.();
+    guardCleanupRef.current = null;
+    if (!waitingMember) return;
+    const roomUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    guardCleanupRef.current = installWaitingRoomNavigationGuard({
+      roomUrl,
+      requestExit: (intent) => {
+        setExitError(null);
+        setExitIntent(intent);
+      },
+    });
+    return () => {
+      guardCleanupRef.current?.();
+      guardCleanupRef.current = null;
+    };
+  }, [waitingMember]);
+
+  useEffect(() => {
+    if (!state || state.room.status !== 'closed') return;
+    transitionedRef.current = true;
+    guardCleanupRef.current?.();
+    guardCleanupRef.current = null;
+    navigate(
+      '/multiplayer',
+      true,
+      state.room.host_user_id === userId
+        ? 'Room closed.'
+        : 'The host closed this room.',
+    );
+  }, [state, userId]);
+
+  const exitingHost = state?.room.host_user_id === userId;
+  const confirmExit = async () => {
+    if (!exitIntent || exitingRef.current) return;
+    setBusy('leave');
+    setExitError(null);
+    await runWaitingRoomExit({
+      pending: exitingRef,
+      leave: () => leaveRoom(client, roomId),
+      onSuccess: () => {
+        if (!mountedRef.current || transitionedRef.current) return;
+        const destination = exitIntent.destination || '/multiplayer';
+        clearExitGuard();
+        if (exitIntent.external) {
+          window.location.assign(destination);
+        } else {
+          navigate(
+            destination,
+            true,
+            destination.startsWith('/multiplayer')
+              ? exitingHost
+                ? 'Room closed.'
+                : 'You left the room.'
+              : undefined,
+          );
+        }
+      },
+      onFailure: () => {
+        if (mountedRef.current) {
+          setExitError('The room could not be left. Try again.');
+        }
+      },
+    });
+    if (mountedRef.current) setBusy(null);
+  };
 
   const act = async (name: string, action: () => Promise<void>) => {
     if (busyRef.current !== null) return;
@@ -581,6 +705,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                   onClick={() =>
                     void act('start', async () => {
                       const match = await startMatch(client, roomId);
+                      clearExitGuard();
                       navigate(`/multiplayer/match/${match.id}`, true);
                     })
                   }
@@ -610,30 +735,32 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                   type="button"
                   className="secondary"
                   disabled={busy !== null}
-                  onClick={() =>
-                    void act('leave', async () => {
-                      await leaveRoom(client, roomId);
-                      navigate('/multiplayer', true);
-                    })
-                  }
+                  onClick={() => {
+                    setExitError(null);
+                    setExitIntent({
+                      destination: '/multiplayer',
+                      external: false,
+                    });
+                  }}
                 >
-                  Leave room
+                  {host ? 'Close Room and Leave' : 'Leave Room'}
                 </button>
-                {host && state.room.status !== 'closed' && (
-                  <button
-                    type="button"
-                    className="danger"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      void act('close', () => closeRoom(client, roomId))
-                    }
-                  >
-                    Close room
-                  </button>
-                )}
               </>
             }
           />
+          {exitIntent && waiting && (
+            <WaitingRoomExitDialog
+              host={host}
+              busy={busy === 'leave'}
+              error={exitError}
+              onCancel={() => {
+                if (busyRef.current !== null || exitingRef.current) return;
+                setExitError(null);
+                setExitIntent(null);
+              }}
+              onConfirm={() => void confirmExit()}
+            />
+          )}
         </>
       }
     />

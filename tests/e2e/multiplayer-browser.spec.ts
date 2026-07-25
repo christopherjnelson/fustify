@@ -1,5 +1,95 @@
 import { expect, test } from '@playwright/test';
 
+test('waiting-room exit dialogs are specific, keyboard accessible, and mobile-safe', async ({
+  page,
+}, testInfo) => {
+  await page.goto(
+    '/multiplayer?visual-review=1&browser-state=empty&exit-dialog=host&exit-error=1',
+  );
+  const dialog = page.getByRole('dialog', { name: 'Close Room and Leave?' });
+  await expect(dialog).toContainText(
+    'Leaving will close this room for everyone.',
+  );
+  await expect(dialog).toContainText('The room could not be left. Try again.');
+  await expect(page.getByRole('button', { name: 'Cancel' })).toBeFocused();
+
+  const bounds = await dialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(
+    page.viewportSize()!.height,
+  );
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+
+  await page.goto(
+    '/multiplayer?visual-review=1&browser-state=empty&exit-dialog=guest',
+  );
+  await expect(page.getByRole('dialog', { name: 'Leave Room?' })).toContainText(
+    'You will leave this multiplayer room.',
+  );
+  await page.getByRole('button', { name: 'Leave Room' }).click();
+  await expect(page.getByTestId('exit-confirmations')).toHaveText('1');
+
+  if (testInfo.project.name === 'mobile-390') {
+    await page.screenshot({
+      path: `test-results/ui-review/${testInfo.project.name}/waiting-room-exit-dialog.png`,
+      fullPage: true,
+    });
+  }
+});
+
+test('waiting-room navigation guard covers links, history, unload, and cleanup', async ({
+  page,
+}) => {
+  await page.goto('/multiplayer?visual-review=1&browser-state=empty');
+  const result = await page.evaluate(async () => {
+    const { installWaitingRoomNavigationGuard } =
+      await import('/src/multiplayer/WaitingRoomExitDialog.tsx');
+    const intents: Array<{ destination: string; external: boolean }> = [];
+    const cleanup = installWaitingRoomNavigationGuard({
+      roomUrl: '/multiplayer?visual-review=1&browser-state=empty',
+      requestExit: (intent) => intents.push(intent),
+    });
+
+    const unloadWhileWaiting = new Event('beforeunload', {
+      cancelable: true,
+    });
+    window.dispatchEvent(unloadWhileWaiting);
+
+    document
+      .querySelector<HTMLAnchorElement>('.branded-app-home')!
+      .dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }),
+      );
+
+    window.history.pushState(null, '', '/local');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    const restoredPath = `${window.location.pathname}${window.location.search}`;
+
+    cleanup();
+    const unloadAfterCleanup = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(unloadAfterCleanup);
+    return {
+      intents,
+      unloadWhileWaiting: unloadWhileWaiting.defaultPrevented,
+      unloadAfterCleanup: unloadAfterCleanup.defaultPrevented,
+      restoredPath,
+    };
+  });
+
+  expect(result.unloadWhileWaiting).toBe(true);
+  expect(result.unloadAfterCleanup).toBe(false);
+  expect(result.restoredPath).toBe(
+    '/multiplayer?visual-review=1&browser-state=empty',
+  );
+  expect(result.intents).toEqual([
+    { destination: '/', external: false },
+    { destination: '/local', external: false },
+  ]);
+});
+
 test('public browser renders cards without room codes and disables full games', async ({
   page,
 }) => {

@@ -1,0 +1,116 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it } from 'vitest';
+import {
+  runWaitingRoomExit,
+  waitingRoomExitCopy,
+  WaitingRoomExitDialog,
+} from './WaitingRoomExitDialog';
+
+describe('waiting room exit confirmation', () => {
+  it('uses host-specific close-room language', () => {
+    expect(waitingRoomExitCopy(true)).toEqual({
+      title: 'Close Room and Leave?',
+      description: 'Leaving will close this room for everyone.',
+      action: 'Close Room',
+    });
+  });
+
+  it('uses guest-specific leave-room language', () => {
+    expect(waitingRoomExitCopy(false)).toEqual({
+      title: 'Leave Room?',
+      description: 'You will leave this multiplayer room.',
+      action: 'Leave Room',
+    });
+  });
+
+  it('renders an accessible, retryable dialog without raw errors', () => {
+    const markup = renderToStaticMarkup(
+      createElement(WaitingRoomExitDialog, {
+        host: true,
+        busy: false,
+        error: 'The room could not be left. Try again.',
+        onCancel: () => undefined,
+        onConfirm: () => undefined,
+      }),
+    );
+
+    expect(markup).toContain('role="dialog"');
+    expect(markup).toContain('aria-modal="true"');
+    expect(markup).toContain(
+      'aria-describedby="waiting-room-exit-description"',
+    );
+    expect(markup).toContain('The room could not be left. Try again.');
+    expect(markup).toContain('Cancel');
+  });
+
+  it('disables both actions and exposes a busy state while leaving', () => {
+    const markup = renderToStaticMarkup(
+      createElement(WaitingRoomExitDialog, {
+        host: false,
+        busy: true,
+        error: null,
+        onCancel: () => undefined,
+        onConfirm: () => undefined,
+      }),
+    );
+
+    expect(markup.match(/disabled=""/gu)).toHaveLength(2);
+    expect(markup).toContain('aria-busy="true"');
+    expect(markup).toContain('Leaving…');
+  });
+
+  it('waits for leave success before navigating and deduplicates confirmation', async () => {
+    let resolveLeave!: () => void;
+    const leave = new Promise<void>((resolve) => {
+      resolveLeave = resolve;
+    });
+    const calls: string[] = [];
+    const pending = { current: false };
+    const first = runWaitingRoomExit({
+      pending,
+      leave: () => {
+        calls.push('rpc');
+        return leave;
+      },
+      onSuccess: () => calls.push('navigate'),
+      onFailure: () => calls.push('error'),
+    });
+    await runWaitingRoomExit({
+      pending,
+      leave: async () => {
+        calls.push('duplicate-rpc');
+      },
+      onSuccess: () => calls.push('duplicate-navigation'),
+      onFailure: () => calls.push('duplicate-error'),
+    });
+
+    expect(calls).toEqual(['rpc']);
+    resolveLeave();
+    await first;
+    expect(calls).toEqual(['rpc', 'navigate']);
+  });
+
+  it('stays put after failure and allows retry', async () => {
+    const calls: string[] = [];
+    const pending = { current: false };
+    await runWaitingRoomExit({
+      pending,
+      leave: async () => {
+        throw new Error('raw Supabase detail');
+      },
+      onSuccess: () => calls.push('navigate'),
+      onFailure: () => calls.push('contained-error'),
+    });
+    await runWaitingRoomExit({
+      pending,
+      leave: async () => {
+        calls.push('retry-rpc');
+      },
+      onSuccess: () => calls.push('navigate'),
+      onFailure: () => calls.push('error'),
+    });
+
+    expect(calls).toEqual(['contained-error', 'retry-rpc', 'navigate']);
+  });
+});

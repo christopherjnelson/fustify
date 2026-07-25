@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { BrandedAppShell } from '../brand/BrandedAppShell';
 import type { UserProfile } from '../auth/profileModel';
 import {
@@ -5,6 +6,7 @@ import {
   type MultiplayerBrowserServices,
 } from '../multiplayer/MultiplayerBrowser';
 import type { PublicRoom, Room } from '../multiplayer/multiplayerApi';
+import { WaitingRoomExitDialog } from '../multiplayer/WaitingRoomExitDialog';
 
 const parameters = new URLSearchParams(window.location.search);
 const state = parameters.get('browser-state') ?? 'populated';
@@ -153,6 +155,10 @@ const services: MultiplayerBrowserServices = {
 };
 
 export function MultiplayerBrowserVisualApp() {
+  const parameters = new URLSearchParams(window.location.search);
+  const exitDialog = parameters.get('exit-dialog');
+  const [dialogOpen, setDialogOpen] = useState(Boolean(exitDialog));
+  const [confirmations, setConfirmations] = useState(0);
   return (
     <BrandedAppShell
       accountControl={
@@ -175,6 +181,22 @@ export function MultiplayerBrowserVisualApp() {
       }
     >
       <MultiplayerBrowser profile={profile} services={services} />
+      {dialogOpen && (
+        <WaitingRoomExitDialog
+          host={exitDialog === 'host'}
+          busy={false}
+          error={
+            parameters.get('exit-error') === '1'
+              ? 'The room could not be left. Try again.'
+              : null
+          }
+          onCancel={() => setDialogOpen(false)}
+          onConfirm={() => setConfirmations((value) => value + 1)}
+        />
+      )}
+      <output hidden data-testid="exit-confirmations">
+        {confirmations}
+      </output>
     </BrandedAppShell>
   );
 }

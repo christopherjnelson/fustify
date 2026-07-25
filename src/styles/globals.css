@@ -7477,6 +7477,39 @@ html.multiplayer-match-route .branded-app-content {
   gap: 18px;
 }
 
+.waiting-room-exit-body {
+  display: grid;
+  padding: 20px 22px 22px;
+  gap: 18px;
+}
+
+.waiting-room-exit-body > p {
+  margin: 0;
+  color: var(--brand-steel);
+  line-height: 1.55;
+}
+
+.waiting-room-exit-body footer {
+  display: flex;
+  justify-content: end;
+  gap: 10px;
+}
+
+.waiting-room-exit-body footer button {
+  min-width: 112px;
+}
+
+.multiplayer-browser-notice {
+  width: min(1180px, calc(100% - 40px));
+  margin: 18px auto 0;
+  padding: 12px 15px;
+  color: var(--brand-text-strong);
+  border: 1px solid
+    color-mix(in srgb, var(--brand-accent) 38%, var(--brand-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--brand-accent) 7%, var(--brand-panel));
+}
+
 .create-game-field {
   display: grid;
   gap: 7px;
@@ -7651,6 +7684,20 @@ html.multiplayer-match-route .branded-app-content {
   }
 
   .create-game-dialog footer button {
+    min-width: 0;
+  }
+
+  .waiting-room-exit-body {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .waiting-room-exit-body footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .waiting-room-exit-body footer button {
     min-width: 0;
   }
 }
