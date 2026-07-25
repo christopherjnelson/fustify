@@ -3993,6 +3993,7 @@ h2 {
 }
 
 .setup-counts input,
+.setup-counts select,
 .territory-search input {
   width: 100%;
   padding: 7px 8px;
@@ -4000,6 +4001,48 @@ h2 {
   border: 1px solid rgba(153, 190, 224, 0.2);
   border-radius: 8px;
   background: rgba(2, 8, 16, 0.64);
+}
+
+.experimental-generator-control {
+  grid-column: 1 / -1;
+}
+
+.normalized-generator-diagnostics {
+  margin-top: 8px;
+  padding: 7px 8px;
+  color: #9fc5dc;
+  border: 1px solid rgba(115, 197, 222, 0.2);
+  border-radius: 8px;
+  background: rgba(5, 19, 31, 0.58);
+  font-size: 0.62rem;
+}
+
+.normalized-generator-diagnostics summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.normalized-generator-diagnostics dl {
+  display: grid;
+  margin: 8px 0 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 9px;
+}
+
+.normalized-generator-diagnostics dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.normalized-generator-diagnostics dt {
+  color: #7898ad;
+}
+
+.normalized-generator-diagnostics dd {
+  margin: 0;
+  color: #e3f5ff;
+  font-variant-numeric: tabular-nums;
 }
 
 .setup-actions {
@@ -5973,6 +6016,7 @@ html.multiplayer-match-route .branded-app-content {
   .draft-card select,
   .seed-row input,
   .setup-counts input,
+  .setup-counts select,
   .combat-control select,
   .territory-search input
 ) {
@@ -5991,6 +6035,7 @@ html.multiplayer-match-route .branded-app-content {
   .draft-card select,
   .seed-row input,
   .setup-counts input,
+  .setup-counts select,
   .combat-control select,
   .territory-search input
 ):focus {

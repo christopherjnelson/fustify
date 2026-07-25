@@ -4,7 +4,11 @@ import { createMatch } from '../core/game/createMatch';
 import { makeEvent } from '../core/game/events';
 import { gameReducer } from '../core/game/gameReducer';
 import type { MatchState } from '../core/game/types';
-import { GENERATOR_VERSION } from '../core/generation/constants';
+import {
+  CURRENT_GENERATOR_VERSION,
+  GENERATOR_VERSION,
+  type WorldGeneratorVersion,
+} from '../core/generation/constants';
 import { generatePlanet } from '../core/generation/generatePlanet';
 import { SAVE_SCHEMA_VERSION } from '../core/persistence/saveGame';
 import { vectorToGeographicPoint } from '../core/minimap/projection';
@@ -71,6 +75,7 @@ export type VisualScenario =
 
 const FIXED_SETUP: WorldSetup = {
   version: 1,
+  generatorVersion: CURRENT_GENERATOR_VERSION,
   seed: 'visual-review-atlas',
   territoryCount: 42,
   continentCount: 6,
@@ -83,6 +88,7 @@ function fixedWorld(setup: WorldSetup = FIXED_SETUP) {
     territoryCount: setup.territoryCount,
     continentCount: setup.continentCount,
     playerCount: setup.playerCount,
+    generatorVersion: setup.generatorVersion,
   });
   const players = createDefaultPlayerConfigs(setup.playerCount);
   const matchSetup = createMatchSetup(planet, players, 0);
@@ -715,6 +721,13 @@ declare global {
   interface Window {
     __WORLDSEED_VISUAL__?: {
       loadScenario: (scenario: VisualScenario) => void;
+      loadGeneratedWorld: (input: {
+        seed: string;
+        territoryCount: number;
+        continentCount: number;
+        generatorVersion: WorldGeneratorVersion;
+        view: 'continents' | 'ownership';
+      }) => void;
       getState: () => {
         mode: ApplicationMode;
         phase: MatchState['phase'];
@@ -725,6 +738,8 @@ declare global {
         draftOwners: Record<string, string>;
         focusSequence: number;
         focusTargetTerritoryId: string | null;
+        hoveredTerritoryId: string | null;
+        inspectedTerritoryId: string | null;
         globeFocus: { longitude: number; latitude: number };
         match: MatchState;
         planet: ReturnType<typeof generatePlanet>;
@@ -740,12 +755,51 @@ declare global {
         latitude?: number,
         distance?: number,
       ) => void;
+      focusTerritory: (territoryId: string) => void;
     };
   }
 }
 
 window.__WORLDSEED_VISUAL__ = {
   loadScenario: applyScenario,
+  loadGeneratedWorld: ({
+    seed,
+    territoryCount,
+    continentCount,
+    generatorVersion,
+    view,
+  }) => {
+    const setup: WorldSetup = {
+      ...FIXED_SETUP,
+      seed,
+      territoryCount,
+      continentCount,
+      generatorVersion,
+    };
+    const generated = fixedWorld(setup);
+    useGameStore.setState({
+      applicationMode: view === 'ownership' ? 'playing' : 'world-setup',
+      setup,
+      setupDraft: setup,
+      seedInput: seed,
+      setupError: null,
+      setupWarning: null,
+      assignmentFeedback: null,
+      planet: generated.planet,
+      matchSetup:
+        view === 'ownership'
+          ? generated.matchSetup
+          : createNeutralMatchSetup(generated.players, 'random'),
+      match: view === 'ownership' ? generated.match : null,
+      hoveredTerritoryId: null,
+      inspectedTerritoryId: null,
+      focusTargetTerritoryId: null,
+      focusSequence: 0,
+      setupOperation: null,
+      viewMode: view,
+      multiplayerSession: null,
+    });
+  },
   getState: () => {
     const state = useGameStore.getState();
     const fallbackMatch = fixedWorld().match;
@@ -765,6 +819,8 @@ window.__WORLDSEED_VISUAL__ = {
           : structuredClone(state.matchSetup.draft?.territoryOwners ?? {}),
       focusSequence: state.focusSequence,
       focusTargetTerritoryId: state.focusTargetTerritoryId,
+      hoveredTerritoryId: state.hoveredTerritoryId,
+      inspectedTerritoryId: state.inspectedTerritoryId,
       globeFocus: state.globeFocus,
       match: structuredClone(state.match ?? fallbackMatch),
       planet: structuredClone(state.planet),
@@ -812,6 +868,8 @@ window.__WORLDSEED_VISUAL__ = {
       }),
     );
   },
+  focusTerritory: (territoryId) =>
+    useGameStore.getState().selectAndFocusTerritory(territoryId),
   prepareAttack: (type) => {
     const store = useGameStore.getState();
     const match = advanceToAttack(store.match!, store.planet);

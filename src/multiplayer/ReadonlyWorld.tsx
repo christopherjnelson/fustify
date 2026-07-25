@@ -2,16 +2,12 @@ import { OrbitControls, Stars } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { createIcosphere } from '../core/geometry/icosphere';
+import { getPlanetSurfaceSphere } from '../core/geometry/planetSurface';
 import {
   getProjectedWorldGeometry,
   type ProjectedPoint,
 } from '../core/minimap/projection';
-import {
-  OCEAN_COLOR,
-  PLANET_RADIUS,
-  PLANET_SUBDIVISIONS,
-} from '../core/generation/constants';
+import { OCEAN_COLOR, PLANET_RADIUS } from '../core/generation/constants';
 import type { PlanetDefinition } from '../core/types/planet';
 import { PLANET_ROTATION } from '../presentation/globeOrientation';
 import { territoryFillColor } from '../presentation/territoryVisuals';
@@ -45,7 +41,7 @@ function linePath(fragments: readonly ProjectedPoint[][]) {
 }
 
 function ReadonlyPlanet({ planet }: { planet: PlanetDefinition }) {
-  const sphere = useMemo(() => createIcosphere(PLANET_SUBDIVISIONS), []);
+  const sphere = useMemo(() => getPlanetSurfaceSphere(planet), [planet]);
   const territoryById = useMemo(
     () =>
       new Map(planet.territories.map((territory) => [territory.id, territory])),

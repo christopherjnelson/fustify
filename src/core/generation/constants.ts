@@ -1,4 +1,30 @@
-export const GENERATOR_VERSION = 3;
+export const CURRENT_GENERATOR_VERSION = 3;
+export const NORMALIZED_GENERATOR_VERSION = 4;
+export const GENERATOR_VERSION = CURRENT_GENERATOR_VERSION;
+export const CURRENT_GENERATOR_PROFILE = 'v1-current';
+export const NORMALIZED_GENERATOR_PROFILE = 'v2-normalized';
+
+export type WorldGeneratorVersion =
+  typeof CURRENT_GENERATOR_VERSION | typeof NORMALIZED_GENERATOR_VERSION;
+
+export type WorldGeneratorProfile =
+  typeof CURRENT_GENERATOR_PROFILE | typeof NORMALIZED_GENERATOR_PROFILE;
+
+export function generatorProfile(
+  version: WorldGeneratorVersion,
+): WorldGeneratorProfile {
+  return version === NORMALIZED_GENERATOR_VERSION
+    ? NORMALIZED_GENERATOR_PROFILE
+    : CURRENT_GENERATOR_PROFILE;
+}
+
+export function generatorVersionFromProfile(
+  profile: string | null | undefined,
+): WorldGeneratorVersion {
+  return profile === NORMALIZED_GENERATOR_PROFILE
+    ? NORMALIZED_GENERATOR_VERSION
+    : CURRENT_GENERATOR_VERSION;
+}
 export const DEFAULT_TERRITORY_COUNT = 42;
 // Engine compatibility default for canonical fixtures and legacy callers.
 // Product creation flows use DEFAULT_NEW_CONTINENT_COUNT instead.

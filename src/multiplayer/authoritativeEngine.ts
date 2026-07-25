@@ -1,6 +1,9 @@
 import { createMatch } from '../core/game/createMatch.ts';
 import type { MatchState } from '../core/game/types.ts';
-import { GENERATOR_VERSION } from '../core/generation/constants.ts';
+import {
+  CURRENT_GENERATOR_VERSION,
+  GENERATOR_VERSION,
+} from '../core/generation/constants.ts';
 import { generatePlanet } from '../core/generation/generatePlanet.ts';
 import type { PlanetDefinition } from '../core/types/planet.ts';
 import { generateStartingPosition } from '../core/setup/startingPositions.ts';
@@ -76,6 +79,7 @@ export async function createAuthoritativeMatch(
       territoryCount: room.territory_count,
       continentCount: room.continent_count,
       playerCount: players.length,
+      generatorVersion: CURRENT_GENERATOR_VERSION,
       assignmentMode: 'random',
       ownershipVariant: 0,
     },

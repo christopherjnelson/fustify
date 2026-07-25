@@ -1,6 +1,5 @@
-import { createIcosphere } from '../geometry/icosphere';
+import { getPlanetSurfaceSphere } from '../geometry/planetSurface';
 import { dot, normalize } from '../geometry/sphericalMath';
-import { PLANET_SUBDIVISIONS } from '../generation/constants';
 import type { PlanetDefinition } from '../types/planet';
 import type { Vector3Tuple } from '../types/territory';
 
@@ -264,7 +263,7 @@ function greatCirclePoints(
 export function projectWorldGeometry(
   planet: PlanetDefinition,
 ): ProjectedWorldGeometry {
-  const sphere = createIcosphere(PLANET_SUBDIVISIONS);
+  const sphere = getPlanetSurfaceSphere(planet);
   if (planet.surfaceCells.length !== sphere.faces.length) {
     throw new Error(
       'Canonical surface cells do not match the minimap topology.',

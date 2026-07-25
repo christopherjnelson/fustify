@@ -1,6 +1,8 @@
 import type { SeededRandom } from './seededRandom.ts';
 import { createSeededRandom } from './seededRandom.ts';
 import type { TerritoryBorderWeight } from './buildConnections.ts';
+import { dot, normalize } from '../geometry/sphericalMath.ts';
+import type { Vector3Tuple } from '../types/territory.ts';
 
 function distancesFrom(
   start: number,
@@ -569,6 +571,138 @@ export function chooseSpatialContinentAssignments(
 }
 
 export const MAX_CONTINENT_ASSIGNMENT_ATTEMPTS = 96;
+
+export const NORMALIZED_CONTINENT_CANDIDATE_COUNT = 24;
+
+export interface NormalizedContinentSelection {
+  assignments: number[];
+  candidateIndex: number;
+  score: number;
+}
+
+function normalizedContinentShapeScore(
+  assignments: readonly number[],
+  adjacency: readonly number[][],
+  borderWeights: readonly TerritoryBorderWeight[],
+  continentCount: number,
+  territoryAreas: readonly number[],
+  territoryCenters: readonly Vector3Tuple[],
+): number {
+  const base = spatialScore(
+    assignments,
+    adjacency,
+    borderWeights,
+    continentCount,
+  );
+  const sizes = Array.from({ length: continentCount }, () => 0);
+  const areas = Array.from({ length: continentCount }, () => 0);
+  const centroids = Array.from(
+    { length: continentCount },
+    () => [0, 0, 0] as Vector3Tuple,
+  );
+  assignments.forEach((continent, territory) => {
+    const area = territoryAreas[territory] ?? 1;
+    sizes[continent] += 1;
+    areas[continent] += area;
+    centroids[continent]![0] += territoryCenters[territory]![0] * area;
+    centroids[continent]![1] += territoryCenters[territory]![1] * area;
+    centroids[continent]![2] += territoryCenters[territory]![2] * area;
+  });
+  const coefficientOfVariation = (values: readonly number[]) => {
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    return (
+      Math.sqrt(
+        values.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
+          values.length,
+      ) / Math.max(1e-12, mean)
+    );
+  };
+  const appendages = assignments.filter((continent, territory) => {
+    const internal = adjacency[territory]!.filter(
+      (neighbor) => assignments[neighbor] === continent,
+    ).length;
+    return sizes[continent]! >= 3 && internal <= 1;
+  }).length;
+  const geographicSpread = assignments.reduce((sum, continent, territory) => {
+    const center = normalize(centroids[continent]!);
+    const angle = Math.acos(
+      Math.max(-1, Math.min(1, dot(center, territoryCenters[territory]!))),
+    );
+    return sum + angle * (territoryAreas[territory] ?? 1);
+  }, 0);
+  const totalArea = areas.reduce((sum, value) => sum + value, 0);
+  return Number(
+    (
+      base +
+      coefficientOfVariation(sizes) * 34 +
+      coefficientOfVariation(areas) * 46 +
+      appendages * 14 +
+      (geographicSpread / Math.max(1e-12, totalArea)) * 22
+    ).toFixed(9),
+  );
+}
+
+/**
+ * The v2 selector keeps the existing connected shared-boundary growth, but
+ * adds explicit count/area/geographic compactness and appendage pressure.
+ */
+export function chooseNormalizedContinentAssignments(
+  adjacency: readonly number[][],
+  borderWeights: readonly TerritoryBorderWeight[],
+  continentCount: number,
+  seed: string,
+  territoryAreas: readonly number[],
+  territoryCenters: readonly Vector3Tuple[],
+): NormalizedContinentSelection {
+  let selected: NormalizedContinentSelection | null = null;
+  let nearestFailure: string[] = [];
+  for (
+    let attempt = 0;
+    attempt < NORMALIZED_CONTINENT_CANDIDATE_COUNT;
+    attempt += 1
+  ) {
+    const assignments = generateSpatialAssignments(
+      adjacency,
+      borderWeights,
+      continentCount,
+      createSeededRandom(`${seed}|normalized-continents|${attempt}`),
+    );
+    const failures = spatialFailureReasons(
+      assignments,
+      adjacency,
+      borderWeights,
+      continentCount,
+    );
+    if (
+      nearestFailure.length === 0 ||
+      failures.length < nearestFailure.length
+    ) {
+      nearestFailure = failures;
+    }
+    if (failures.length > 0) continue;
+    const score = normalizedContinentShapeScore(
+      assignments,
+      adjacency,
+      borderWeights,
+      continentCount,
+      territoryAreas,
+      territoryCenters,
+    );
+    if (
+      selected === null ||
+      score < selected.score ||
+      (score === selected.score && attempt < selected.candidateIndex)
+    ) {
+      selected = { assignments, candidateIndex: attempt, score };
+    }
+  }
+  if (!selected) {
+    throw new Error(
+      `Unable to generate an accepted normalized continent layout after ${NORMALIZED_CONTINENT_CANDIDATE_COUNT} deterministic attempts: ${nearestFailure.join(', ') || 'no candidate was produced'}.`,
+    );
+  }
+  return selected;
+}
 
 /** Placeholder bonus: size / 3 + neighboring continents / 2 - gateways / 4. */
 export function calculateContinentBonus(

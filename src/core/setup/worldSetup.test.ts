@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { generatePlanet } from '../generation/generatePlanet';
 import {
+  CURRENT_GENERATOR_VERSION,
+  NORMALIZED_GENERATOR_PROFILE,
+  NORMALIZED_GENERATOR_VERSION,
+} from '../generation/constants';
+import {
   DEFAULT_WORLD_SETUP,
   MAX_CONTINENT_COUNT,
   MAX_NEW_CONTINENT_COUNT,
@@ -15,6 +20,7 @@ import {
   parseWorldSetup,
   serializeWorldSetup,
   worldSetupsEqual,
+  type WorldSetup,
 } from './worldSetup';
 
 describe('versioned world setup URLs', () => {
@@ -25,8 +31,9 @@ describe('versioned world setup URLs', () => {
   });
 
   it('round-trips a valid setup deterministically', () => {
-    const setup = {
+    const setup: WorldSetup = {
       version: 1,
+      generatorVersion: CURRENT_GENERATOR_VERSION,
       seed: 'shared-world',
       territoryCount: 36,
       continentCount: 5,
@@ -55,14 +62,28 @@ describe('versioned world setup URLs', () => {
   });
 
   it('keeps old URLs valid and round-trips assignment mode', () => {
-    expect(parseWorldSetup('v=1&seed=legacy').setup.assignmentMode).toBe(
-      'random',
-    );
+    const legacy = parseWorldSetup('v=1&seed=legacy').setup;
+    expect(legacy.assignmentMode).toBe('random');
+    expect(legacy.generatorVersion).toBe(CURRENT_GENERATOR_VERSION);
+    expect(serializeWorldSetup(legacy).has('generator')).toBe(false);
     const drafted = parseWorldSetup(
       'v=1&seed=draft&assignment=player-draft',
     ).setup;
     expect(drafted.assignmentMode).toBe('player-draft');
     expect(serializeWorldSetup(drafted).get('assignment')).toBe('player-draft');
+  });
+
+  it('only opts into normalized geometry through explicit version metadata', () => {
+    const parsed = parseWorldSetup(
+      `v=1&generator=${NORMALIZED_GENERATOR_PROFILE}&seed=normalized`,
+    ).setup;
+    expect(parsed.generatorVersion).toBe(NORMALIZED_GENERATOR_VERSION);
+    expect(serializeWorldSetup(parsed).get('generator')).toBe(
+      NORMALIZED_GENERATOR_PROFILE,
+    );
+    expect(
+      generatePlanet(parsed.seed, parsed).generationDiagnostics?.profile,
+    ).toBe(NORMALIZED_GENERATOR_PROFILE);
   });
 
   it('uses defaults for malformed numbers without throwing', () => {

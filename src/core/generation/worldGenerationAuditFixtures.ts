@@ -101,3 +101,71 @@ export const WORLD_GENERATION_AUDIT_FIXTURES: readonly WorldGenerationAuditFixtu
       group: 'nearby',
     },
   ] as const;
+
+export interface NormalizedWorldReviewFixture {
+  readonly seed: string;
+  readonly territoryCount: number;
+  readonly continentCount: number;
+  readonly note: string;
+  readonly priority: 'all-desktop' | 'laptop' | 'basic';
+}
+
+export const NORMALIZED_WORLD_REVIEW_FIXTURES: readonly NormalizedWorldReviewFixture[] =
+  [
+    {
+      seed: 'atlas-prime',
+      territoryCount: 42,
+      continentCount: 5,
+      note: 'Canonical product-size comparison.',
+      priority: 'all-desktop',
+    },
+    {
+      seed: 'normalized-four-regions-348',
+      territoryCount: 42,
+      continentCount: 4,
+      note: 'Product-size four-continent comparison.',
+      priority: 'all-desktop',
+    },
+    {
+      seed: 'normalized-three-regions-619',
+      territoryCount: 42,
+      continentCount: 3,
+      note: 'Product-size broad-region comparison.',
+      priority: 'all-desktop',
+    },
+    {
+      seed: 'nearby-30-5-379',
+      territoryCount: 30,
+      continentCount: 5,
+      note: 'Small supported creation range.',
+      priority: 'laptop',
+    },
+    {
+      seed: 'normalized-sixty',
+      territoryCount: 60,
+      continentCount: 5,
+      note: 'Reporting-only high territory count.',
+      priority: 'laptop',
+    },
+    {
+      seed: 'polar-normalized-217',
+      territoryCount: 42,
+      continentCount: 5,
+      note: 'Polar-heavy anchor and projection stress.',
+      priority: 'all-desktop',
+    },
+    {
+      seed: 'calm-reef-648',
+      territoryCount: 42,
+      continentCount: 5,
+      note: 'Historically problematic fragmented-looking geography.',
+      priority: 'laptop',
+    },
+    {
+      seed: 'golden-citadel-587',
+      territoryCount: 42,
+      continentCount: 5,
+      note: 'Historically irregular strips and wedge boundaries.',
+      priority: 'laptop',
+    },
+  ] as const;

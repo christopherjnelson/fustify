@@ -2,6 +2,11 @@ import { z } from 'zod';
 import type { ApplicationMode } from '../appFlow';
 import type { MatchState } from '../game/types';
 import { generatePlanet } from '../generation/generatePlanet';
+import {
+  CURRENT_GENERATOR_VERSION,
+  NORMALIZED_GENERATOR_VERSION,
+  type WorldGeneratorVersion,
+} from '../generation/constants';
 import type { WorldSetup } from '../setup/worldSetup';
 import {
   analyzeStartingPosition,
@@ -11,12 +16,12 @@ import {
   type TerritoryAssignmentMode,
 } from '../setup/startingPositions';
 
-export const SAVE_SCHEMA_VERSION = 4;
+export const SAVE_SCHEMA_VERSION = 5;
 
 export interface LocalMatchSave {
   schemaVersion: number;
   savedAt: string;
-  generatorVersion: number;
+  generatorVersion: WorldGeneratorVersion;
   worldSetup: WorldSetup;
   matchSetup: MatchSetup;
   matchState: MatchState | null;
@@ -64,13 +69,23 @@ const legacyMatchSetupSchema = z.object({
 });
 const worldSetupSchema = z.object({
   version: z.number().int(),
+  generatorVersion: z.union([
+    z.literal(CURRENT_GENERATOR_VERSION),
+    z.literal(NORMALIZED_GENERATOR_VERSION),
+  ]),
   seed: z.string().min(1),
   territoryCount: z.number().int().min(12).max(48),
   continentCount: z.number().int().min(2).max(8),
   playerCount: z.number().int().min(2).max(6),
   assignmentMode: z.enum(['random', 'player-draft']),
 });
-const legacyWorldSetupSchema = worldSetupSchema.omit({ assignmentMode: true });
+const versionFourWorldSetupSchema = worldSetupSchema.omit({
+  generatorVersion: true,
+});
+const legacyWorldSetupSchema = worldSetupSchema.omit({
+  assignmentMode: true,
+  generatorVersion: true,
+});
 const eventSchema = z.object({
   id: z.string(),
   turnNumber: z.number().int().positive(),
@@ -153,7 +168,10 @@ export function validateMatchState(
 const currentSaveSchema = z.object({
   schemaVersion: z.literal(SAVE_SCHEMA_VERSION),
   savedAt: z.string().datetime(),
-  generatorVersion: z.number().int().positive(),
+  generatorVersion: z.union([
+    z.literal(CURRENT_GENERATOR_VERSION),
+    z.literal(NORMALIZED_GENERATOR_VERSION),
+  ]),
   worldSetup: worldSetupSchema,
   matchSetup: matchSetupSchema,
   matchState: matchStateSchema.nullable(),
@@ -162,10 +180,14 @@ const currentSaveSchema = z.object({
 
 function migrateSave(
   value: Record<string, unknown>,
-  version: 0 | 1 | 2 | 3,
+  version: 0 | 1 | 2 | 3 | 4,
 ): unknown {
   const oldWorldSetup = legacyWorldSetupSchema.safeParse(value.worldSetup);
+  const versionFourWorldSetup = versionFourWorldSetupSchema.safeParse(
+    value.worldSetup,
+  );
   const oldMatchSetup = legacyMatchSetupSchema.safeParse(value.matchSetup);
+  const fullCurrentShape = matchSetupSchema.safeParse(value.matchSetup);
   const currentShape = matchSetupSchema
     .extend({ players: z.array(legacyPlayerSchema).min(2).max(6) })
     .safeParse(value.matchSetup);
@@ -177,27 +199,40 @@ function migrateSave(
         : []
   ).map((player) => ({ ...player, controllerType: 'local-human' as const }));
   const migratedMatchSetup =
-    version === 3 && currentShape.success
-      ? { ...currentShape.data, players: migratedPlayers }
-      : oldMatchSetup.success
-        ? {
-            ...oldMatchSetup.data,
-            players: migratedPlayers,
-            assignmentMode: 'random',
-            setupPhase: 'ready',
-            draft: null,
-          }
-        : value.matchSetup;
+    version === 4 && fullCurrentShape.success
+      ? fullCurrentShape.data
+      : version === 3 && currentShape.success
+        ? { ...currentShape.data, players: migratedPlayers }
+        : oldMatchSetup.success
+          ? {
+              ...oldMatchSetup.data,
+              players: migratedPlayers,
+              assignmentMode: 'random',
+              setupPhase: 'ready',
+              draft: null,
+            }
+          : value.matchSetup;
   return {
     ...value,
     schemaVersion: SAVE_SCHEMA_VERSION,
+    generatorVersion: CURRENT_GENERATOR_VERSION,
     savedAt:
       typeof value.savedAt === 'string'
         ? value.savedAt
         : new Date(0).toISOString(),
-    worldSetup: oldWorldSetup.success
-      ? { ...oldWorldSetup.data, assignmentMode: 'random' }
-      : value.worldSetup,
+    worldSetup:
+      version === 4 && versionFourWorldSetup.success
+        ? {
+            ...versionFourWorldSetup.data,
+            generatorVersion: CURRENT_GENERATOR_VERSION,
+          }
+        : oldWorldSetup.success
+          ? {
+              ...oldWorldSetup.data,
+              generatorVersion: CURRENT_GENERATOR_VERSION,
+              assignmentMode: 'random',
+            }
+          : value.worldSetup,
     matchSetup: migratedMatchSetup,
     applicationMode:
       version === 0
@@ -334,13 +369,20 @@ export function parseLocalMatchSave(serialized: string): SaveParseResult {
     return { ok: false, error: `Save version ${version} is not supported.` };
   }
   const migrated =
-    version === 0 || version === 1 || version === 2 || version === 3;
+    version === 0 ||
+    version === 1 ||
+    version === 2 ||
+    version === 3 ||
+    version === 4;
   if (!migrated && version !== SAVE_SCHEMA_VERSION) {
     return { ok: false, error: `Save version ${version} is not supported.` };
   }
   const parsed = currentSaveSchema.safeParse(
     migrated
-      ? migrateSave(value as Record<string, unknown>, version as 0 | 1 | 2 | 3)
+      ? migrateSave(
+          value as Record<string, unknown>,
+          version as 0 | 1 | 2 | 3 | 4,
+        )
       : value,
   );
   if (!parsed.success) {

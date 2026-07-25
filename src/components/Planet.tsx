@@ -6,12 +6,8 @@ import {
   getFortifyTargets,
   getReinforcementTargets,
 } from '../core/game';
-import { createIcosphere } from '../core/geometry/icosphere';
-import {
-  OCEAN_COLOR,
-  PLANET_RADIUS,
-  PLANET_SUBDIVISIONS,
-} from '../core/generation/constants';
+import { getPlanetSurfaceSphere } from '../core/geometry/planetSurface';
+import { OCEAN_COLOR, PLANET_RADIUS } from '../core/generation/constants';
 import type { PlanetDefinition } from '../core/types/planet';
 import { playerColorValue } from '../core/setup/playerConfig';
 import {
@@ -58,7 +54,7 @@ export function Planet({ planet }: PlanetProps) {
   const gameplayActive =
     match !== null &&
     ['handoff', 'playing', 'game-over'].includes(applicationMode);
-  const sphere = useMemo(() => createIcosphere(PLANET_SUBDIVISIONS), []);
+  const sphere = useMemo(() => getPlanetSurfaceSphere(planet), [planet]);
   const territoryById = useMemo(
     () => new Map(planet.territories.map((item) => [item.id, item])),
     [planet],

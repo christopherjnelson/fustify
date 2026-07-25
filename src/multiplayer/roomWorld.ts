@@ -1,4 +1,5 @@
 import { generatePlanet } from '../core/generation/generatePlanet';
+import { CURRENT_GENERATOR_VERSION } from '../core/generation/constants';
 import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
 import type { PlanetDefinition } from '../core/types/planet';
 import type { Room } from './multiplayerApi';
@@ -22,5 +23,6 @@ export function generateRoomPreviewPlanet(
     territoryCount: room.territory_count,
     continentCount: room.continent_count,
     playerCount: room.max_seats,
+    generatorVersion: CURRENT_GENERATOR_VERSION,
   });
 }

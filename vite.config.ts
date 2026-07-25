@@ -27,13 +27,28 @@ export default defineConfig(({ mode }) => {
           ]
         : []),
     ],
-    build: isBundleAnalysis
-      ? {
-          emptyOutDir: true,
-          manifest: true,
-          outDir: '.fustify/reports/bundle/dist',
-        }
-      : undefined,
+    build: {
+      ...(isBundleAnalysis
+        ? {
+            emptyOutDir: true,
+            manifest: true,
+            outDir: '.fustify/reports/bundle/dist',
+          }
+        : {}),
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (
+              /\/src\/core\/(?:generation\/(?:generateNormalizedTerritories|geometryQuality|regularizeSharedGeometry)|geometry\/sphericalGeometry)\.ts$/.test(
+                id,
+              )
+            ) {
+              return 'normalized-world-generator';
+            }
+          },
+        },
+      },
+    },
     test: {
       environment: 'node',
       include: ['src/**/*.test.ts'],

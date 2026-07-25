@@ -74,6 +74,8 @@ export const planetDefinitionSchema = z.object({
     }),
   ),
   landCoverage: z.number().min(0).max(1),
+  surfaceVertices: z.array(vectorSchema).optional(),
+  generationDiagnostics: z.unknown().optional(),
   analysis: z.object({
     connected: z.boolean(),
     articulationTerritoryIds: idList,
@@ -225,6 +227,21 @@ export function validatePlanet(
     errors.push('Territory IDs must be unique.');
   }
   const sphere = createIcosphere(PLANET_SUBDIVISIONS);
+  if (
+    planet.surfaceVertices &&
+    planet.surfaceVertices.length !== sphere.vertices.length
+  ) {
+    errors.push('Canonical surface vertex count does not match the topology.');
+  }
+  if (
+    planet.surfaceVertices?.some(
+      (vertex) =>
+        !vertex.every(Number.isFinite) ||
+        Math.abs(Math.hypot(...vertex) - 1) > 1e-8,
+    )
+  ) {
+    errors.push('Canonical surface vertices must be finite unit vectors.');
+  }
   const cellAdjacency = buildCellAdjacency(sphere);
   if (planet.surfaceCells.length !== sphere.faces.length) {
     errors.push('Surface cell count does not match the configured icosphere.');

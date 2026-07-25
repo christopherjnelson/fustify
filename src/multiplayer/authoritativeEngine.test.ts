@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createAuthoritativeMatch } from './authoritativeEngine';
 import { sha256Fingerprint } from './gameProtocol';
 import { createMultiplayerPlayerConfigs } from './multiplayerPlayerConfig';
+import { CURRENT_GENERATOR_VERSION } from '../core/generation/constants';
 
 const room = {
   id: '00000000-0000-4000-8000-000000000010',
@@ -39,6 +40,11 @@ describe('authoritative multiplayer initialization', () => {
     );
     expect(first).toEqual(second);
     expect(first.planet.territories).toHaveLength(12);
+    expect(first.planet.generatorVersion).toBe(CURRENT_GENERATOR_VERSION);
+    expect(first.planet.surfaceVertices).toBeUndefined();
+    expect(first.generatorMetadata.generatorVersion).toBe(
+      CURRENT_GENERATOR_VERSION,
+    );
     expect(Object.keys(first.state.territories)).toHaveLength(12);
     expect(first.state.activePlayerId).toBe('player-01');
     expect(first.state.phase).toBe('reinforce');

@@ -22,6 +22,7 @@ export function isAuthRoute(pathname: string): boolean {
 
 const LOCAL_SETUP_QUERY_KEYS = [
   'v',
+  'generator',
   'seed',
   'territories',
   'continents',

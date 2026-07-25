@@ -13,6 +13,7 @@ export function worldFingerprint(planet: PlanetDefinition): string {
       territory.adjacentTerritoryIds,
     ]),
     surface: planet.surfaceCells.map((cell) => cell.territoryId),
+    surfaceVertices: planet.surfaceVertices,
     connections: planet.connections.map((connection) => [
       connection.fromTerritoryId,
       connection.toTerritoryId,

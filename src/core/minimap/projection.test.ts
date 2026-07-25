@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMatch } from '../game/createMatch';
 import { generatePlanet } from '../generation/generatePlanet';
+import { CURRENT_GENERATOR_VERSION } from '../generation/constants';
 import {
   parseLocalMatchSave,
   SAVE_SCHEMA_VERSION,
@@ -34,6 +35,7 @@ import {
 
 const DEFAULT_SETUP: WorldSetup = {
   version: 1,
+  generatorVersion: CURRENT_GENERATOR_VERSION,
   seed: 'minimap-projection',
   territoryCount: 42,
   continentCount: 6,
@@ -299,7 +301,7 @@ describe('minimap canonical state styling and focus', () => {
     const serialized = serializeLocalMatchSave({
       schemaVersion: SAVE_SCHEMA_VERSION,
       savedAt: '2026-07-18T12:00:00.000Z',
-      generatorVersion: planet.generatorVersion,
+      generatorVersion: DEFAULT_SETUP.generatorVersion,
       worldSetup: DEFAULT_SETUP,
       matchSetup,
       matchState: null,
@@ -317,6 +319,6 @@ describe('minimap canonical state styling and focus', () => {
     expect(projectWorldGeometry(loadedPlanet)).toEqual(
       projectWorldGeometry(planet),
     );
-    expect(SAVE_SCHEMA_VERSION).toBe(4);
+    expect(SAVE_SCHEMA_VERSION).toBe(5);
   });
 });

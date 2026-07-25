@@ -2,6 +2,12 @@ import type { ContinentDefinition } from './continent.ts';
 import type { StrategicGraphAnalysis } from './analysis.ts';
 import type { PlayerDefinition } from './player.ts';
 import type { TerritoryDefinition } from './territory.ts';
+import type { Vector3Tuple } from './territory.ts';
+import type {
+  GenerationDiagnostics,
+  GenerationTimingObserver,
+} from './generation.ts';
+import type { WorldGeneratorVersion } from '../generation/constants.ts';
 import type {
   LandmassDefinition,
   SurfaceCellDefinition,
@@ -22,6 +28,13 @@ export interface PlanetDefinition {
   connections: TerritoryConnection[];
   landCoverage: number;
   analysis: StrategicGraphAnalysis;
+  /**
+   * Version-4 worlds can conservatively move the fixed topology's shared
+   * vertices. Absence means the immutable subdivision-4 icosphere vertices.
+   */
+  surfaceVertices?: Vector3Tuple[];
+  /** Deterministic experimental diagnostics; omitted from v1 planets. */
+  generationDiagnostics?: GenerationDiagnostics;
 }
 
 export interface PlanetGenerationOptions {
@@ -29,4 +42,7 @@ export interface PlanetGenerationOptions {
   continentCount?: number;
   landCoverage?: number;
   playerCount?: number;
+  generatorVersion?: WorldGeneratorVersion;
+  /** Reporting-only wall-clock observer; never affects generated data. */
+  timingObserver?: GenerationTimingObserver;
 }

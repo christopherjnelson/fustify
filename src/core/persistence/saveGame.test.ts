@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createMatch } from '../game/createMatch';
-import { GENERATOR_VERSION } from '../generation/constants';
+import {
+  CURRENT_GENERATOR_VERSION,
+  GENERATOR_VERSION,
+  NORMALIZED_GENERATOR_VERSION,
+} from '../generation/constants';
 import { generatePlanet } from '../generation/generatePlanet';
 import { createDefaultPlayerConfigs } from '../setup/playerConfig';
 import {
@@ -11,7 +15,7 @@ import {
   beginTerritoryAssignment,
   pickDraftTerritory,
 } from '../setup/territoryAssignment';
-import { DEFAULT_WORLD_SETUP } from '../setup/worldSetup';
+import { DEFAULT_WORLD_SETUP, type WorldSetup } from '../setup/worldSetup';
 import {
   parseLocalMatchSave,
   SAVE_SCHEMA_VERSION,
@@ -154,13 +158,14 @@ describe('local match persistence', () => {
     ).toBe(false);
   });
 
-  it.each([0, 1, 2, 3] as const)(
+  it.each([0, 1, 2, 3, 4] as const)(
     'migrates supported version %s to random ready setup',
     (schemaVersion) => {
       const old = structuredClone(save) as unknown as Record<string, unknown>;
       old.schemaVersion = schemaVersion;
       if (schemaVersion === 0) delete old.savedAt;
       const oldWorld = old.worldSetup as Record<string, unknown>;
+      delete oldWorld.generatorVersion;
       if (schemaVersion < 3) delete oldWorld.assignmentMode;
       const oldSetup = old.matchSetup as Record<string, unknown>;
       const oldPlayers = oldSetup.players as Array<Record<string, unknown>>;
@@ -184,6 +189,49 @@ describe('local match persistence', () => {
       }
     },
   );
+
+  it('reloads explicit v2 saves while legacy saves infer v1', () => {
+    const normalizedWorldSetup: WorldSetup = {
+      ...DEFAULT_WORLD_SETUP,
+      seed: 'normalized-save',
+      generatorVersion: NORMALIZED_GENERATOR_VERSION,
+    };
+    const normalizedPlanet = generatePlanet(
+      normalizedWorldSetup.seed,
+      normalizedWorldSetup,
+    );
+    const normalizedPlayers = createDefaultPlayerConfigs(
+      normalizedWorldSetup.playerCount,
+    );
+    const normalizedSave: LocalMatchSave = {
+      schemaVersion: SAVE_SCHEMA_VERSION,
+      savedAt: save.savedAt,
+      generatorVersion: NORMALIZED_GENERATOR_VERSION,
+      worldSetup: normalizedWorldSetup,
+      matchSetup: createNeutralMatchSetup(normalizedPlayers, 'random'),
+      matchState: null,
+      applicationMode: 'pregame',
+    };
+    const normalizedResult = parseLocalMatchSave(
+      serializeLocalMatchSave(normalizedSave),
+    );
+    expect(normalizedPlanet.generatorVersion).toBe(
+      NORMALIZED_GENERATOR_VERSION,
+    );
+    expect(
+      normalizedResult.ok
+        ? normalizedResult.save.worldSetup.generatorVersion
+        : null,
+    ).toBe(NORMALIZED_GENERATOR_VERSION);
+
+    const legacy = structuredClone(save) as unknown as Record<string, unknown>;
+    legacy.schemaVersion = 4;
+    delete (legacy.worldSetup as Record<string, unknown>).generatorVersion;
+    const legacyResult = parseLocalMatchSave(JSON.stringify(legacy));
+    expect(
+      legacyResult.ok ? legacyResult.save.worldSetup.generatorVersion : null,
+    ).toBe(CURRENT_GENERATOR_VERSION);
+  });
 
   it('contains data only and no rendering objects', () => {
     expect(() => structuredClone(save)).not.toThrow();

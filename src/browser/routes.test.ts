@@ -29,6 +29,7 @@ describe('legacy local setup URLs', () => {
   it('recognizes every supported setup key without treating arbitrary queries as local', () => {
     for (const key of [
       'v',
+      'generator',
       'seed',
       'territories',
       'continents',

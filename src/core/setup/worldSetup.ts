@@ -1,6 +1,11 @@
 import {
+  CURRENT_GENERATOR_VERSION,
   DEFAULT_PLAYER_COUNT,
   DEFAULT_TERRITORY_COUNT,
+  generatorProfile,
+  generatorVersionFromProfile,
+  NORMALIZED_GENERATOR_VERSION,
+  type WorldGeneratorVersion,
 } from '../generation/constants';
 import type { TerritoryAssignmentMode } from './startingPositions';
 
@@ -17,6 +22,7 @@ export const MAX_NEW_PLAYER_COUNT = 5;
 
 export interface WorldSetup {
   version: number;
+  generatorVersion: WorldGeneratorVersion;
   seed: string;
   territoryCount: number;
   continentCount: number;
@@ -31,6 +37,7 @@ export interface ParsedWorldSetup {
 
 export const DEFAULT_WORLD_SETUP: Readonly<WorldSetup> = Object.freeze({
   version: WORLD_SETUP_VERSION,
+  generatorVersion: CURRENT_GENERATOR_VERSION,
   seed: 'atlas-prime',
   territoryCount: DEFAULT_TERRITORY_COUNT,
   continentCount: DEFAULT_NEW_CONTINENT_COUNT,
@@ -76,6 +83,10 @@ export function normalizeWorldSetup(
   const seed = candidate.seed?.trim() || DEFAULT_WORLD_SETUP.seed;
   return {
     version: WORLD_SETUP_VERSION,
+    generatorVersion:
+      candidate.generatorVersion === NORMALIZED_GENERATOR_VERSION
+        ? NORMALIZED_GENERATOR_VERSION
+        : CURRENT_GENERATOR_VERSION,
     seed,
     territoryCount,
     continentCount,
@@ -117,6 +128,7 @@ export function parseWorldSetup(
   }
   const raw: WorldSetup = {
     version: WORLD_SETUP_VERSION,
+    generatorVersion: generatorVersionFromProfile(params.get('generator')),
     seed: params.get('seed') ?? DEFAULT_WORLD_SETUP.seed,
     territoryCount: integerInRange(
       params.get('territories'),
@@ -158,6 +170,7 @@ export function parseWorldSetup(
 
 const SETUP_KEYS = new Set([
   'v',
+  'generator',
   'seed',
   'territories',
   'continents',
@@ -172,6 +185,9 @@ export function serializeWorldSetup(
   const normalized = normalizeWorldSetup(setup);
   const result = new URLSearchParams();
   result.set('v', String(normalized.version));
+  if (normalized.generatorVersion === NORMALIZED_GENERATOR_VERSION) {
+    result.set('generator', generatorProfile(normalized.generatorVersion));
+  }
   result.set('seed', normalized.seed);
   result.set('territories', String(normalized.territoryCount));
   result.set('continents', String(normalized.continentCount));
@@ -189,6 +205,7 @@ export function serializeWorldSetup(
 export function worldSetupsEqual(a: WorldSetup, b: WorldSetup): boolean {
   return (
     a.version === b.version &&
+    a.generatorVersion === b.generatorVersion &&
     a.seed === b.seed &&
     a.territoryCount === b.territoryCount &&
     a.continentCount === b.continentCount &&

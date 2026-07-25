@@ -14,7 +14,10 @@ import { createMatch } from '../core/game/createMatch';
 import { gameReducer } from '../core/game/gameReducer';
 import { formatMatchEvent } from '../core/game/eventFormatter';
 import type { GameAction, GameError, MatchState } from '../core/game/types';
-import { GENERATOR_VERSION } from '../core/generation/constants';
+import {
+  CURRENT_GENERATOR_VERSION,
+  NORMALIZED_GENERATOR_VERSION,
+} from '../core/generation/constants';
 import { generatePlanet } from '../core/generation/generatePlanet';
 import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
 import { createTerritorySelectionAction } from '../core/navigation/territoryNavigator';
@@ -68,6 +71,7 @@ function initializeSetupFromLocation() {
   const params = new URLSearchParams(window.location.search);
   const hasSharedSetup = [
     'v',
+    'generator',
     'seed',
     'territories',
     'continents',
@@ -93,6 +97,7 @@ function generateSetupPlanet(setup: WorldSetup): PlanetDefinition {
     territoryCount: setup.territoryCount,
     continentCount: setup.continentCount,
     playerCount: setup.playerCount,
+    generatorVersion: setup.generatorVersion,
   });
 }
 
@@ -349,7 +354,7 @@ function saveSnapshot(
   return {
     schemaVersion: SAVE_SCHEMA_VERSION,
     savedAt: new Date().toISOString(),
-    generatorVersion: state.planet.generatorVersion,
+    generatorVersion: state.setup.generatorVersion,
     worldSetup: state.setup,
     matchSetup: state.matchSetup,
     matchState: applicationMode === 'pregame' ? null : state.match,
@@ -1111,7 +1116,12 @@ export const useGameStore = create<GameState>((set, get) => {
           return;
         }
         const save = parsed.save;
-        if (save.generatorVersion !== GENERATOR_VERSION) {
+        if (
+          save.generatorVersion !== save.worldSetup.generatorVersion ||
+          ![CURRENT_GENERATOR_VERSION, NORMALIZED_GENERATOR_VERSION].includes(
+            save.generatorVersion,
+          )
+        ) {
           set({
             saveError: 'This save uses an unsupported world generator version.',
           });
