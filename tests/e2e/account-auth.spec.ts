@@ -445,6 +445,41 @@ async function capture(page: Page, projectName: string, name: string) {
   await page.screenshot({ path, fullPage: true });
 }
 
+async function expectViewportSafeDialog(page: Page, name: string) {
+  const dialog = page.getByRole('dialog', { name });
+  await expect(dialog).toBeVisible();
+  const geometry = await dialog.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const backdrop = document.querySelector<HTMLElement>(
+      '.auth-dialog-backdrop',
+    );
+    return {
+      top: rect.top,
+      bottom: rect.bottom,
+      width: rect.width,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      documentOverflow:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+      position: backdrop ? getComputedStyle(backdrop).position : '',
+      zIndex: backdrop ? Number(getComputedStyle(backdrop).zIndex) : 0,
+      bodyOverflow: getComputedStyle(document.body).overflow,
+      scrollable: element.scrollHeight > element.clientHeight,
+    };
+  });
+  expect(geometry.top).toBeGreaterThanOrEqual(0);
+  expect(
+    geometry.bottom <= geometry.viewportHeight + 1 || geometry.scrollable,
+  ).toBe(true);
+  expect(geometry.width).toBeLessThanOrEqual(geometry.viewportWidth);
+  expect(geometry.documentOverflow).toBeLessThanOrEqual(1);
+  expect(geometry.position).toBe('fixed');
+  expect(geometry.zIndex).toBeGreaterThan(40);
+  expect(geometry.bodyOverflow).toBe('hidden');
+  return dialog;
+}
+
 test('signed-out home registration, login, and recovery stay in the Auth layer', async ({
   page,
 }, testInfo) => {
@@ -545,7 +580,14 @@ test('registered account can edit its profile and sign out', async ({
   await expect(page.getByText('player@example.test')).toBeVisible();
   await capture(page, testInfo.project.name, 'homepage-registered');
   await page.getByRole('button', { name: 'Edit profile' }).click();
-  const edit = page.getByRole('dialog', { name: 'Edit profile' });
+  const edit = await expectViewportSafeDialog(page, 'Edit profile');
+  await expect(
+    edit.getByRole('heading', { name: 'Edit profile' }),
+  ).toBeVisible();
+  await expect(edit.getByLabel('Display name')).toBeVisible();
+  await expect(
+    edit.getByRole('button', { name: 'Save profile' }),
+  ).toBeVisible();
   await capture(page, testInfo.project.name, 'account-edit-profile-dialog');
   await edit.getByLabel('Display name').fill('Renamed Player');
   await edit.getByRole('button', { name: 'Save profile' }).click();
@@ -563,6 +605,40 @@ test('registered account can edit its profile and sign out', async ({
     ),
   ).toBe('1');
   expect(await called(page, 'signInAnonymously')).toHaveLength(0);
+});
+
+test('shared profile dialog stays viewport-bound and restores focus on protected routes', async ({
+  page,
+}, testInfo) => {
+  await installAuthFixture(page, 'registered');
+
+  for (const [route, captureName, heading] of [
+    ['/local', 'account-edit-profile-local', 'Choose your world'],
+    [
+      '/multiplayer',
+      'account-edit-profile-multiplayer',
+      'Private multiplayer rooms',
+    ],
+  ] as const) {
+    await page.goto(route);
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+    const visibleTrigger = page.getByRole('button', { name: 'Edit profile' });
+    if (await visibleTrigger.isVisible().catch(() => false)) {
+      await visibleTrigger.click();
+    } else {
+      await page.evaluate(() =>
+        window.dispatchEvent(new Event('fustify:open-profile-editor')),
+      );
+    }
+    const edit = await expectViewportSafeDialog(page, 'Edit profile');
+    await expect(edit.getByLabel('Display name')).toBeFocused();
+    await capture(page, testInfo.project.name, captureName);
+    await page.keyboard.press('Escape');
+    await expect(edit).toHaveCount(0);
+    if (await visibleTrigger.isVisible().catch(() => false)) {
+      await expect(visibleTrigger).toBeFocused();
+    }
+  }
 });
 
 test('registered protected routes render the branded shell and button hierarchy without overflow', async ({

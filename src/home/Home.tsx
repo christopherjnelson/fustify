@@ -39,53 +39,6 @@ function HomeHeader() {
   );
 }
 
-function OrbitalGlobe() {
-  return (
-    <div className="hero-orbit" aria-hidden="true">
-      <svg
-        className="hero-orbit__graphic"
-        focusable="false"
-        viewBox="0 0 420 420"
-      >
-        <defs>
-          <radialGradient id="hero-globe-field" cx="50%" cy="42%" r="58%">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.09" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <circle className="hero-orbit__field" cx="210" cy="210" r="132" />
-        <g className="hero-orbit__sphere">
-          <circle cx="210" cy="210" r="126" />
-          <ellipse cx="210" cy="210" rx="62" ry="126" />
-          <ellipse cx="210" cy="210" rx="126" ry="46" />
-          <path d="M101 147c33 18 70 27 109 27s76-9 109-27" />
-          <path d="M101 273c33-18 70-27 109-27s76 9 109 27" />
-          <path d="M210 84v252M84 210h252" />
-        </g>
-        <g className="hero-orbit__rings">
-          <ellipse
-            cx="210"
-            cy="210"
-            rx="184"
-            ry="62"
-            transform="rotate(-18 210 210)"
-          />
-          <ellipse
-            cx="210"
-            cy="210"
-            rx="164"
-            ry="92"
-            transform="rotate(48 210 210)"
-          />
-        </g>
-        <circle className="hero-orbit__node" cx="361" cy="151" r="6" />
-        <circle className="hero-orbit__focus" cx="173" cy="192" r="5" />
-      </svg>
-      <span className="hero-orbit__label">Procedural sphere / seed locked</span>
-    </div>
-  );
-}
-
 function ModeCard({
   eyebrow,
   title,
@@ -175,7 +128,6 @@ function Hero({ onNavigate }: { onNavigate: Navigate }) {
             conquer continents in local or online multiplayer.
           </p>
         </div>
-        <OrbitalGlobe />
       </div>
       <GameModeCards onNavigate={onNavigate} />
     </section>

@@ -250,6 +250,7 @@ html.game-route .protected-route-shell {
   inset: 0;
   padding: 24px;
   place-items: center;
+  overflow: auto;
   background: rgba(1, 5, 11, 0.76);
   backdrop-filter: blur(7px);
 }
@@ -258,6 +259,7 @@ html.game-route .protected-route-shell {
 .auth-route-card {
   width: min(460px, 100%);
   max-height: min(760px, calc(100vh - 48px));
+  max-height: min(760px, calc(100dvh - 48px));
   padding: 24px;
   overflow: auto;
   color: #dce9f3;
@@ -923,7 +925,7 @@ html.game-route .protected-route-shell {
 
   .auth-dialog-backdrop {
     padding: 10px;
-    place-items: end center;
+    place-items: start center;
   }
 
   .auth-dialog {
@@ -5307,16 +5309,13 @@ html.home-route body {
 }
 
 .home-hero-intro {
-  display: grid;
-  min-height: 330px;
+  min-height: 260px;
   margin-bottom: 34px;
-  grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.7fr);
-  align-items: center;
-  gap: clamp(28px, 5vw, 72px);
+  padding: clamp(24px, 4vw, 48px) 0;
 }
 
 .home-hero-copy {
-  max-width: 760px;
+  max-width: 880px;
   margin: 0;
 }
 
@@ -5360,95 +5359,6 @@ html.home-route body {
   max-width: 670px;
   margin-top: 12px;
   color: var(--brand-steel);
-}
-
-.hero-orbit {
-  position: relative;
-  width: min(100%, 390px);
-  justify-self: end;
-  color: var(--brand-accent);
-}
-
-.hero-orbit::before {
-  position: absolute;
-  z-index: -1;
-  inset: 16% 14%;
-  content: '';
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--brand-accent) 6%, transparent);
-  filter: blur(34px);
-}
-
-.hero-orbit__graphic {
-  display: block;
-  width: 100%;
-  overflow: visible;
-}
-
-.hero-orbit__field {
-  fill: url('#hero-globe-field');
-  stroke: var(--brand-border);
-  stroke-width: 1;
-}
-
-.hero-orbit__sphere,
-.hero-orbit__rings {
-  fill: none;
-  stroke: var(--brand-steel);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-
-.hero-orbit__sphere {
-  opacity: 0.34;
-}
-
-.hero-orbit__rings {
-  stroke: var(--brand-accent);
-  opacity: 0.52;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: home-orbit-drift 24s linear infinite;
-}
-
-.hero-orbit__node,
-.hero-orbit__focus {
-  fill: var(--brand-accent);
-}
-
-.hero-orbit__node {
-  stroke: var(--brand-page);
-  stroke-width: 3;
-}
-
-.hero-orbit__focus {
-  opacity: 0.8;
-  animation: home-orbit-pulse 3.6s ease-in-out infinite;
-}
-
-.hero-orbit__label {
-  position: absolute;
-  right: 3%;
-  bottom: 5%;
-  color: var(--brand-steel);
-  font-family: var(--brand-display-font);
-  font-size: 0.48rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-@keyframes home-orbit-drift {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes home-orbit-pulse {
-  50% {
-    opacity: 0.35;
-    transform: scale(1.55);
-    transform-origin: 173px 192px;
-  }
 }
 
 .mode-grid {
@@ -5705,9 +5615,7 @@ html.home-route body {
   .home-hero-intro {
     min-height: 0;
     margin-bottom: 24px;
-    grid-template-columns: minmax(0, 1fr) 112px;
-    align-items: start;
-    gap: 8px;
+    padding: 12px 0;
   }
 
   .home-hero-copy h1 {
@@ -5723,37 +5631,12 @@ html.home-route body {
     font-size: 0.78rem;
   }
 
-  .hero-orbit {
-    width: 142px;
-    margin-top: 30px;
-    margin-right: -22px;
-    opacity: 0.82;
-  }
-
-  .hero-orbit__label {
-    display: none;
-  }
-
   .mode-card {
     padding: 22px;
   }
 }
 
 @media (max-width: 430px) {
-  .home-hero-intro {
-    display: block;
-  }
-
-  .hero-orbit {
-    position: absolute;
-    width: 118px;
-    top: 90px;
-    right: -28px;
-    margin: 0;
-    opacity: 0.3;
-    pointer-events: none;
-  }
-
   .home-hero-copy {
     position: relative;
     z-index: 1;
@@ -5761,11 +5644,6 @@ html.home-route body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hero-orbit__rings,
-  .hero-orbit__focus {
-    animation: none;
-  }
-
   .mode-card {
     transition: none;
   }
@@ -5855,6 +5733,10 @@ html.multiplayer-match-route .branded-app-content {
   background: color-mix(in srgb, var(--brand-panel) 92%, transparent);
   box-shadow: 0 16px 42px rgba(0, 0, 0, 0.32);
   backdrop-filter: blur(16px);
+}
+
+.branded-app-header:has(.auth-dialog-backdrop) {
+  backdrop-filter: none;
 }
 
 .branded-app-shell-immersive .branded-app-header {

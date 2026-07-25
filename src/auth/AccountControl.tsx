@@ -139,6 +139,7 @@ export function AuthDialog({
   const client = useMemo(() => getSupabaseClient(), []);
   const identity = accountIdentity(account);
   const dialogRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
   const [displayName, setDisplayName] = useState(
     identity?.profile.displayName ?? '',
   );
@@ -149,7 +150,17 @@ export function AuthDialog({
   const [status, setStatus] = useState<FormStatus>({ kind: 'idle' });
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
     const dialog = dialogRef.current;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     (
       dialog?.querySelector<HTMLElement>('input') ??
       dialog?.querySelector<HTMLElement>(
@@ -157,12 +168,35 @@ export function AuthDialog({
       )
     )?.focus();
 
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+    const handleKeyboard = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [onClose]);
+    window.addEventListener('keydown', handleKeyboard);
+    return () => {
+      window.removeEventListener('keydown', handleKeyboard);
+      document.body.style.overflow = previousBodyOverflow;
+      previouslyFocused?.focus();
+    };
+  }, []);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -494,6 +528,7 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
   const [dialog, setDialog] = useState<DialogView | null>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [discordBusy, setDiscordBusy] = useState(false);
+  const dialogTriggerRef = useRef<HTMLElement | null>(null);
   const [returnPath] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const requested = params.get('returnPath');
@@ -528,6 +563,10 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
   useEffect(() => {
     const openProfileEditor = () => {
       if (account.status !== 'registered-ready') return;
+      dialogTriggerRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
       setSignOutError(null);
       setDialog('edit-profile');
     };
@@ -545,6 +584,10 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
   }
 
   const open = (view: DialogView) => {
+    dialogTriggerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     setSignOutError(null);
     setDialog(view);
   };
@@ -670,7 +713,10 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
           key={`${dialog}:${identity?.userId ?? 'signed-out'}`}
           view={dialog}
           account={account}
-          onClose={() => setDialog(null)}
+          onClose={() => {
+            setDialog(null);
+            window.setTimeout(() => dialogTriggerRef.current?.focus(), 0);
+          }}
           onView={setDialog}
           onProfileUpdated={(profile) => controller?.updateProfile(profile)}
           returnPath={returnPath}

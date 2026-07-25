@@ -22,10 +22,8 @@ test('home choices route through the account-required shell without loading game
     .locator('.fustify-logo');
   await expect(homeLogo).toBeVisible();
   await expect(homeLogo).toHaveAttribute('aria-hidden', 'true');
-  await expect(page.locator('.hero-orbit')).toHaveAttribute(
-    'aria-hidden',
-    'true',
-  );
+  await expect(page.locator('.hero-orbit')).toHaveCount(0);
+  await expect(page.getByText(/procedural sphere|seed locked/i)).toHaveCount(0);
   await expect(page.locator('.home-shell')).toHaveCSS(
     'background-color',
     'rgb(5, 10, 18)',
@@ -117,10 +115,7 @@ test('home choices route through the account-required shell without loading game
   ).toEqual([]);
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(page.locator('.hero-orbit__rings')).toHaveCSS(
-    'animation-name',
-    'none',
-  );
+  await expect(page.locator('[class*="hero-orbit"]')).toHaveCount(0);
 
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Fustify home' })).toBeFocused();
