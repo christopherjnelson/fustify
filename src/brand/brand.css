@@ -1,0 +1,119 @@
+@import '@fontsource/orbitron/latin-600.css';
+
+:root {
+  --brand-chartreuse: #ccff00;
+  --brand-chartreuse-hover: #d8ff3f;
+  --brand-background: #050a12;
+  --brand-surface: #0b1220;
+  --brand-surface-raised: #121c2b;
+  --brand-slate: #1e2c3f;
+  --brand-border: #26374b;
+  --brand-steel: #8a96a8;
+  --brand-text: #e6edf3;
+  --brand-text-strong: #f7f9fc;
+
+  --brand-accent: var(--brand-chartreuse);
+  --brand-accent-hover: var(--brand-chartreuse-hover);
+  --brand-page: var(--brand-background);
+  --brand-panel: var(--brand-surface);
+  --brand-panel-raised: var(--brand-surface-raised);
+  --brand-focus: #ddff57;
+  --brand-display-font: 'Orbitron', 'Arial Wide', system-ui, sans-serif;
+  --brand-body-font:
+    Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.fustify-mark,
+.fustify-logo {
+  display: inline-block;
+  overflow: visible;
+  flex: 0 0 auto;
+}
+
+.fustify-mark {
+  --fustify-field: var(--brand-background);
+  --fustify-rim: var(--brand-slate);
+  --fustify-grid: var(--brand-steel);
+  --fustify-accent: var(--brand-chartreuse);
+}
+
+.fustify-mark__field {
+  fill: var(--fustify-field);
+}
+
+.fustify-mark__rim {
+  fill: none;
+  stroke: var(--fustify-rim);
+  stroke-width: 4;
+}
+
+.fustify-mark__grid {
+  fill: none;
+  opacity: 0.57;
+  stroke: var(--fustify-grid);
+  stroke-linecap: round;
+  stroke-width: 2.8;
+}
+
+.fustify-mark__orbit {
+  fill: none;
+  stroke: var(--fustify-accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 6;
+}
+
+.fustify-mark__orbit circle {
+  fill: var(--fustify-accent);
+  stroke: var(--fustify-field);
+  stroke-width: 3;
+}
+
+.fustify-mark__letter {
+  fill: var(--fustify-accent);
+}
+
+.fustify-mark--monochrome-light,
+.fustify-logo--monochrome-light {
+  --fustify-field: transparent;
+  --fustify-rim: currentColor;
+  --fustify-grid: currentColor;
+  --fustify-accent: currentColor;
+  color: var(--brand-text-strong);
+}
+
+.fustify-mark--monochrome-dark,
+.fustify-logo--monochrome-dark {
+  --fustify-field: transparent;
+  --fustify-rim: currentColor;
+  --fustify-grid: currentColor;
+  --fustify-accent: currentColor;
+  color: var(--brand-background);
+}
+
+.fustify-logo__wordmark {
+  fill: var(--fustify-accent, var(--brand-chartreuse));
+  font-family: var(--brand-display-font);
+  font-size: 45px;
+  font-weight: 600;
+  letter-spacing: 5px;
+}
+
+.fustify-logo__descriptor {
+  fill: var(--brand-steel);
+  font-family: var(--brand-body-font);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 3.1px;
+}
+
+.fustify-logo--monochrome-light,
+.fustify-logo--monochrome-dark {
+  --fustify-accent: currentColor;
+}
+
+.fustify-logo--monochrome-light .fustify-logo__descriptor,
+.fustify-logo--monochrome-dark .fustify-logo__descriptor {
+  fill: currentColor;
+  opacity: 0.72;
+}

@@ -45,6 +45,7 @@
     "test:auth:local": "node --import tsx scripts/testEmailPasswordAuth.ts"
   },
   "dependencies": {
+    "@fontsource/orbitron": "5.2.8",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.2",
     "@supabase/supabase-js": "2.110.8",
