@@ -39,26 +39,57 @@ if (isMultiplayerMatch) {
 async function bootstrap() {
   const root = createRoot(document.getElementById('root')!);
   if (isAdmin) {
-    const [{ AdminDashboard }, reportSources] = await Promise.all([
-      import('./admin/AdminDashboard'),
-      import('./admin/reportSource'),
-    ]);
-    let source = reportSources.localAdminReportSource;
-    if (import.meta.env.DEV) {
-      // Fixture sources are development-only. Rollup drops this whole branch,
-      // and therefore the fixture chunk, from production builds.
-      const fixtureName = new URLSearchParams(window.location.search).get(
-        'admin-fixture',
-      );
-      if (fixtureName) {
-        const { fixtureAdminReportSource } =
-          await import('./admin/fixtureReportSource');
-        source = fixtureAdminReportSource(fixtureName);
+    const [{ AdminApp, AdminFixtureApp, AdminFixtureGate }, reportSources] =
+      await Promise.all([
+        import('./admin/AdminApp'),
+        import('./admin/reportSource'),
+      ]);
+    const parameters = new URLSearchParams(window.location.search);
+    const visualReview =
+      import.meta.env.DEV && parameters.get('visual-review') === '1';
+    if (visualReview) {
+      const accessState = parameters.get('admin-access');
+      if (
+        accessState === 'checking' ||
+        accessState === 'denied' ||
+        accessState === 'error'
+      ) {
+        root.render(
+          <StrictMode>
+            <AdminFixtureGate state={accessState} />
+          </StrictMode>,
+        );
+        return;
       }
+      const [{ fixtureAdminReportSource }, { fixtureAdminDashboardSource }] =
+        await Promise.all([
+          import('./admin/fixtureReportSource'),
+          import('./admin/adminFixtures'),
+        ]);
+      const reportFixture = parameters.get('admin-fixture') ?? 'empty';
+      const dataFixture = parameters.get('admin-data');
+      root.render(
+        <StrictMode>
+          <AdminFixtureApp
+            operationsSource={fixtureAdminDashboardSource(
+              dataFixture === 'empty' ||
+                dataFixture === 'error' ||
+                dataFixture === 'loading'
+                ? dataFixture
+                : 'populated',
+            )}
+            verificationSource={fixtureAdminReportSource(reportFixture)}
+          />
+        </StrictMode>,
+      );
+      return;
     }
     root.render(
       <StrictMode>
-        <AdminDashboard source={source} dataAvailable={import.meta.env.DEV} />
+        <AdminApp
+          verificationSource={reportSources.localAdminReportSource}
+          verificationDataAvailable={import.meta.env.DEV}
+        />
       </StrictMode>,
     );
     return;

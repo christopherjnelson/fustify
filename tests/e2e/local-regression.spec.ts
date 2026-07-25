@@ -34,9 +34,11 @@ test('local and admin routes remain isolated from multiplayer', async ({
     }),
   ).toBeVisible();
 
-  await page.goto('/admin');
+  await page.goto(
+    '/admin?visual-review=1&admin-fixture=empty&admin-data=populated',
+  );
   await expect(
-    page.getByRole('heading', { name: 'Verification Dashboard' }),
+    page.getByRole('heading', { name: 'Admin Dashboard' }),
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Multiplayer' })).toHaveCount(
     0,

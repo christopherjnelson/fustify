@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { openScenario, reviewPath, type Scenario } from './helpers';
+import {
+  installAdminAuthFixture,
+  type AdminAuthFixture,
+} from './adminTestClient';
 
 const scenarios: Array<{
   name: Scenario;
@@ -276,12 +280,14 @@ for (const fixture of [
 ] as const) {
   test(`visual review: admin-${fixture}`, async ({ page }, testInfo) => {
     const source = fixture === 'simulation-heavy' ? 'passed' : fixture;
-    await page.goto(`/admin?admin-fixture=${source}`);
+    await page.goto(
+      `/admin?visual-review=1&admin-fixture=${source}&admin-data=populated`,
+    );
     await page.addStyleTag({
       content: ':root { font-family: Arial, sans-serif !important; }',
     });
     await expect(
-      page.getByRole('heading', { name: 'Verification Dashboard' }),
+      page.getByRole('heading', { name: 'Admin Dashboard' }),
     ).toBeVisible();
     if (fixture === 'empty')
       await expect(
@@ -291,6 +297,7 @@ for (const fixture of [
       await expect(page.getByRole('heading', { name: 'Suites' })).toBeVisible();
     await expect(page.locator('.admin-shell')).toHaveScreenshot(
       `admin-${fixture}-ui.png`,
+      { timeout: 15_000 },
     );
     await page.screenshot({
       path: reviewPath(testInfo, `admin-${fixture}`),
@@ -307,12 +314,14 @@ for (const fixture of [
 ] as const) {
   test(`visual review: admin-${fixture}`, async ({ page }, testInfo) => {
     const source = fixture.replace('study-', '');
-    await page.goto(`/admin?admin-fixture=${source}`);
+    await page.goto(
+      `/admin?visual-review=1&admin-fixture=${source}&admin-data=populated`,
+    );
     await page.addStyleTag({
       content: ':root { font-family: Arial, sans-serif !important; }',
     });
     await expect(
-      page.getByRole('heading', { name: 'Balance Studies' }),
+      page.getByRole('heading', { name: 'Balance Studies', exact: true }),
     ).toBeVisible();
     await expect(page.locator('.study-overview')).toBeVisible();
     await expect(page.locator('.study-section')).toHaveScreenshot(
@@ -320,6 +329,88 @@ for (const fixture of [
     );
     await page.screenshot({
       path: reviewPath(testInfo, `admin-${fixture}`),
+      fullPage: true,
+    });
+  });
+}
+
+for (const fixture of [
+  ['signed-out', 'Account required'],
+  ['non-admin', 'Admin access required'],
+  ['admin-check-error', 'Unable to verify admin access'],
+] as const satisfies readonly (readonly [AdminAuthFixture, string])[]) {
+  test(`visual review: admin-${fixture[0]}`, async ({ page }, testInfo) => {
+    await installAdminAuthFixture(page, fixture[0]);
+    await page.goto('/admin');
+    await page.addStyleTag({
+      content: ':root { font-family: Arial, sans-serif !important; }',
+    });
+    await expect(
+      page.getByRole('heading', { name: fixture[1] }).first(),
+    ).toBeVisible();
+    const region = page.locator('.auth-route-shell, .admin-shell').first();
+    await expect(region).toHaveScreenshot(`admin-${fixture[0]}-ui.png`);
+    await page.screenshot({
+      path: reviewPath(testInfo, `admin-${fixture[0]}`),
+      fullPage: true,
+    });
+  });
+}
+
+test('visual review: admin-authorized-shell', async ({ page }, testInfo) => {
+  await installAdminAuthFixture(page, 'admin');
+  await page.route('**/__fustify/admin/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith('/latest')) {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: 'null',
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: '{"reports":[]}',
+    });
+  });
+  await page.goto('/admin');
+  await page.addStyleTag({
+    content: ':root { font-family: Arial, sans-serif !important; }',
+  });
+  await expect(
+    page.getByRole('heading', { name: 'Admin Dashboard' }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Admin' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Authorized Room' }),
+  ).toBeVisible();
+  await expect(page.locator('.branded-app-shell')).toHaveScreenshot(
+    'admin-authorized-shell-ui.png',
+    { timeout: 15_000 },
+  );
+  await page.screenshot({
+    path: reviewPath(testInfo, 'admin-authorized-shell'),
+    fullPage: true,
+  });
+});
+
+for (const fixture of ['empty', 'error'] as const) {
+  test(`visual review: admin-data-${fixture}`, async ({ page }, testInfo) => {
+    await page.goto(
+      `/admin?visual-review=1&admin-fixture=empty&admin-data=${fixture}`,
+    );
+    await page.addStyleTag({
+      content: ':root { font-family: Arial, sans-serif !important; }',
+    });
+    await expect(
+      page.getByRole('heading', { name: 'Admin Dashboard' }),
+    ).toBeVisible();
+    const region = page.locator('.admin-operations');
+    await expect(region).toHaveScreenshot(`admin-data-${fixture}-ui.png`);
+    await page.screenshot({
+      path: reviewPath(testInfo, `admin-data-${fixture}`),
       fullPage: true,
     });
   });

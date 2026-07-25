@@ -24,6 +24,384 @@
   }
 }
 
+/* Authorized administration */
+.admin-shell {
+  color: var(--brand-text);
+  background:
+    linear-gradient(var(--brand-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--brand-grid-line) 1px, transparent 1px),
+    radial-gradient(
+      circle at 82% 0,
+      color-mix(in srgb, var(--brand-accent) 8%, transparent),
+      transparent 30rem
+    ),
+    var(--brand-page);
+  background-size:
+    48px 48px,
+    48px 48px,
+    auto,
+    auto;
+  font-family: var(--brand-body-font);
+}
+
+.branded-app-content > .admin-shell {
+  padding-top: 112px;
+}
+
+.admin-header {
+  align-items: center;
+  border-color: var(--brand-border);
+}
+
+.admin-header h1,
+.admin-state-card h1 {
+  color: var(--brand-text-strong);
+  font-family: var(--brand-display-font);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.admin-header p,
+.admin-section-heading p,
+.admin-room-card p {
+  color: var(--brand-steel);
+}
+
+.admin-eyebrow {
+  color: var(--brand-accent) !important;
+  font-family: var(--brand-display-font);
+}
+
+.admin-actions button,
+.latest-button,
+.admin-error button,
+.admin-gate-actions button {
+  color: var(--brand-page);
+  border-color: var(--brand-accent);
+  background: var(--brand-accent);
+}
+
+.admin-actions button:hover,
+.admin-actions button:focus-visible,
+.latest-button:hover,
+.latest-button:focus-visible,
+.admin-error button:hover,
+.admin-error button:focus-visible,
+.admin-gate-actions button:hover,
+.admin-gate-actions button:focus-visible {
+  border-color: var(--brand-accent-hover);
+  background: var(--brand-accent-hover);
+}
+
+.admin-actions button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.admin-operations,
+.admin-diagnostics {
+  margin-top: 28px;
+}
+
+.admin-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.admin-section-heading h2 {
+  margin: 3px 0 7px;
+  color: var(--brand-text-strong);
+  font-size: 1.25rem;
+}
+
+.admin-section-heading p {
+  margin-bottom: 0;
+}
+
+.admin-fixture-notice {
+  margin-top: 16px;
+  padding: 10px 12px;
+  color: var(--brand-accent);
+  border: 1px solid
+    color-mix(in srgb, var(--brand-accent) 34%, var(--brand-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand-accent) 7%, var(--brand-panel));
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.admin-state-card {
+  margin-top: 20px;
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid var(--brand-border);
+  border-radius: 12px;
+  background: var(--brand-panel);
+}
+
+.admin-state-card h1,
+.admin-state-card h3 {
+  margin: 4px 0 10px;
+}
+
+.admin-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.admin-metric {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--brand-border);
+  border-radius: 10px;
+  background: var(--brand-panel);
+}
+
+.admin-metric > span {
+  display: block;
+  color: var(--brand-steel);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-metric strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--brand-text-strong);
+  font-family: var(--brand-display-font);
+  font-size: clamp(1.5rem, 4vw, 2rem);
+}
+
+.admin-metric p {
+  margin: 7px 0 0;
+  color: var(--brand-steel);
+  font-size: 0.78rem;
+}
+
+.admin-room-heading {
+  margin-top: 34px;
+}
+
+.admin-room-list {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-room-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--brand-border);
+  border-radius: 10px;
+  background: var(--brand-panel);
+}
+
+.admin-room-primary {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-room-card h3 {
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+  color: var(--brand-text-strong);
+}
+
+.admin-room-card p {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.admin-room-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.admin-room-badges span {
+  padding: 5px 8px;
+  color: var(--brand-accent);
+  border: 1px solid
+    color-mix(in srgb, var(--brand-accent) 28%, var(--brand-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-accent) 6%, transparent);
+  font-size: 0.65rem;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
+.admin-room-card dl {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0 0;
+}
+
+.admin-room-card dd {
+  font-size: 0.8rem;
+}
+
+.admin-current,
+.admin-notice,
+.admin-empty,
+.study-section,
+.suite-card,
+.simulation-grid article,
+.failure-card,
+.coverage-grid article,
+.configuration-table article,
+.findings article,
+.recent-list button,
+.recent-studies button {
+  border-color: var(--brand-border);
+  background: var(--brand-panel);
+}
+
+.admin-current,
+.admin-notice,
+.admin-empty {
+  border-left-color: var(--brand-accent);
+}
+
+.admin-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: color-mix(in srgb, var(--brand-danger) 76%, var(--brand-text-strong));
+  background: var(--brand-danger-surface);
+}
+
+.admin-error button {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.admin-gate {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+}
+
+.admin-gate .admin-state-card {
+  width: min(620px, 100%);
+  margin: 0;
+}
+
+.admin-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.admin-gate-actions button,
+.admin-gate-actions a {
+  min-height: 38px;
+  padding: 9px 13px;
+  border-radius: 7px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.admin-gate-actions a {
+  display: inline-flex;
+  align-items: center;
+  color: var(--brand-text);
+  border: 1px solid var(--brand-border);
+  background: var(--brand-panel-raised);
+}
+
+.account-actions .admin-nav-link {
+  display: inline-flex;
+  min-height: 36px;
+  padding: 7px 11px;
+  align-items: center;
+  color: var(--brand-page);
+  border: 1px solid var(--brand-accent);
+  border-radius: 7px;
+  background: var(--brand-accent);
+  font-size: inherit;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.account-actions .admin-nav-link:hover,
+.account-actions .admin-nav-link:focus-visible {
+  border-color: var(--brand-accent-hover);
+  background: var(--brand-accent-hover);
+}
+
+.branded-app-header .account-actions .admin-nav-link {
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: 0.64rem;
+}
+
+@media (max-width: 1040px) {
+  .admin-room-card dl {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .branded-app-content > .admin-shell {
+    padding-top: 138px;
+  }
+
+  .admin-section-heading,
+  .admin-room-primary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-room-badges {
+    justify-content: flex-start;
+  }
+
+  .admin-room-card dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-error button {
+    margin-left: 0;
+  }
+
+  .home-header .account-control .account-actions .admin-nav-link,
+  .account-control-compact .account-actions .admin-nav-link {
+    min-height: 32px;
+    padding: 5px 8px;
+    flex: 0 0 auto;
+    font-size: 0.68rem;
+  }
+}
+
+@media (max-width: 440px) {
+  .admin-metric-grid,
+  .admin-room-card dl {
+    grid-template-columns: 1fr;
+  }
+}
+
 .home-shell {
   position: relative;
   min-height: 100vh;
@@ -7287,4 +7665,75 @@ html.multiplayer-match-route .branded-app-content {
     animation: none;
     transition: none;
   }
+}
+
+/* Keep the administration palette authoritative over the legacy report CSS. */
+.admin-shell {
+  color: var(--brand-text);
+  background:
+    linear-gradient(var(--brand-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--brand-grid-line) 1px, transparent 1px),
+    radial-gradient(
+      circle at 82% 0,
+      color-mix(in srgb, var(--brand-accent) 8%, transparent),
+      transparent 30rem
+    ),
+    var(--brand-page);
+  background-size:
+    48px 48px,
+    48px 48px,
+    auto,
+    auto;
+  font-family: var(--brand-body-font);
+}
+
+.admin-header {
+  align-items: center;
+  border-color: var(--brand-border);
+}
+
+.admin-header h1 {
+  color: var(--brand-text-strong);
+  font-family: var(--brand-display-font);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.admin-header p {
+  color: var(--brand-steel);
+}
+
+.admin-actions button,
+.latest-button,
+.admin-error button {
+  color: var(--brand-page);
+  border-color: var(--brand-accent);
+  background: var(--brand-accent);
+}
+
+.admin-current,
+.admin-notice,
+.admin-empty,
+.study-section,
+.suite-card,
+.simulation-grid article,
+.failure-card,
+.coverage-grid article,
+.configuration-table article,
+.findings article,
+.recent-list button,
+.recent-studies button {
+  border-color: var(--brand-border);
+  background: var(--brand-panel);
+}
+
+.admin-current,
+.admin-notice,
+.admin-empty {
+  border-left-color: var(--brand-accent);
+}
+
+.admin-error {
+  color: color-mix(in srgb, var(--brand-danger) 76%, var(--brand-text-strong));
+  background: var(--brand-danger-surface);
 }

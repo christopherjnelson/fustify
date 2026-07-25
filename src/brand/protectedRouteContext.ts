@@ -7,6 +7,15 @@ export type RouteContext = {
 };
 
 export function protectedRouteContext(pathname: string): RouteContext {
+  if (pathname === '/admin' || pathname === '/admin/') {
+    return {
+      backHref: '/',
+      backLabel: 'Home',
+      eyebrow: 'Restricted tools',
+      title: 'Administration',
+      immersive: false,
+    };
+  }
   if (pathname.startsWith('/multiplayer/match/')) {
     return {
       backHref: '/multiplayer',

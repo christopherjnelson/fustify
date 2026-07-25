@@ -109,9 +109,9 @@ export const BUNDLE_BUDGETS: BundleBudgets = {
     },
     {
       id: 'admin',
-      description: 'Development verification dashboard at /admin',
-      chunkNames: ['AdminDashboard', 'reportSource'],
-      gzipBudget: 94_000,
+      description: 'Restricted administration dashboard at /admin',
+      chunkNames: ['AdminApp', 'reportSource'],
+      gzipBudget: 166_000,
     },
   ],
   largestJavaScriptRaw: 1_080_000,

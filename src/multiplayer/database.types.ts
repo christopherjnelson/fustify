@@ -323,11 +323,58 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_roles: {
+        Row: {
+          created_at: string;
+          role: Database['public']['Enums']['app_role'];
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          role: Database['public']['Enums']['app_role'];
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          role?: Database['public']['Enums']['app_role'];
+          user_id?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
+      admin_dashboard_overview: {
+        Args: never;
+        Returns: {
+          active_matches: number;
+          generated_at: string;
+          private_waiting_rooms: number;
+          public_waiting_missing_thumbnail: number;
+          public_waiting_rooms: number;
+          public_waiting_with_thumbnail: number;
+          registered_accounts: number;
+          total_matches: number;
+        }[];
+      };
+      admin_recent_rooms: {
+        Args: never;
+        Returns: {
+          claimed_seats: number;
+          created_at: string;
+          current_members: number;
+          generator_version: number;
+          host_display_name: string;
+          maximum_players: number;
+          room_name: string;
+          room_state: string;
+          thumbnail_available: boolean;
+          updated_at: string;
+          visibility: string;
+        }[];
+      };
       authority_commit_match_command: {
         Args: {
           p_actor_user_id: string;
@@ -468,6 +515,10 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      current_user_is_admin: {
+        Args: never;
+        Returns: boolean;
       };
       ensure_own_profile: {
         Args: never;
@@ -674,7 +725,7 @@ export type Database = {
       };
     };
     Enums: {
-      [_ in never]: never;
+      app_role: 'admin';
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -801,6 +852,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ['admin'],
+    },
   },
 } as const;

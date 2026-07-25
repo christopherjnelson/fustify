@@ -28,7 +28,7 @@ function manifest(): BundleManifest {
       isEntry: true,
       dynamicImports: [
         '_BrowserApp-bbbb.js',
-        'src/admin/AdminDashboard.tsx',
+        'src/admin/AdminApp.tsx',
         'src/admin/reportSource.ts',
         'src/auth/AuthCallbackPage.tsx',
       ],
@@ -63,9 +63,9 @@ function manifest(): BundleManifest {
       isDynamicEntry: true,
       imports: ['index.html', '_GameSetup-eeee.js', '_BrowserApp-bbbb.js'],
     },
-    'src/admin/AdminDashboard.tsx': {
-      file: 'assets/AdminDashboard-hhhh.js',
-      name: 'AdminDashboard',
+    'src/admin/AdminApp.tsx': {
+      file: 'assets/AdminApp-hhhh.js',
+      name: 'AdminApp',
       isDynamicEntry: true,
       imports: ['index.html'],
     },
@@ -92,7 +92,7 @@ const sizes: AssetSizes = {
   'assets/GameSetup-eeee.js': { raw: 16_000, gzip: 1600 },
   'assets/App-ffff.js': { raw: 32, gzip: 16 },
   'assets/MultiplayerApp-gggg.js': { raw: 64, gzip: 32 },
-  'assets/AdminDashboard-hhhh.js': { raw: 128, gzip: 64 },
+  'assets/AdminApp-hhhh.js': { raw: 128, gzip: 64 },
   'assets/reportSource-iiii.js': { raw: 256, gzip: 128 },
   'assets/AuthCallbackPage-jjjj.js': { raw: 512, gzip: 256 },
 };
@@ -201,9 +201,7 @@ describe('route isolation', () => {
     expect(files('public-shell')).not.toContain(
       'assets/MultiplayerApp-gggg.js',
     );
-    expect(files('public-shell')).not.toContain(
-      'assets/AdminDashboard-hhhh.js',
-    );
+    expect(files('public-shell')).not.toContain('assets/AdminApp-hhhh.js');
   });
 
   it('keeps gameplay chunks out of the standalone auth page', () => {
