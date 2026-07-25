@@ -51,6 +51,16 @@ export class PermanentMatchReadError extends Error {
   readonly permanent = true;
 }
 
+export class RoomMembershipRequiredError extends Error {
+  readonly membershipRequired = true;
+}
+
+export function isRoomMembershipRequiredError(
+  error: unknown,
+): error is RoomMembershipRequiredError {
+  return error instanceof RoomMembershipRequiredError;
+}
+
 export function isPermanentMatchReadError(
   error: unknown,
 ): error is PermanentMatchReadError {
@@ -194,7 +204,11 @@ export async function fetchRoomState(
     seatsResult.error ??
     matchResult.error;
   if (error) throw multiplayerError(error);
-  if (!roomResult.data) throw multiplayerError('room_access_denied');
+  if (!roomResult.data) {
+    throw new RoomMembershipRequiredError(
+      MULTIPLAYER_ERRORS.room_access_denied,
+    );
+  }
   return {
     room: roomResult.data,
     members: membersResult.data ?? [],

@@ -82,6 +82,13 @@ import {
   WaitingRoomExitDialog,
   type WaitingRoomExitIntent,
 } from './WaitingRoomExitDialog';
+import {
+  directRoomEntryFailure,
+  directRoomEntryStatus,
+  enterRoomFromDirectLink,
+  isValidDirectRoomId,
+  type DirectRoomEntryFailure,
+} from './directRoomEntry';
 
 type Route =
   | { kind: 'lobby' }
@@ -286,6 +293,10 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   const [state, setState] = useState<RoomState | null>(null);
   const [settings, setSettings] = useState<Room | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [entryFailure, setEntryFailure] =
+    useState<DirectRoomEntryFailure | null>(() =>
+      isValidDirectRoomId(roomId) ? null : 'invalid-link',
+    );
   const [busy, setBusy] = useState<string | null>(null);
   const [connection, setConnection] = useState('CONNECTING');
   const requestSequence = useRef(0);
@@ -332,7 +343,55 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   }, [client, roomId]);
 
   useEffect(() => {
-    const initialRefreshTimer = window.setTimeout(() => void refresh(), 0);
+    if (!isValidDirectRoomId(roomId)) return;
+    let active = true;
+    let entered = false;
+    let inFlight = false;
+    let retryTimer: number | null = null;
+    const attemptEntry = () => {
+      if (!active || entered || inFlight) return;
+      inFlight = true;
+      setEntryFailure(null);
+      const sequence = ++requestSequence.current;
+      void enterRoomFromDirectLink(client, userId, roomId)
+        .then((canonical) => {
+          if (!active || sequence !== requestSequence.current) return;
+          entered = true;
+          if (retryTimer !== null) window.clearTimeout(retryTimer);
+          setState(canonical);
+          setSettings(canonical.room);
+          setEntryFailure(null);
+          setError(null);
+        })
+        .catch((entryError) => {
+          if (!active || sequence !== requestSequence.current) return;
+          const failure = directRoomEntryFailure(entryError);
+          setEntryFailure(failure);
+          if (failure === 'temporary') {
+            retryTimer = window.setTimeout(attemptEntry, 2_000);
+          }
+        })
+        .finally(() => {
+          inFlight = false;
+        });
+    };
+    const recover = () => attemptEntry();
+    window.addEventListener('online', recover);
+    window.addEventListener('focus', recover);
+    attemptEntry();
+    return () => {
+      active = false;
+      requestSequence.current += 1;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      window.removeEventListener('online', recover);
+      window.removeEventListener('focus', recover);
+    };
+  }, [client, roomId, userId]);
+
+  const loadedRoomId = state?.room.id ?? null;
+
+  useEffect(() => {
+    if (loadedRoomId !== roomId) return;
     let refreshTimer: number | null = null;
     let channel = subscribeToRoom(
       client,
@@ -377,7 +436,6 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     }
 
     return () => {
-      window.clearTimeout(initialRefreshTimer);
       if (refreshTimer !== null) window.clearTimeout(refreshTimer);
       window.clearInterval(reconciliationTimer);
       window.removeEventListener('online', recover);
@@ -385,7 +443,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
       delete window.__FUSTIFY_MULTIPLAYER_TEST__;
       void client.removeChannel(channel);
     };
-  }, [client, refresh, roomId]);
+  }, [client, loadedRoomId, refresh, roomId]);
 
   useEffect(() => {
     if (state?.match) {
@@ -512,10 +570,11 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   };
 
   if (!state || !settings) {
+    const entryStatus = directRoomEntryStatus(entryFailure);
     return (
       <StatusScreen
-        title={error ? 'Room unavailable' : 'Loading room'}
-        message={error ?? 'Restoring canonical room state…'}
+        title={error ? 'Room unavailable' : entryStatus.title}
+        message={error ?? entryStatus.message}
       />
     );
   }
@@ -1237,7 +1296,13 @@ export function MultiplayerApp({ userId }: { userId: string }) {
   }, []);
 
   if (route.kind === 'room')
-    return <RoomView roomId={route.id} userId={userId} />;
+    return (
+      <RoomView
+        key={`${userId}:${route.id}`}
+        roomId={route.id}
+        userId={userId}
+      />
+    );
   if (route.kind === 'match')
     return (
       <MatchView key={route.id} matchId={route.id} userId={userId} canReact />
