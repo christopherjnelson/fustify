@@ -117,6 +117,17 @@ interface NormalizedCandidate {
   diagnostic: GenerationCandidateDiagnostics;
 }
 
+function normalizedGeographicSpreadFailureCount(
+  quality: GeometryQualityAnalysis,
+): number {
+  return quality.continents.filter(
+    (continent) =>
+      continent.territoryCount >= 4 &&
+      continent.maximumAngularRadiusDegrees > 72 &&
+      continent.meanAngularRadiusDegrees > 38,
+  ).length;
+}
+
 function generateNormalizedPlanet(
   normalizedSeed: string,
   territoryCount: number,
@@ -147,6 +158,13 @@ function generateNormalizedPlanet(
       cellAdjacency,
       targetLandCoverage,
       continentCount,
+      continentCount >= 5
+        ? 'varied'
+        : continentCount === 4
+          ? candidateIndex > 0
+            ? 'varied'
+            : 'compact-fallback'
+          : 'legacy',
     );
     const initialLayout = generateNormalizedTerritoryLayout(
       baseSphere,
@@ -207,6 +225,7 @@ function generateNormalizedPlanet(
       derivedSeed,
       territoryAreas,
       territoryCentroids,
+      !(continentCount === 4 && candidateIndex === 0),
     );
     const seaRoutes = buildSeaRoutes(
       territoryCenters,
@@ -253,6 +272,12 @@ function generateNormalizedPlanet(
   }
   const selected = [...candidates].sort(
     (left, right) =>
+      normalizedGeographicSpreadFailureCount(left.quality) -
+        normalizedGeographicSpreadFailureCount(right.quality) ||
+      (continentCount === 4 && left.diagnostic.candidateIndex === 0 ? 1 : 0) -
+        (continentCount === 4 && right.diagnostic.candidateIndex === 0
+          ? 1
+          : 0) ||
       left.diagnostic.score.total - right.diagnostic.score.total ||
       left.diagnostic.candidateIndex - right.diagnostic.candidateIndex,
   )[0]!;

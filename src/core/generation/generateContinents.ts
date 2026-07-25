@@ -229,6 +229,7 @@ function generateSpatialAssignments(
   borderWeights: readonly TerritoryBorderWeight[],
   continentCount: number,
   random: SeededRandom,
+  territoryCenters?: readonly Vector3Tuple[],
 ): number[] {
   const components = graphComponents(adjacency);
   const allocations = allocateContinents(components, continentCount);
@@ -255,6 +256,47 @@ function generateSpatialAssignments(
   const tieRank = new Map(tieOrder.map((territory, rank) => [territory, rank]));
   seeds.forEach((territory, continent) => {
     assignments[territory] = continent;
+  });
+  const shapeStrengths = territoryCenters
+    ? random
+        .shuffle([0, 0.18, 0.34, 0.52, 0.72, 0.26, 0.6])
+        .slice(0, continentCount)
+    : [];
+  const shapeProfiles = seeds.map((territory, continent) => {
+    const center = territoryCenters?.[territory];
+    if (!center) return null;
+    const reference: Vector3Tuple =
+      Math.abs(center[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+    const fallbackAxis = normalize([
+      reference[1] * center[2] - reference[2] * center[1],
+      reference[2] * center[0] - reference[0] * center[2],
+      reference[0] * center[1] - reference[1] * center[0],
+    ]);
+    const randomDirection: Vector3Tuple = [
+      random.next() * 2 - 1,
+      random.next() * 2 - 1,
+      random.next() * 2 - 1,
+    ];
+    const projection = dot(randomDirection, center);
+    const projected: Vector3Tuple = [
+      randomDirection[0] - center[0] * projection,
+      randomDirection[1] - center[1] * projection,
+      randomDirection[2] - center[2] * projection,
+    ];
+    const axis =
+      Math.hypot(...projected) < 1e-8 ? fallbackAxis : normalize(projected);
+    const transverse: Vector3Tuple = [
+      center[1] * axis[2] - center[2] * axis[1],
+      center[2] * axis[0] - center[0] * axis[2],
+      center[0] * axis[1] - center[1] * axis[0],
+    ];
+    return {
+      axis,
+      transverse,
+      strength:
+        (shapeStrengths[continent] ?? 0) * (continentCount <= 3 ? 0.35 : 1),
+      bend: (random.next() - 0.5) * 0.9,
+    };
   });
 
   let remaining = adjacency.length - seeds.length;
@@ -294,6 +336,20 @@ function generateSpatialAssignments(
           }
         }
         const fillPenalty = (sizes[continent]! / targets[continent]!) * 8;
+        const profile = shapeProfiles[continent];
+        const territoryCenter = territoryCenters?.[territory];
+        const silhouetteBias =
+          profile && territoryCenter
+            ? profile.strength *
+              (Math.abs(dot(territoryCenter, profile.axis)) * 7 -
+                Math.abs(
+                  dot(territoryCenter, profile.transverse) -
+                    profile.bend *
+                      dot(territoryCenter, profile.axis) *
+                      Math.abs(dot(territoryCenter, profile.axis)),
+                ) *
+                  5)
+            : 0;
         candidates.push({
           territory,
           continent,
@@ -303,7 +359,8 @@ function generateSpatialAssignments(
             sameStrategic * 2.5 -
             externalBoundary * 1.15 -
             externalLand * 5 -
-            fillPenalty,
+            fillPenalty +
+            silhouetteBias,
         });
       }
     });
@@ -580,6 +637,63 @@ export interface NormalizedContinentSelection {
   score: number;
 }
 
+function continentAspectRatio(
+  continent: number,
+  assignments: readonly number[],
+  territoryAreas: readonly number[],
+  territoryCenters: readonly Vector3Tuple[],
+  centroid: Vector3Tuple,
+): number {
+  const reference: Vector3Tuple =
+    Math.abs(centroid[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  const firstAxis = normalize([
+    reference[1] * centroid[2] - reference[2] * centroid[1],
+    reference[2] * centroid[0] - reference[0] * centroid[2],
+    reference[0] * centroid[1] - reference[1] * centroid[0],
+  ]);
+  const secondAxis: Vector3Tuple = [
+    centroid[1] * firstAxis[2] - centroid[2] * firstAxis[1],
+    centroid[2] * firstAxis[0] - centroid[0] * firstAxis[2],
+    centroid[0] * firstAxis[1] - centroid[1] * firstAxis[0],
+  ];
+  const points = assignments
+    .map((assigned, territory) => ({ assigned, territory }))
+    .filter(({ assigned }) => assigned === continent)
+    .map(({ territory }) => ({
+      weight: territoryAreas[territory] ?? 1,
+      x: dot(territoryCenters[territory]!, firstAxis),
+      y: dot(territoryCenters[territory]!, secondAxis),
+    }));
+  if (points.length < 3) return 1;
+  const weight = points.reduce((sum, point) => sum + point.weight, 0);
+  const meanX =
+    points.reduce((sum, point) => sum + point.x * point.weight, 0) / weight;
+  const meanY =
+    points.reduce((sum, point) => sum + point.y * point.weight, 0) / weight;
+  const xx =
+    points.reduce(
+      (sum, point) => sum + (point.x - meanX) ** 2 * point.weight,
+      0,
+    ) / weight;
+  const yy =
+    points.reduce(
+      (sum, point) => sum + (point.y - meanY) ** 2 * point.weight,
+      0,
+    ) / weight;
+  const xy =
+    points.reduce(
+      (sum, point) =>
+        sum + (point.x - meanX) * (point.y - meanY) * point.weight,
+      0,
+    ) / weight;
+  const trace = xx + yy;
+  const discriminant = Math.sqrt(Math.max(0, (xx - yy) ** 2 + 4 * xy ** 2));
+  return Math.sqrt(
+    Math.max(1e-12, (trace + discriminant) / 2) /
+      Math.max(1e-12, (trace - discriminant) / 2),
+  );
+}
+
 function normalizedContinentShapeScore(
   assignments: readonly number[],
   adjacency: readonly number[][],
@@ -630,21 +744,68 @@ function normalizedContinentShapeScore(
     );
     return sum + angle * (territoryAreas[territory] ?? 1);
   }, 0);
+  const maximumRadii = centroids.map((center, continent) => {
+    const normalizedCenter = normalize(center);
+    return assignments.reduce(
+      (maximum, assigned, territory) =>
+        assigned === continent
+          ? Math.max(
+              maximum,
+              Math.acos(
+                Math.max(
+                  -1,
+                  Math.min(
+                    1,
+                    dot(normalizedCenter, territoryCenters[territory]!),
+                  ),
+                ),
+              ),
+            )
+          : maximum,
+      0,
+    );
+  });
+  const aspectRatios = centroids.map((center, continent) =>
+    continentAspectRatio(
+      continent,
+      assignments,
+      territoryAreas,
+      territoryCenters,
+      normalize(center),
+    ),
+  );
+  const aspectVariation = coefficientOfVariation(aspectRatios);
+  const uniformlyRounded = aspectRatios.filter(
+    (aspect) => aspect < 1.18,
+  ).length;
+  const silhouettePenalty =
+    Math.max(0, 0.2 - aspectVariation) * 42 +
+    Math.max(0, uniformlyRounded - Math.ceil(continentCount * 0.4)) * 5 +
+    aspectRatios.reduce(
+      (sum, aspect) => sum + Math.max(0, aspect - 2.8) * 12,
+      0,
+    ) +
+    maximumRadii.reduce(
+      (sum, radius) => sum + Math.max(0, radius - 1.05) * 180,
+      0,
+    );
   const totalArea = areas.reduce((sum, value) => sum + value, 0);
   return Number(
     (
       base +
       coefficientOfVariation(sizes) * 34 +
       coefficientOfVariation(areas) * 46 +
-      appendages * 14 +
-      (geographicSpread / Math.max(1e-12, totalArea)) * 22
+      appendages * 11 +
+      (geographicSpread / Math.max(1e-12, totalArea)) * 13 +
+      silhouettePenalty
     ).toFixed(9),
   );
 }
 
 /**
  * The v2 selector keeps the existing connected shared-boundary growth, but
- * adds explicit count/area/geographic compactness and appendage pressure.
+ * adds count/area balance, bounded appendage pressure, and a continent-level
+ * mix of broad and elongated silhouettes.
  */
 export function chooseNormalizedContinentAssignments(
   adjacency: readonly number[][],
@@ -653,6 +814,7 @@ export function chooseNormalizedContinentAssignments(
   seed: string,
   territoryAreas: readonly number[],
   territoryCenters: readonly Vector3Tuple[],
+  useShapeBias = true,
 ): NormalizedContinentSelection {
   let selected: NormalizedContinentSelection | null = null;
   let nearestFailure: string[] = [];
@@ -666,6 +828,7 @@ export function chooseNormalizedContinentAssignments(
       borderWeights,
       continentCount,
       createSeededRandom(`${seed}|normalized-continents|${attempt}`),
+      useShapeBias ? territoryCenters : undefined,
     );
     const failures = spatialFailureReasons(
       assignments,

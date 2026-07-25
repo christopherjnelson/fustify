@@ -9,6 +9,7 @@ import {
 } from './constants';
 import { analyzePlanetGeometry } from './geometryQuality';
 import { generatePlanet } from './generatePlanet';
+import { SHARED_GEOMETRY_REGULARIZATION } from './regularizeSharedGeometry';
 import { validatePlanet } from './validatePlanet';
 import { worldFingerprint } from '../../multiplayer/worldFingerprint';
 
@@ -143,6 +144,17 @@ describe('normalized world generator v2', () => {
     }
   });
 
+  it('bounds coastline smoothing independently from inland regularization', () => {
+    expect(SHARED_GEOMETRY_REGULARIZATION).toMatchObject({
+      internalBorderMoveFraction: 0.42,
+      internalBorderMaximumRadians: 0.018,
+      coastlineMoveFraction: 0.42,
+      coastlineMaximumRadians: 0.014,
+      coastlineCumulativeMaximumRadians: 0.032,
+      coastlineSmoothingPasses: 3,
+    });
+  });
+
   it('uses interior anchors and improves selected jagged v1 baselines', () => {
     const seeds = [
       'calm-reef-648',
@@ -208,6 +220,64 @@ describe('normalized world generator v2', () => {
       normalizedSides.filter((sideCount) => sideCount >= 5 && sideCount <= 7)
         .length,
     ).toBeGreaterThan(normalizedSides.length * 0.6);
+  }, 15_000);
+
+  it('produces a curated mix of broad and elongated continent silhouettes', () => {
+    const fixtures = [
+      ['atlas-prime', 5],
+      ['normalized-four-regions-348', 4],
+      ['calm-reef-648', 5],
+      ['golden-citadel-587', 5],
+    ] as const;
+    const analyses = fixtures.map(([seed, continentCount]) =>
+      analyzePlanetGeometry(
+        generatePlanet(seed, {
+          ...NORMALIZED_OPTIONS,
+          continentCount,
+        }),
+      ),
+    );
+    for (const analysis of analyses) {
+      const aspects = analysis.world.continentSilhouetteAspectRatioDistribution;
+      expect(Math.min(...aspects)).toBeLessThanOrEqual(1.3);
+      expect(Math.max(...aspects)).toBeGreaterThanOrEqual(1.7);
+      expect(Math.max(...aspects) - Math.min(...aspects)).toBeGreaterThan(0.45);
+      expect(
+        analysis.continents.every(
+          (continent) =>
+            Number.isFinite(continent.coastlineRadialVariation) &&
+            continent.coastlineVertexCount > 0,
+        ),
+      ).toBe(true);
+    }
+    expect(
+      analyses.reduce(
+        (sum, analysis) => sum + analysis.world.continentSilhouetteDiversity,
+        0,
+      ) / analyses.length,
+    ).toBeGreaterThan(0.2);
+  }, 15_000);
+
+  it('uses a deterministic compact fallback for unsafe four-continent terrain', () => {
+    const planet = generatePlanet('normalized-sweep-0003', {
+      ...NORMALIZED_OPTIONS,
+      continentCount: 4,
+    });
+    expect(planet.generationDiagnostics?.selectedCandidateIndex).toBe(0);
+    expect(
+      validatePlanet(planet, {
+        territoryCount: 42,
+        continentCount: 4,
+        playerCount: 4,
+      }).errors,
+    ).toEqual([]);
+    expect(
+      planet.generationDiagnostics?.continentMetrics.every(
+        (continent) =>
+          continent.maximumAngularRadiusDegrees <= 72 ||
+          continent.meanAngularRadiusDegrees <= 38,
+      ),
+    ).toBe(true);
   });
 
   it.each([2, 3, 4, 5])(

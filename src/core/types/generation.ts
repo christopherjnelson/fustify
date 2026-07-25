@@ -24,6 +24,9 @@ export interface ContinentGeometryMetrics {
   territoryCount: number;
   sphericalArea: number;
   compactness: number;
+  silhouetteAspectRatio: number;
+  coastlineRadialVariation: number;
+  coastlineVertexCount: number;
   perimeterToCoastlineRatio: number;
   geographicDiameterDegrees: number;
   maximumAngularRadiusDegrees: number;
@@ -44,6 +47,8 @@ export interface WorldGeometryMetrics {
   tinyEdgeTotal: number;
   acuteCornerTotal: number;
   continentCompactnessDistribution: number[];
+  continentSilhouetteAspectRatioDistribution: number[];
+  continentSilhouetteDiversity: number;
   landOceanBalance: number;
   adjacencyDegreeDistribution: Record<string, number>;
   seaRouteCount: number;

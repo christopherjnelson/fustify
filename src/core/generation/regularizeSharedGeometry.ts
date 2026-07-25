@@ -9,8 +9,12 @@ import type { Vector3Tuple } from '../types/territory.ts';
 
 const INTERNAL_BORDER_MOVE_FRACTION = 0.42;
 const INTERNAL_BORDER_MAXIMUM_RADIANS = 0.018;
-const COASTLINE_MOVE_FRACTION = 0.38;
+// Repeated local passes suppress mesh-scale staircase turns. Capping the total
+// move from the source contour prevents those passes from progressively
+// shrinking low-frequency bends into a uniformly rounded outline.
+const COASTLINE_MOVE_FRACTION = 0.42;
 const COASTLINE_MAXIMUM_RADIANS = 0.014;
+const COASTLINE_CUMULATIVE_MAXIMUM_RADIANS = 0.032;
 const COASTLINE_SMOOTHING_PASSES = 3;
 const MINIMUM_BASE_EDGE_LENGTH_RATIO = 0.55;
 
@@ -200,11 +204,17 @@ export function regularizeSharedSurfaceVertices(
           [0, 0, 0],
         ),
       );
-      vertices[vertexIndex] = boundedSphericalMove(
+      const smoothed = boundedSphericalMove(
         previous[vertexIndex]!,
         target,
         COASTLINE_MOVE_FRACTION,
         COASTLINE_MAXIMUM_RADIANS,
+      );
+      vertices[vertexIndex] = boundedSphericalMove(
+        sphere.vertices[vertexIndex]!,
+        smoothed,
+        1,
+        COASTLINE_CUMULATIVE_MAXIMUM_RADIANS,
       );
     });
   }
@@ -250,6 +260,7 @@ export const SHARED_GEOMETRY_REGULARIZATION = {
   internalBorderMaximumRadians: INTERNAL_BORDER_MAXIMUM_RADIANS,
   coastlineMoveFraction: COASTLINE_MOVE_FRACTION,
   coastlineMaximumRadians: COASTLINE_MAXIMUM_RADIANS,
+  coastlineCumulativeMaximumRadians: COASTLINE_CUMULATIVE_MAXIMUM_RADIANS,
   coastlineSmoothingPasses: COASTLINE_SMOOTHING_PASSES,
   minimumBaseEdgeLengthRatio: MINIMUM_BASE_EDGE_LENGTH_RATIO,
 } as const;

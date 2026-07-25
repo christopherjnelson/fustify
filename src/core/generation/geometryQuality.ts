@@ -548,6 +548,14 @@ export function analyzeGeometryQuality(
     { length: input.continentCount },
     () => 0,
   );
+  const continentBoundaryVertices = Array.from(
+    { length: input.continentCount },
+    () => new Set<number>(),
+  );
+  const continentCoastlineVertices = Array.from(
+    { length: input.continentCount },
+    () => new Set<number>(),
+  );
   input.continentAssignments.forEach((continent, territory) => {
     continentAreas[continent] += areas[territory]!;
   });
@@ -565,14 +573,25 @@ export function analyzeGeometryQuality(
       input.sphere.vertices[edge.first]!,
       input.sphere.vertices[edge.second]!,
     );
-    if (firstContinent !== null) continentPerimeters[firstContinent] += length;
-    if (secondContinent !== null)
+    if (firstContinent !== null) {
+      continentPerimeters[firstContinent] += length;
+      continentBoundaryVertices[firstContinent]!.add(edge.first);
+      continentBoundaryVertices[firstContinent]!.add(edge.second);
+    }
+    if (secondContinent !== null) {
       continentPerimeters[secondContinent] += length;
+      continentBoundaryVertices[secondContinent]!.add(edge.first);
+      continentBoundaryVertices[secondContinent]!.add(edge.second);
+    }
     if (firstContinent !== null && secondContinent === null) {
       continentCoastlines[firstContinent] += length;
+      continentCoastlineVertices[firstContinent]!.add(edge.first);
+      continentCoastlineVertices[firstContinent]!.add(edge.second);
     }
     if (secondContinent !== null && firstContinent === null) {
       continentCoastlines[secondContinent] += length;
+      continentCoastlineVertices[secondContinent]!.add(edge.first);
+      continentCoastlineVertices[secondContinent]!.add(edge.second);
     }
   }
   const meanTerritoryCount = input.territoryCount / input.continentCount;
@@ -628,6 +647,16 @@ export function analyzeGeometryQuality(
             (neighbor) => input.continentAssignments[neighbor] === continent,
           ),
       ).length;
+      const silhouetteVertexIds =
+        continentCoastlineVertices[continent]!.size >= 3
+          ? [...continentCoastlineVertices[continent]!]
+          : [...continentBoundaryVertices[continent]!];
+      const silhouetteVertices = silhouetteVertexIds.map(
+        (vertex) => input.sphere.vertices[vertex]!,
+      );
+      const coastlineRadii = silhouetteVertices.map((vertex) =>
+        angularDistance(continentCenter, vertex),
+      );
       return {
         continentId: `continent-${String(continent + 1).padStart(2, '0')}`,
         territoryCount: nodes.length,
@@ -639,6 +668,13 @@ export function analyzeGeometryQuality(
               continentPerimeters[continent]! ** 2,
           ),
         ),
+        silhouetteAspectRatio: rounded(
+          tangentAspectRatio(continentCenter, silhouetteVertices),
+        ),
+        coastlineRadialVariation: rounded(
+          coefficientOfVariation(coastlineRadii),
+        ),
+        coastlineVertexCount: continentCoastlineVertices[continent]!.size,
         perimeterToCoastlineRatio: rounded(
           continentPerimeters[continent]! /
             Math.max(1e-12, continentCoastlines[continent]!),
@@ -718,6 +754,14 @@ export function analyzeGeometryQuality(
     continentCompactnessDistribution: continents
       .map((metric) => metric.compactness)
       .sort((left, right) => left - right),
+    continentSilhouetteAspectRatioDistribution: continents
+      .map((metric) => metric.silhouetteAspectRatio)
+      .sort((left, right) => left - right),
+    continentSilhouetteDiversity: rounded(
+      coefficientOfVariation(
+        continents.map((metric) => metric.silhouetteAspectRatio),
+      ),
+    ),
     landOceanBalance: rounded(input.landCoverage),
     adjacencyDegreeDistribution: degreeDistribution,
     seaRouteCount: seaRouteLengths.length,
@@ -754,6 +798,7 @@ export function scoreGeometryCandidate(
     (sum, metric) =>
       sum +
       Math.max(0, 0.28 - metric.compactness) * 90 +
+      Math.max(0, metric.silhouetteAspectRatio - 2.6) * 50 +
       Math.max(0, metric.geographicDiameterDegrees - 100) * 3.5 +
       (metric.maximumAngularRadiusDegrees > 68 &&
       metric.meanAngularRadiusDegrees > 35
