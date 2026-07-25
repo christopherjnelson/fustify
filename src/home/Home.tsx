@@ -13,7 +13,7 @@ const singlePlayerFeatures = [
 ];
 
 const multiplayerFeatures = [
-  'Private room codes',
+  'Public games and private codes',
   'Two to five players',
   'Realtime turns and Activity',
   'Refresh and reconnect support',
@@ -24,7 +24,7 @@ const currentFeatures = [
   'Local and online play',
   'Deterministic opponents',
   'Save and resume',
-  'Private multiplayer rooms',
+  'Public and private multiplayer rooms',
   'Realtime Activity and reactions',
 ];
 
@@ -96,10 +96,10 @@ function GameModeCards({ onNavigate }: { onNavigate: Navigate }) {
         variant="local"
       />
       <ModeCard
-        eyebrow="Private online rooms"
+        eyebrow="Online rooms"
         title="Multiplayer"
-        description="Create a private room and play an authoritative online match with up to five registered players."
-        detail="Invite your group with a room code and keep every turn in sync."
+        description="Browse public games or create an authoritative online match with up to five registered players."
+        detail="Join openly or share a private room code while every turn stays in sync."
         features={multiplayerFeatures}
         href="/multiplayer"
         action="Play Multiplayer"

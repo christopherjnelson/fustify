@@ -1,6 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import {
+  createPrivateMultiplayerGame,
+  submitMultiplayerRoomCode,
+} from './helpers';
 
 type AuthFixture =
   | 'signed-out'
@@ -614,11 +618,7 @@ test('shared profile dialog stays viewport-bound and restores focus on protected
 
   for (const [route, captureName, heading] of [
     ['/local', 'account-edit-profile-local', 'Choose your world'],
-    [
-      '/multiplayer',
-      'account-edit-profile-multiplayer',
-      'Private multiplayer rooms',
-    ],
+    ['/multiplayer', 'account-edit-profile-multiplayer', 'Multiplayer'],
   ] as const) {
     await page.goto(route);
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
@@ -713,25 +713,16 @@ test('registered home-to-multiplayer navigation keeps one ready account without 
   await page.getByRole('link', { name: 'Play Multiplayer' }).click();
   await expect(page).toHaveURL(/\/multiplayer$/);
   await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+    page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
   await expect(page.locator('.account-identity strong')).toHaveText(
     'Player One',
   );
-  await expect(page.getByText('Playing as', { exact: true })).toBeVisible();
-  await expect(page.locator('.multiplayer-playing-as strong')).toHaveText(
-    'Player One',
-  );
-  await expect(page.locator('.multiplayer-playing-as > div > span')).toHaveText(
-    'PO',
-  );
+  await expect(page.locator('.multiplayer-playing-as')).toHaveCount(0);
   await expect(page.getByLabel('Room display name')).toHaveCount(0);
   await expect(
     page.getByRole('textbox', { name: /name|alias|nickname/iu }),
   ).toHaveCount(0);
-  await expect(
-    page.getByRole('button', { name: 'Edit profile' }),
-  ).toBeVisible();
   await capture(page, testInfo.project.name, 'account-multiplayer-registered');
 
   const headings = await page.evaluate(
@@ -766,7 +757,7 @@ test('slow verification renders only checking and does not import protected code
 
   await releaseVerification(page);
   await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+    page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Account required' }),
@@ -779,9 +770,9 @@ test('missing registered profile is recovered before room controls load', async 
   await installAuthFixture(page, 'missing-profile-recovered');
   await page.goto('/multiplayer');
   await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+    page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
-  await expect(page.locator('.multiplayer-playing-as strong')).toHaveText(
+  await expect(page.locator('.account-identity strong')).toHaveText(
     'Player One',
   );
   expect(await called(page, 'ensure_own_profile')).toHaveLength(1);
@@ -800,9 +791,9 @@ test('unrecoverable registered profile fails closed with a safe profile error', 
       'Your player profile could not be loaded. Please try again.',
     ),
   ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
-  ).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Multiplayer' })).toHaveCount(
+    0,
+  );
   expect(await called(page, 'create_room')).toHaveLength(0);
   expect(await called(page, 'join_room')).toHaveLength(0);
 });
@@ -812,17 +803,22 @@ test('profile identity updates before create and room RPC payload has no alias s
 }) => {
   await installAuthFixture(page, 'registered');
   await page.goto('/multiplayer');
-  await page.getByRole('button', { name: 'Edit profile' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Multiplayer' }),
+  ).toBeVisible();
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event('fustify:open-profile-editor')),
+  );
   const edit = page.getByRole('dialog', { name: 'Edit profile' });
   await edit.getByLabel('Display name').fill('Renamed Player');
   await edit.getByRole('button', { name: 'Save profile' }).click();
   await expect(edit.getByText('Profile updated.')).toBeVisible();
   await edit.getByRole('button', { name: 'Close account dialog' }).click();
-  await expect(page.locator('.multiplayer-playing-as strong')).toHaveText(
+  await expect(page.locator('.account-identity strong')).toHaveText(
     'Renamed Player',
   );
 
-  await page.getByRole('button', { name: 'Create private room' }).click();
+  await createPrivateMultiplayerGame(page);
   await expect
     .poll(async () => (await called(page, 'create_room')).length)
     .toBe(1);
@@ -837,7 +833,7 @@ test('join uses only the room code and sends no editable alias state', async ({
   await installAuthFixture(page, 'registered');
   await page.goto('/multiplayer');
   await page.getByLabel('Room code').fill('ABCD-1234');
-  await page.getByRole('button', { name: 'Join room' }).click();
+  await submitMultiplayerRoomCode(page);
   await expect
     .poll(async () => (await called(page, 'join_room')).length)
     .toBe(1);
@@ -863,9 +859,9 @@ test('direct signed-out navigation remains account-required with zero multiplaye
   await expect(
     page.getByRole('heading', { name: 'Account required' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
-  ).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Multiplayer' })).toHaveCount(
+    0,
+  );
   expect(await protectedResources(page)).toEqual([]);
   expect(await called(page, 'create_room')).toHaveLength(0);
   expect(await called(page, 'join_room')).toHaveLength(0);
@@ -898,17 +894,17 @@ test('session invalidation unmounts multiplayer and blocks room RPCs', async ({
   await installAuthFixture(page, 'registered');
   await page.goto('/multiplayer');
   await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+    page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
 
   await invalidateFixtureSession(page, false);
-  await page.getByRole('button', { name: 'Create private room' }).click();
+  await createPrivateMultiplayerGame(page);
   await expect(
     page.getByRole('heading', { name: 'Account required' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
-  ).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Multiplayer' })).toHaveCount(
+    0,
+  );
   expect(await called(page, 'create_room')).toHaveLength(0);
   expect(await called(page, 'join_room')).toHaveLength(0);
 
@@ -925,16 +921,16 @@ test('a signed-out Auth event immediately invalidates every protected route cons
   await installAuthFixture(page, 'registered');
   await page.goto('/multiplayer');
   await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+    page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
 
   await invalidateFixtureSession(page, true);
   await expect(
     page.getByRole('heading', { name: 'Account required' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
-  ).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Multiplayer' })).toHaveCount(
+    0,
+  );
   expect(await called(page, 'create_room')).toHaveLength(0);
   expect(await called(page, 'join_room')).toHaveLength(0);
   expect(await called(page, 'channel')).toHaveLength(0);
@@ -946,7 +942,7 @@ test('account_required room rejection revalidates and fails closed without retry
   await installAuthFixture(page, 'registered');
   await page.goto('/multiplayer');
   await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+    page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
   await page.evaluate(() => {
     (
@@ -956,13 +952,13 @@ test('account_required room rejection revalidates and fails closed without retry
     ).__FUSTIFY_AUTH_TEST_STATE__.rejectRoomActions = true;
   });
 
-  await page.getByRole('button', { name: 'Create private room' }).click();
+  await createPrivateMultiplayerGame(page);
   await expect(
     page.getByRole('heading', { name: 'Account session invalidated' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
-  ).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Multiplayer' })).toHaveCount(
+    0,
+  );
   expect(await called(page, 'create_room')).toHaveLength(1);
   expect(await called(page, 'join_room')).toHaveLength(0);
   expect(await called(page, 'channel')).toHaveLength(0);
@@ -1073,7 +1069,7 @@ test('stale upgraded sessions refresh once before loading protected gameplay', a
     ).__FUSTIFY_AUTH_TEST_STATE__.releaseRefresh?.();
   });
   await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+    page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
   expect(await called(page, 'refreshSession')).toHaveLength(1);
   await expect(
@@ -1288,12 +1284,12 @@ test('Discord signed-out callback becomes registered-ready before protected game
 
   await expect(page).toHaveURL(/\/multiplayer$/);
   await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+    page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Account required' }),
   ).toHaveCount(0);
-  await expect(page.locator('.multiplayer-playing-as strong')).toHaveText(
+  await expect(page.locator('.account-identity strong')).toHaveText(
     'Player One',
   );
   expect(await called(page, 'exchangeCodeForSession')).toHaveLength(1);

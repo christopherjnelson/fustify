@@ -20,7 +20,7 @@ export function protectedRouteContext(pathname: string): RouteContext {
     return {
       backHref: '/multiplayer',
       backLabel: 'Multiplayer',
-      eyebrow: 'Private room',
+      eyebrow: 'Game room',
       title: 'Lobby',
       immersive: false,
     };

@@ -24,6 +24,10 @@ Migration order:
 8. `20260724032701_add_match_event_reactions.sql`
 9. `20260724062455_create_profile_foundation.sql`
 10. `20260724081653_add_email_password_accounts.sql`
+11. `20260724171927_account_required_gameplay.sql`
+12. `20260724211217_canonical_profile_multiplayer_names.sql`
+13. `20260725083521_default_rooms_to_normalized_generator.sql`
+14. `20260725083532_add_public_multiplayer_browser.sql`
 
 The authority migration extends `matches`, creates append-only
 `match_commands`, adds member-scoped read RLS, removes browser execution of the
@@ -59,10 +63,11 @@ The frontend capability model mirrors these restrictions for profile editing,
 reactions, and future chat presentation. Future chat writes must independently
 enforce registered-user status on the server.
 
-The hosted history contains all ten migrations in this order. Edge Function
-`multiplayer-game` is active at version 3 with `verify_jwt=false`. The Activity
-reaction, profile-foundation, and account work do not change
-authority-imported source and therefore do not redeploy this function.
+The source-controlled and hosted histories contain all fourteen migrations in
+this order. Edge Function `multiplayer-game` is active at version 3 with
+`verify_jwt=false`. The Activity reaction, profile-foundation, account, and
+public-browser work do not change authority-imported source and therefore do
+not redeploy this function.
 
 ## Secrets and browser configuration
 
@@ -146,6 +151,20 @@ caller-supplied user ID. Profile customization uses the same private
 registered-account check. No profile value or user-editable metadata grants
 either capability.
 
+Public discovery and public joining are narrow registered-account functions,
+not broad table reads. `list_public_rooms` returns only safe card data for
+public waiting rooms and omits room codes and account identifiers.
+`join_public_room` locks the target room and reuses the membership/capacity
+rules before returning the joined room. Both functions pin `search_path`, take
+the caller only from `auth.uid()`, and are executable only by `authenticated`.
+
+The public `room-thumbnails` bucket accepts only WebP objects up to 1 MiB.
+Object writes are restricted to authenticated hosts, public rooms, and the
+exact `{room-id}/world.webp` path. Upsert is covered by host-scoped
+`SELECT`/`INSERT`/`UPDATE` policies; delete uses the same ownership predicate.
+The image contains only deterministic world geometry, and the room row stores
+only its object path and monotonically increasing cache version.
+
 The Edge Function derives `actor_user_id` from the verified JWT, never request
 JSON. Both TypeScript and SQL validate current seat membership; SQL locks the
 canonical row and independently checks actor-to-player mapping and revision.
@@ -169,6 +188,12 @@ permit weakening grants or policies.
   three-digit suffix; only exact old per-user fallbacks are backfilled.
 - Anonymous and malformed/missing-claim callers receive `account_required` for
   profile and reaction mutations; registered callers retain normal behavior.
+- Public listing excludes private and non-waiting rooms and exposes no join
+  codes, user IDs, emails, or administrative fields.
+- Public joining rechecks visibility, waiting state, membership, and capacity
+  under a room lock.
+- Only a public room host can write its exact stable thumbnail object path or
+  publish its thumbnail metadata.
 - Member reads and non-member zero-row behavior pass.
 - Browser writes and authority-function execution fail.
 - Reaction writes validate canonical event ownership, participant identity, and

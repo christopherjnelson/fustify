@@ -6,6 +6,10 @@ import {
   type Locator,
   type Page,
 } from '@playwright/test';
+import {
+  createPrivateMultiplayerGame,
+  submitMultiplayerRoomCode,
+} from './helpers';
 
 const identities = {
   host: 'test-results/multiplayer-layout-host.json',
@@ -31,7 +35,7 @@ async function openEntry(
   const page = await context.newPage();
   await page.goto('/multiplayer');
   const entry = page.getByRole('heading', {
-    name: 'Private multiplayer rooms',
+    name: 'Multiplayer',
   });
   const authError = page.getByRole('heading', {
     name: 'Could not restore multiplayer session',
@@ -109,7 +113,7 @@ test('representative five-seat lobby stays compact and synchronized', async ({
   let roomId = '';
 
   try {
-    await host.getByRole('button', { name: 'Create private room' }).click();
+    await createPrivateMultiplayerGame(host);
     await expect(
       host.getByRole('heading', { name: 'Multiplayer lobby' }),
     ).toBeVisible();
@@ -133,13 +137,13 @@ test('representative five-seat lobby stays compact and synchronized', async ({
     await expect(host.getByText('Room code copied.')).toBeVisible();
 
     await player.getByLabel('Room code').fill(code);
-    await player.getByRole('button', { name: 'Join room' }).click();
+    await submitMultiplayerRoomCode(player);
     await player
       .getByTestId('seat-1')
       .getByRole('button', { name: 'Claim Seat 2' })
       .click();
     await observer.getByLabel('Room code').fill(code);
-    await observer.getByRole('button', { name: 'Join room' }).click();
+    await submitMultiplayerRoomCode(observer);
 
     await expect(host.getByTestId('seat-0')).toContainText('Layout Host');
     await expect(host.getByTestId('seat-0')).toContainText('Crimson');

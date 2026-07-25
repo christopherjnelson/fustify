@@ -1,10 +1,14 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import {
+  createPrivateMultiplayerGame,
+  submitMultiplayerRoomCode,
+} from './helpers';
 
 async function openEntry(context: BrowserContext, displayName: string) {
   const page = await context.newPage();
   await page.goto('/multiplayer');
   await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+    page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
   await page.getByLabel('Room display name').fill(displayName);
   return page;
@@ -30,7 +34,7 @@ test('sparse claimed seats keep their colors through refresh and match start', a
   let roomId = '';
 
   try {
-    await host.getByRole('button', { name: 'Create private room' }).click();
+    await createPrivateMultiplayerGame(host);
     roomId = host.url().split('/').at(-1)!;
     await host.getByLabel('Territories').fill('12');
     await host.getByLabel('Continents').fill('2');
@@ -51,7 +55,7 @@ test('sparse claimed seats keep their colors through refresh and match start', a
 
     const code = await host.getByTestId('room-code').innerText();
     await guest.getByLabel('Room code').fill(code);
-    await guest.getByRole('button', { name: 'Join room' }).click();
+    await submitMultiplayerRoomCode(guest);
     await guest
       .getByTestId('seat-1')
       .getByRole('button', { name: 'Claim Seat 2' })

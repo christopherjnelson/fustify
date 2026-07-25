@@ -1,24 +1,43 @@
 # Authoritative multiplayer beta
 
-Fustify multiplayer is a private, anonymous, human-only mode for 2–5 players.
-It reuses the local deterministic generator, setup code, `gameReducer`, globe,
-minimap, territory navigator, accessible phase controls, and victory rules.
-Multiplayer is considered playable only after the remote migration, deployed
-Edge Function, security harness, and complete two-browser winner test all pass.
+Fustify multiplayer is a registered-account, human-only mode for 2–5 players.
+Players can advertise public waiting rooms, create unlisted private rooms, or
+join either kind through an existing room code. It reuses the local
+deterministic generator, setup code, `gameReducer`, globe, minimap, territory
+navigator, accessible phase controls, and victory rules. Multiplayer is
+considered playable only after the remote migration, deployed Edge Function,
+security harness, and complete two-browser winner test all pass.
 
 ## Routes and lifecycle
 
-- `/multiplayer` restores or creates an anonymous Supabase Auth session.
-- `/multiplayer/room/:roomId` creates/joins a private room and claims one human
-  seat per member. Start is disabled until two seats are claimed, while the
-  database independently enforces the same minimum against concurrent changes.
+- `/multiplayer` requires a registered Supabase account and renders the public
+  waiting-room browser, public/private creation dialog, and room-code join form.
+- `/multiplayer/room/:roomId` is the existing pre-game room lobby. It allows one
+  human seat per member. Start is disabled until two seats are claimed, while
+  the database independently enforces the same minimum against concurrent
+  changes.
 - `/multiplayer/match/:matchId` restores the persisted canonical world and
   mutable match snapshot. It never invents ownership or combat results locally.
 
 The host selects 12–48 territories, 2–5 continents, 2–5 seats, and a seed.
 Multiplayer accepts random assignment only; player draft remains unchanged in
 local play. There are no bots, bot takeover, mid-match joins, spectators,
-matchmaking, public rooms, chat, timers, kicking, or host migration.
+matchmaking, started-game browsing, chat, timers, kicking, or host migration.
+
+Public discovery uses the registered-only `list_public_rooms` function. It
+returns safe presentation fields for public rooms still in `waiting` status and
+never returns a join code, user ID, email, private room, or started/closed room.
+`join_public_room` locks the room row and rechecks visibility, status,
+membership, and authoritative capacity before returning the code needed by the
+existing route. The browser polls every 12 seconds while visible and refetches
+on focus; private room rows are not exposed through Realtime.
+
+Public cards render stored 640×360 WebP previews from the public
+`room-thumbnails` bucket. The host alone can upsert the exact
+`{room-id}/world.webp` path. Room creation and world-setting persistence do not
+depend on thumbnail success. A setting change invalidates published thumbnail
+metadata transactionally, and successful publication increments the stable
+cache version used in the image URL.
 
 ## Authority boundary
 
@@ -109,6 +128,8 @@ Focused commands are:
 
 ```bash
 pnpm test
+pnpm test:e2e
+pnpm test:visual
 pnpm test:multiplayer:authority
 pnpm test:multiplayer:concurrency
 pnpm test:e2e:multiplayer
@@ -128,8 +149,9 @@ restores an active match and checks readability/clipping.
 ## Production smoke test (`dev.fustify.com`)
 
 1. Open two separate devices or isolated browser profiles.
-2. Create a 12-territory, 2-continent, 2-seat random room; join and claim both
-   seats; verify Start was unavailable before the second claim.
+2. Create a public 12-territory, 2-continent, 2-seat random room; verify it is
+   advertised without its code, join from its card, and claim both seats.
+   Verify Start was unavailable before the second claim.
 3. Start and confirm both browsers show revision 0 and the same fingerprint.
 4. Complete at least one turn on each device, including combat and capture move.
 5. Refresh both devices during active phases and confirm phase, armies,

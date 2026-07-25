@@ -69,9 +69,31 @@ export type MultiplayerRoomSettings = z.infer<
   typeof multiplayerRoomSettingsSchema
 >;
 
+export const roomNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'Enter a game name.')
+  .max(60, 'Game names can be up to 60 characters.')
+  .refine(
+    (value) =>
+      !Array.from(value).some((character) => {
+        const codePoint = character.codePointAt(0);
+        return (
+          codePoint !== undefined &&
+          (codePoint <= 31 || (codePoint >= 127 && codePoint <= 159))
+        );
+      }),
+    'Game names cannot contain control characters.',
+  );
+
+export const roomVisibilitySchema = z.enum(['public', 'private']);
+export type RoomVisibility = z.infer<typeof roomVisibilitySchema>;
+
 export interface CreateRoomOptions {
   settings?: MultiplayerRoomSettings;
   generateSeed?: () => string;
+  name?: string;
+  visibility?: RoomVisibility;
 }
 
 const DEFAULT_ROOM_SETTINGS = {
@@ -80,6 +102,27 @@ const DEFAULT_ROOM_SETTINGS = {
   assignmentMode: 'random',
   maxSeats: 5,
 } as const;
+
+const publicRoomPlayerSchema = z.object({
+  displayName: z.string().min(1).max(40),
+  avatarUrl: z.string().url().nullable(),
+});
+
+const publicRoomSchema = z.object({
+  room_id: z.string().uuid(),
+  room_name: roomNameSchema,
+  host_display_name: z.string().min(1).max(40),
+  host_avatar_url: z.string().url().nullable(),
+  current_players: z.number().int().min(0).max(5),
+  maximum_players: z.number().int().min(2).max(5),
+  room_state: z.enum(['waiting', 'full']),
+  thumbnail_path: z.string().nullable(),
+  thumbnail_version: z.number().int().nonnegative(),
+  players: z.array(publicRoomPlayerSchema).max(5),
+  created_at: z.string(),
+});
+
+export type PublicRoom = z.infer<typeof publicRoomSchema>;
 
 const pendingBootstrapByClient = new WeakMap<
   SupabaseClient<Database>,
@@ -287,10 +330,31 @@ export async function createRoom(
     continent_count: settings.continentCount,
     assignment_mode: settings.assignmentMode,
     max_seats: settings.maxSeats,
+    game_name: roomNameSchema.parse(options.name ?? 'New Game'),
+    room_visibility: roomVisibilitySchema.parse(options.visibility ?? 'public'),
   };
   const { data, error } = await client.rpc('create_room', args);
   if (error) throw multiplayerError(error);
   if (!data) throw multiplayerError('room_creation_failed');
+  return data;
+}
+
+export async function fetchPublicRooms(
+  client: SupabaseClient<Database>,
+): Promise<PublicRoom[]> {
+  const { data, error } = await client.rpc('list_public_rooms');
+  if (error) throw multiplayerError(error);
+  return z.array(publicRoomSchema).parse(data ?? []);
+}
+
+export async function joinPublicRoom(
+  client: SupabaseClient<Database>,
+  roomId: string,
+): Promise<Room> {
+  const { data, error } = await client.rpc('join_public_room', {
+    p_room_id: roomId,
+  });
+  if (error) throw multiplayerError(error);
   return data;
 }
 
@@ -330,8 +394,8 @@ export async function releaseSeat(
 export async function updateRoomSettings(
   client: SupabaseClient<Database>,
   room: Room,
-): Promise<void> {
-  const { error } = await client.rpc('update_room_settings', {
+): Promise<Room> {
+  const { data, error } = await client.rpc('update_room_settings', {
     room_id: room.id,
     seed: room.seed,
     territory_count: room.territory_count,
@@ -340,6 +404,7 @@ export async function updateRoomSettings(
     max_seats: room.max_seats,
   });
   if (error) throw multiplayerError(error);
+  return data;
 }
 
 async function functionError(error: unknown): Promise<Error> {

@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { submitMultiplayerRoomCode } from './helpers';
 
 const authStateA = 'test-results/multiplayer-waiting-player-a.json';
 const authStateB = 'test-results/multiplayer-waiting-player-b.json';
@@ -12,7 +13,7 @@ async function openPlayer(
   const page = await context.newPage();
   await page.goto('/multiplayer');
   await expect(
-    page.getByRole('heading', { name: 'Private multiplayer rooms' }),
+    page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
   if (!existsSync(authStatePath)) {
     await context.storageState({ path: authStatePath });
@@ -115,7 +116,7 @@ test('two claimed browsers swap interactive and waiting HUDs after one handoff',
 
     const code = await pageA.getByTestId('room-code').innerText();
     await pageB.getByLabel('Room code').fill(code);
-    await pageB.getByRole('button', { name: 'Join room' }).click();
+    await submitMultiplayerRoomCode(pageB);
     await pageB
       .getByTestId('seat-1')
       .getByRole('button', { name: 'Claim Seat 2' })

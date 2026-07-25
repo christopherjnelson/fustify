@@ -1,7 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { Database } from './database.types';
-import { createRoom, joinRoom, multiplayerError } from './multiplayerApi';
+import {
+  createRoom,
+  fetchPublicRooms,
+  joinPublicRoom,
+  joinRoom,
+  multiplayerError,
+  roomNameSchema,
+} from './multiplayerApi';
 
 describe('multiplayer room creation', () => {
   it('persists one freshly generated readable seed during room creation', async () => {
@@ -19,6 +26,8 @@ describe('multiplayer room creation', () => {
       continent_count: 5,
       assignment_mode: 'random',
       max_seats: 5,
+      game_name: 'New Game',
+      room_visibility: 'public',
     });
   });
 
@@ -36,6 +45,8 @@ describe('multiplayer room creation', () => {
           assignmentMode: 'random',
           maxSeats: 4,
         },
+        name: '  Night Orbit  ',
+        visibility: 'private',
       }),
     ).resolves.toBe(room);
     expect(rpc).toHaveBeenCalledWith('create_room', {
@@ -45,7 +56,15 @@ describe('multiplayer room creation', () => {
       continent_count: 5,
       assignment_mode: 'random',
       max_seats: 4,
+      game_name: 'Night Orbit',
+      room_visibility: 'private',
     });
+  });
+
+  it('normalizes names and rejects empty or oversized room names', () => {
+    expect(roomNameSchema.parse('  Atlas Prime  ')).toBe('Atlas Prime');
+    expect(() => roomNameSchema.parse('   ')).toThrow();
+    expect(() => roomNameSchema.parse('x'.repeat(61))).toThrow();
   });
 
   it('surfaces account_required without retrying the room RPC', async () => {
@@ -113,6 +132,50 @@ describe('multiplayer room joining', () => {
       display_name: '',
     });
   });
+
+  it('joins an advertised room through the public-room RPC', async () => {
+    const room = { id: 'joined-public-room' };
+    const rpc = vi.fn(async () => ({ data: room, error: null }));
+    const client = { rpc } as unknown as SupabaseClient<Database>;
+
+    await expect(
+      joinPublicRoom(client, '10000000-0000-4000-8000-000000000001'),
+    ).resolves.toBe(room);
+    expect(rpc).toHaveBeenCalledWith('join_public_room', {
+      p_room_id: '10000000-0000-4000-8000-000000000001',
+    });
+  });
+});
+
+describe('public multiplayer discovery', () => {
+  it('parses only the safe public-room card payload', async () => {
+    const data = [
+      {
+        room_id: '10000000-0000-4000-8000-000000000001',
+        room_name: 'Atlas Prime',
+        host_display_name: 'NovaCommander',
+        host_avatar_url: null,
+        current_players: 2,
+        maximum_players: 5,
+        room_state: 'waiting',
+        thumbnail_path: '10000000-0000-4000-8000-000000000001/world.webp',
+        thumbnail_version: 3,
+        players: [
+          { displayName: 'NovaCommander', avatarUrl: null },
+          { displayName: 'MistyRaven-214', avatarUrl: null },
+        ],
+        created_at: '2026-07-25T12:00:00.000Z',
+      },
+    ];
+    const rpc = vi.fn(async () => ({ data, error: null }));
+    const client = { rpc } as unknown as SupabaseClient<Database>;
+
+    await expect(fetchPublicRooms(client)).resolves.toEqual(data);
+    expect(rpc).toHaveBeenCalledWith('list_public_rooms');
+    expect(JSON.stringify(await fetchPublicRooms(client))).not.toContain(
+      'join_code',
+    );
+  });
 });
 
 describe('multiplayer errors', () => {
@@ -142,6 +205,9 @@ describe('multiplayer errors', () => {
       multiplayerError(new Error('invalid_profile_display_name')).message,
     ).toBe(
       'Your profile display name is invalid. Edit your profile and try again.',
+    );
+    expect(multiplayerError(new Error('public_room_unavailable')).message).toBe(
+      'That public game is no longer available. Choose another game.',
     );
   });
 });

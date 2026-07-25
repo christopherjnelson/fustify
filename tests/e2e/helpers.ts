@@ -81,6 +81,22 @@ export function reviewPath(testInfo: TestInfo, scenario: string) {
   return `test-results/ui-review/${testInfo.project.name}/${scenario}.png`;
 }
 
+export async function createPrivateMultiplayerGame(page: Page) {
+  await page
+    .getByRole('button', { name: 'Create Game', exact: true })
+    .first()
+    .click();
+  const dialog = page.getByRole('dialog', { name: 'Create Game' });
+  await dialog.getByLabel('Private').check();
+  await dialog
+    .getByRole('button', { name: 'Create Game', exact: true })
+    .click();
+}
+
+export async function submitMultiplayerRoomCode(page: Page) {
+  await page.getByLabel('Room code').press('Enter');
+}
+
 export async function stateSnapshot(page: Page) {
   return page.evaluate(() => window.__WORLDSEED_VISUAL__!.getState());
 }

@@ -24,8 +24,11 @@ export const MULTIPLAYER_ERRORS: Record<string, string> = {
   invalid_event_reaction: 'That Activity reaction is not available.',
   invalid_profile_display_name:
     'Your profile display name is invalid. Edit your profile and try again.',
+  invalid_room_name: 'Use a game name between 1 and 60 characters.',
   idempotency_conflict:
     'That request key was already used for a different action.',
+  invalid_thumbnail_path: 'That world preview path is not available.',
+  invalid_visibility: 'Choose Public or Private for this game.',
   legacy_match_incomplete:
     'This earlier preview cannot become a playable match. Create a new room.',
   match_snapshot_immutable: 'The match setup snapshot cannot be changed.',
@@ -40,6 +43,9 @@ export const MULTIPLAYER_ERRORS: Record<string, string> = {
   not_your_turn: 'It is another player’s turn.',
   profile_unavailable:
     'Your player profile could not be loaded. Please try again.',
+  private_room_thumbnail: 'Private games do not publish world previews.',
+  public_room_unavailable:
+    'That public game is no longer available. Choose another game.',
   revision_conflict: 'The match changed before that action was accepted.',
   room_access_denied: 'This private room is unavailable to this player.',
   room_active: 'This room has already started.',

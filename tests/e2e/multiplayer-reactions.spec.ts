@@ -1,5 +1,9 @@
 import { existsSync } from 'node:fs';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import {
+  createPrivateMultiplayerGame,
+  submitMultiplayerRoomCode,
+} from './helpers';
 
 const authStateA = 'test-results/multiplayer-reaction-player-a.json';
 const authStateB = 'test-results/multiplayer-reaction-player-b.json';
@@ -12,7 +16,7 @@ async function newPlayer(
   const page = await context.newPage();
   await page.goto('/multiplayer');
   const entry = page.getByRole('heading', {
-    name: 'Private multiplayer rooms',
+    name: 'Multiplayer',
   });
   const authError = page.getByRole('heading', {
     name: 'Could not restore multiplayer session',
@@ -135,7 +139,7 @@ test('two participants synchronize persistent Activity reactions without changin
   let roomId = '';
 
   try {
-    await pageA.getByRole('button', { name: 'Create private room' }).click();
+    await createPrivateMultiplayerGame(pageA);
     await expect(
       pageA.getByRole('heading', { name: 'Multiplayer lobby' }),
     ).toBeVisible();
@@ -152,7 +156,7 @@ test('two participants synchronize persistent Activity reactions without changin
 
     const code = await pageA.getByTestId('room-code').innerText();
     await pageB.getByLabel('Room code').fill(code);
-    await pageB.getByRole('button', { name: 'Join room' }).click();
+    await submitMultiplayerRoomCode(pageB);
     await pageB
       .getByTestId('seat-1')
       .getByRole('button', { name: 'Claim Seat 2' })

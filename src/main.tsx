@@ -101,6 +101,22 @@ async function bootstrap() {
 
   if (
     import.meta.env.DEV &&
+    isMultiplayer &&
+    !isMultiplayerMatch &&
+    new URLSearchParams(window.location.search).get('visual-review') === '1'
+  ) {
+    const { MultiplayerBrowserVisualApp } =
+      await import('./testSupport/MultiplayerBrowserVisualApp');
+    root.render(
+      <StrictMode>
+        <MultiplayerBrowserVisualApp />
+      </StrictMode>,
+    );
+    return;
+  }
+
+  if (
+    import.meta.env.DEV &&
     !isHome &&
     new URLSearchParams(window.location.search).get('visual-review') === '1'
   ) {

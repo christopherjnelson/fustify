@@ -30,7 +30,7 @@ test('local and admin routes remain isolated from multiplayer', async ({
   await page.goto('/multiplayer');
   await expect(
     page.getByRole('heading', {
-      name: /^(Private multiplayer rooms|Multiplayer configuration unavailable)$/,
+      name: /^(Multiplayer|Multiplayer configuration unavailable)$/,
     }),
   ).toBeVisible();
 
@@ -38,5 +38,7 @@ test('local and admin routes remain isolated from multiplayer', async ({
   await expect(
     page.getByRole('heading', { name: 'Verification Dashboard' }),
   ).toBeVisible();
-  await expect(page.getByText('Private multiplayer rooms')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Multiplayer' })).toHaveCount(
+    0,
+  );
 });

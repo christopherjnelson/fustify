@@ -7,48 +7,8 @@ export type Json =
   | Json[];
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: '14.5';
-  };
   public: {
     Tables: {
-      match_event_reactions: {
-        Row: {
-          created_at: string;
-          event_id: string;
-          match_id: string;
-          reaction: string;
-          updated_at: string;
-          user_id: string;
-        };
-        Insert: {
-          created_at?: string;
-          event_id: string;
-          match_id: string;
-          reaction: string;
-          updated_at?: string;
-          user_id: string;
-        };
-        Update: {
-          created_at?: string;
-          event_id?: string;
-          match_id?: string;
-          reaction?: string;
-          updated_at?: string;
-          user_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: 'match_event_reactions_match_id_fkey';
-            columns: ['match_id'];
-            isOneToOne: false;
-            referencedRelation: 'matches';
-            referencedColumns: ['id'];
-          },
-        ];
-      };
       match_commands: {
         Row: {
           actor_seat_index: number;
@@ -98,6 +58,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'match_commands_match_id_fkey';
+            columns: ['match_id'];
+            isOneToOne: false;
+            referencedRelation: 'matches';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      match_event_reactions: {
+        Row: {
+          created_at: string;
+          event_id: string;
+          match_id: string;
+          reaction: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          event_id: string;
+          match_id: string;
+          reaction: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          event_id?: string;
+          match_id?: string;
+          reaction?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'match_event_reactions_match_id_fkey';
             columns: ['match_id'];
             isOneToOne: false;
             referencedRelation: 'matches';
@@ -278,11 +273,15 @@ export type Database = {
           id: string;
           join_code: string;
           max_seats: number;
+          name: string;
           revision: number;
           seed: string;
           status: string;
           territory_count: number;
+          thumbnail_path: string | null;
+          thumbnail_version: number;
           updated_at: string;
+          visibility: string;
         };
         Insert: {
           assignment_mode?: string;
@@ -293,11 +292,15 @@ export type Database = {
           id?: string;
           join_code: string;
           max_seats?: number;
+          name?: string;
           revision?: number;
           seed?: string;
           status?: string;
           territory_count?: number;
+          thumbnail_path?: string | null;
+          thumbnail_version?: number;
           updated_at?: string;
+          visibility?: string;
         };
         Update: {
           assignment_mode?: string;
@@ -308,11 +311,15 @@ export type Database = {
           id?: string;
           join_code?: string;
           max_seats?: number;
+          name?: string;
           revision?: number;
           seed?: string;
           status?: string;
           territory_count?: number;
+          thumbnail_path?: string | null;
+          thumbnail_version?: number;
           updated_at?: string;
+          visibility?: string;
         };
         Relationships: [];
       };
@@ -408,11 +415,15 @@ export type Database = {
           id: string;
           join_code: string;
           max_seats: number;
+          name: string;
           revision: number;
           seed: string;
           status: string;
           territory_count: number;
+          thumbnail_path: string | null;
+          thumbnail_version: number;
           updated_at: string;
+          visibility: string;
         };
         SetofOptions: {
           from: '*';
@@ -426,7 +437,9 @@ export type Database = {
           assignment_mode?: string;
           continent_count?: number;
           display_name: string;
+          game_name?: string;
           max_seats?: number;
+          room_visibility?: string;
           seed?: string;
           territory_count?: number;
         };
@@ -439,11 +452,15 @@ export type Database = {
           id: string;
           join_code: string;
           max_seats: number;
+          name: string;
           revision: number;
           seed: string;
           status: string;
           territory_count: number;
+          thumbnail_path: string | null;
+          thumbnail_version: number;
           updated_at: string;
+          visibility: string;
         };
         SetofOptions: {
           from: '*';
@@ -453,7 +470,7 @@ export type Database = {
         };
       };
       ensure_own_profile: {
-        Args: Record<PropertyKey, never>;
+        Args: never;
         Returns: {
           avatar_url: string | null;
           created_at: string;
@@ -464,6 +481,34 @@ export type Database = {
         SetofOptions: {
           from: '*';
           to: 'profiles';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      join_public_room: {
+        Args: { p_room_id: string };
+        Returns: {
+          assignment_mode: string;
+          continent_count: number;
+          created_at: string;
+          generator_version: number;
+          host_user_id: string;
+          id: string;
+          join_code: string;
+          max_seats: number;
+          name: string;
+          revision: number;
+          seed: string;
+          status: string;
+          territory_count: number;
+          thumbnail_path: string | null;
+          thumbnail_version: number;
+          updated_at: string;
+          visibility: string;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'rooms';
           isOneToOne: true;
           isSetofReturn: false;
         };
@@ -479,11 +524,15 @@ export type Database = {
           id: string;
           join_code: string;
           max_seats: number;
+          name: string;
           revision: number;
           seed: string;
           status: string;
           territory_count: number;
+          thumbnail_path: string | null;
+          thumbnail_version: number;
           updated_at: string;
+          visibility: string;
         };
         SetofOptions: {
           from: '*';
@@ -493,6 +542,50 @@ export type Database = {
         };
       };
       leave_room: { Args: { room_id: string }; Returns: undefined };
+      list_public_rooms: {
+        Args: never;
+        Returns: {
+          created_at: string;
+          current_players: number;
+          host_avatar_url: string | null;
+          host_display_name: string;
+          maximum_players: number;
+          players: Json;
+          room_id: string;
+          room_name: string;
+          room_state: string;
+          thumbnail_path: string | null;
+          thumbnail_version: number;
+        }[];
+      };
+      publish_room_thumbnail: {
+        Args: { p_room_id: string; p_thumbnail_path: string };
+        Returns: {
+          assignment_mode: string;
+          continent_count: number;
+          created_at: string;
+          generator_version: number;
+          host_user_id: string;
+          id: string;
+          join_code: string;
+          max_seats: number;
+          name: string;
+          revision: number;
+          seed: string;
+          status: string;
+          territory_count: number;
+          thumbnail_path: string | null;
+          thumbnail_version: number;
+          updated_at: string;
+          visibility: string;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'rooms';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       release_room_seat: { Args: { room_id: string }; Returns: undefined };
       set_match_event_reaction: {
         Args: {
@@ -528,6 +621,22 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      update_own_profile: {
+        Args: { p_avatar_url: string | null; p_display_name: string };
+        Returns: {
+          avatar_url: string | null;
+          created_at: string;
+          display_name: string;
+          updated_at: string;
+          user_id: string;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'profiles';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       update_room_settings: {
         Args: {
           assignment_mode: string;
@@ -546,34 +655,19 @@ export type Database = {
           id: string;
           join_code: string;
           max_seats: number;
+          name: string;
           revision: number;
           seed: string;
           status: string;
           territory_count: number;
+          thumbnail_path: string | null;
+          thumbnail_version: number;
           updated_at: string;
+          visibility: string;
         };
         SetofOptions: {
           from: '*';
           to: 'rooms';
-          isOneToOne: true;
-          isSetofReturn: false;
-        };
-      };
-      update_own_profile: {
-        Args: {
-          p_avatar_url: string | null;
-          p_display_name: string;
-        };
-        Returns: {
-          avatar_url: string | null;
-          created_at: string;
-          display_name: string;
-          updated_at: string;
-          user_id: string;
-        };
-        SetofOptions: {
-          from: '*';
-          to: 'profiles';
           isOneToOne: true;
           isSetofReturn: false;
         };

@@ -2,8 +2,8 @@
 
 **Generate a world. Conquer it.**
 
-A browser-based solo, local hot-seat, and private human multiplayer playtest for
-a voxel-styled planetary strategy game. Multiplayer persists a complete
+A browser-based solo, local hot-seat, and public/private human multiplayer
+playtest for a voxel-styled planetary strategy game. Multiplayer persists a complete
 server-authoritative world and reducer state through Supabase; browsers submit
 typed commands and never write resulting state or combat outcomes.
 
@@ -15,7 +15,7 @@ The prototype currently provides:
 - Normal creation at 42 playable territories, temporarily capped at 5 land-connected gameplay continents
 - Four recommended editable seats (one Local Human and three Heuristic Bots), expandable to five; custom two- and three-seat tables remain supported
 - Compatibility loading for existing valid six-continent/six-seat saves, URLs, canonical worlds, and fixtures
-- Private anonymous 2–5-player rooms with durable seats, trusted initialization, authoritative reducer commands, ordered revisions/idempotency, deterministic server combat, Realtime recovery, reconnect, and shared victory
+- Registered-account 2–5-player public or private rooms with a public game browser, stored world previews, durable seats, trusted initialization, authoritative reducer commands, ordered revisions/idempotency, deterministic server combat, Realtime recovery, reconnect, and shared victory
 - A randomly named neutral world on fresh launch, before any player ownership exists
 - Subtle dotted canonical sea routes on the 3D globe while choosing a neutral world
 - Curated readable names that are also canonical deterministic world seeds

@@ -4,18 +4,17 @@ import {
   useMemo,
   useRef,
   useState,
-  type FormEvent,
   type ReactNode,
 } from 'react';
 import { publishRouteConnection } from '../brand/routeConnectionStatus';
 import { z } from 'zod';
-import { BRAND } from '../branding';
 import { GlobeScene } from '../components/GlobeScene';
 import { Minimap } from '../components/Minimap';
 import { TerritoryHud } from '../components/TerritoryHud';
 import { ControlLegend } from '../components/ControlLegend';
 import type { MatchState } from '../core/game/types';
 import { resolveGeneratorVersion } from '../core/generation/constants';
+import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
 import type { PlanetDefinition } from '../core/types/planet';
 import { createNeutralMatchSetup } from '../core/setup/startingPositions';
 import {
@@ -26,9 +25,11 @@ import {
   claimSeat,
   closeRoom,
   createRoom,
+  fetchPublicRooms,
   fetchRoomState,
   formatRoomCode,
   joinRoom,
+  joinPublicRoom,
   leaveRoom,
   multiplayerError,
   isAccountRequiredError,
@@ -61,8 +62,6 @@ import { MultiplayerRoomRoster } from './MultiplayerRoomRoster';
 import { buildMultiplayerRosterDisplay } from './multiplayerRoomRosterViewModel';
 import { createMultiplayerPlayerConfigs } from './multiplayerPlayerConfig';
 import { PostMatchActions } from './PostMatchActions';
-import { OPEN_PROFILE_EDITOR_EVENT } from '../auth/AccountControl';
-import { profileInitials } from '../auth/guestName';
 import {
   aggregateMatchEventReactions,
   fetchMatchEventReactions,
@@ -72,6 +71,11 @@ import {
   type MatchEventReaction,
   type MatchEventReactionRow,
 } from './matchEventReactions';
+import {
+  MultiplayerBrowser,
+  type MultiplayerBrowserServices,
+} from './MultiplayerBrowser';
+import { replaceRoomThumbnail, roomThumbnailPublicUrl } from './worldThumbnail';
 
 type Route =
   | { kind: 'lobby' }
@@ -130,128 +134,77 @@ function StatusScreen({ title, message }: { title: string; message: string }) {
 function Lobby() {
   const client = useMemo(() => getSupabaseClient(), []);
   const { controller, state: account } = useAccount();
-  const [joinCode, setJoinCode] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'create' | 'join' | null>(null);
-  const accountReady = account.status === 'registered-ready';
-  const profile = accountReady ? account.account.profile : null;
-
-  const runAuthorized = async <T,>(request: () => Promise<T>): Promise<T> => {
-    if (!controller) {
-      throw new Error('Account configuration is unavailable.');
-    }
-    await controller.requireRegisteredReady();
-    try {
-      return await request();
-    } catch (requestError) {
-      if (isAccountRequiredError(requestError)) {
-        await controller.handleBackendAccountRequired();
+  const runAuthorized = useCallback(
+    async <T,>(request: () => Promise<T>): Promise<T> => {
+      if (!controller) {
+        throw new Error('Account configuration is unavailable.');
       }
-      throw requestError;
-    }
-  };
+      await controller.requireRegisteredReady();
+      try {
+        return await request();
+      } catch (requestError) {
+        if (isAccountRequiredError(requestError)) {
+          await controller.handleBackendAccountRequired();
+        }
+        throw requestError;
+      }
+    },
+    [controller],
+  );
 
-  const create = async () => {
-    setBusy('create');
-    setError(null);
-    try {
-      const room = await runAuthorized(() => createRoom(client));
-      navigate(`/multiplayer/room/${room.id}`);
-    } catch (requestError) {
-      setError(multiplayerError(requestError).message);
-    } finally {
-      setBusy(null);
-    }
-  };
+  const services = useMemo<MultiplayerBrowserServices>(
+    () => ({
+      createGame: async ({ name, visibility, maxSeats }) => {
+        const room = await runAuthorized(() =>
+          createRoom(client, {
+            name,
+            visibility,
+            settings: {
+              seed: generateReadableWorldSeed(),
+              territoryCount: 42,
+              continentCount: 5,
+              assignmentMode: 'random',
+              maxSeats,
+            },
+          }),
+        );
+        if (visibility === 'public') {
+          void replaceRoomThumbnail(client, room).catch(() => {
+            console.warn('Initial public room thumbnail publication failed.');
+          });
+        }
+        return room;
+      },
+      joinWithCode: (code) =>
+        runAuthorized(() => joinRoom(client, code)).catch((error) => {
+          throw multiplayerError(error);
+        }),
+      joinPublicGame: (roomId) =>
+        runAuthorized(() => joinPublicRoom(client, roomId)).catch((error) => {
+          throw multiplayerError(error);
+        }),
+      listPublicGames: () =>
+        runAuthorized(() => fetchPublicRooms(client)).catch((error) => {
+          throw multiplayerError(error);
+        }),
+      thumbnailUrl: (path, version) =>
+        roomThumbnailPublicUrl(client, path, version),
+      navigate,
+    }),
+    [client, runAuthorized],
+  );
 
-  const join = async (event: FormEvent) => {
-    event.preventDefault();
-    setBusy('join');
-    setError(null);
-    try {
-      const room = await runAuthorized(() => joinRoom(client, joinCode));
-      navigate(`/multiplayer/room/${room.id}`);
-    } catch (requestError) {
-      setError(multiplayerError(requestError).message);
-    } finally {
-      setBusy(null);
-    }
-  };
+  if (account.status !== 'registered-ready') {
+    return (
+      <StatusScreen
+        title="Multiplayer unavailable"
+        message="Your registered account could not be loaded."
+      />
+    );
+  }
 
   return (
-    <main className="multiplayer-shell multiplayer-centered">
-      <section className="multiplayer-card multiplayer-entry-card">
-        <span className="eyebrow">{BRAND.productName} multiplayer beta</span>
-        <h1>Private multiplayer rooms</h1>
-        <p>
-          Create a private room or join with a shared code. Match state,
-          commands, combat, reconnect, and victory are synchronized through the
-          authoritative server boundary.
-        </p>
-        {profile && (
-          <div className="multiplayer-playing-as">
-            <span>Playing as</span>
-            <div>
-              {profile.avatarUrl ? (
-                <img src={profile.avatarUrl} alt="" />
-              ) : (
-                <span aria-hidden="true">
-                  {profileInitials(profile.displayName)}
-                </span>
-              )}
-              <strong>{profile.displayName}</strong>
-              <button
-                type="button"
-                className="quiet"
-                onClick={() =>
-                  window.dispatchEvent(new Event(OPEN_PROFILE_EDITOR_EVENT))
-                }
-              >
-                Edit profile
-              </button>
-            </div>
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => void create()}
-          disabled={busy !== null || !accountReady || !profile}
-        >
-          {busy === 'create' ? 'Creating…' : 'Create private room'}
-        </button>
-        <form
-          onSubmit={(event) => void join(event)}
-          className="multiplayer-join-form"
-        >
-          <label>
-            Room code
-            <input
-              value={joinCode}
-              onChange={(event) =>
-                setJoinCode(event.target.value.toUpperCase())
-              }
-              placeholder="ABCD-1234"
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </label>
-          <button
-            type="submit"
-            className="secondary"
-            disabled={busy !== null || !accountReady || !profile}
-          >
-            {busy === 'join' ? 'Joining…' : 'Join room'}
-          </button>
-        </form>
-        {error && (
-          <p role="alert" className="multiplayer-error">
-            {error}
-          </p>
-        )}
-        <p className="multiplayer-session-note">Registered account ready.</p>
-        <a href="/local">Return to local game</a>
-      </section>
-    </main>
+    <MultiplayerBrowser profile={account.account.profile} services={services} />
   );
 }
 
@@ -405,10 +358,19 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     }
   };
 
+  const saveWorldSettings = async (room: Room) => {
+    const updatedRoom = await updateRoomSettings(client, room);
+    if (updatedRoom.visibility === 'public') {
+      void replaceRoomThumbnail(client, updatedRoom).catch(() => {
+        console.warn('Public room thumbnail replacement failed.');
+      });
+    }
+  };
+
   if (!state || !settings) {
     return (
       <StatusScreen
-        title={error ? 'Private room unavailable' : 'Loading private room'}
+        title={error ? 'Room unavailable' : 'Loading room'}
         message={error ?? 'Restoring canonical room state…'}
       />
     );
@@ -431,10 +393,14 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
 
   return (
     <GameSetupShell
-      eyebrow="Private multiplayer room"
+      eyebrow={`${state.room.visibility === 'public' ? 'Public' : 'Private'} multiplayer room`}
       title="Multiplayer lobby"
       summary={
-        <SetupSummary label="Private room summary">
+        <SetupSummary label={`${state.room.name} room summary`}>
+          <div className="room-summary-name">
+            <span>Game</span>
+            <strong>{state.room.name}</strong>
+          </div>
           <div className="room-summary-code">
             <span>Room</span>
             <strong data-testid="room-code">
@@ -474,7 +440,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
           onSubmit={(event) => {
             event.preventDefault();
             void act('settings', async () => {
-              await updateRoomSettings(client, settings);
+              await saveWorldSettings(settings);
               settingsDirty.current = false;
             });
           }}
@@ -505,7 +471,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                       settingsDirty.current = true;
                       setSettings(generatedSettings);
                       void act('generate-world', async () => {
-                        await updateRoomSettings(client, generatedSettings);
+                        await saveWorldSettings(generatedSettings);
                         settingsDirty.current = false;
                       });
                     }}
@@ -1084,7 +1050,7 @@ function MatchView({
   if (!match) {
     return (
       <StatusScreen
-        title={error ? 'Private match unavailable' : 'Loading private match'}
+        title={error ? 'Multiplayer match unavailable' : 'Loading match'}
         message={error ?? 'Restoring authoritative match state…'}
       />
     );

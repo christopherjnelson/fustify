@@ -1,5 +1,9 @@
 import { existsSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
+import {
+  createPrivateMultiplayerGame,
+  submitMultiplayerRoomCode,
+} from './helpers';
 
 const mobileAuthState = 'test-results/multiplayer-visual-auth.json';
 const mobileGuestAuthState = 'test-results/multiplayer-mobile-guest.json';
@@ -17,7 +21,7 @@ test('mobile lobby keeps room controls visible without horizontal clipping', asy
     await context.storageState({ path: mobileAuthState });
   }
   await page.getByLabel('Room display name').fill('Mobile Host');
-  await page.getByRole('button', { name: 'Create private room' }).click();
+  await createPrivateMultiplayerGame(page);
   await expect(
     page.getByRole('heading', { name: 'Multiplayer lobby' }),
   ).toBeVisible();
@@ -68,10 +72,10 @@ test('mobile restores an authoritative active match without clipping controls', 
   try {
     await host.goto('/multiplayer');
     await expect(
-      host.getByRole('heading', { name: 'Private multiplayer rooms' }),
+      host.getByRole('heading', { name: 'Multiplayer' }),
     ).toBeVisible();
     await host.getByLabel('Room display name').fill('Mobile Alpha');
-    await host.getByRole('button', { name: 'Create private room' }).click();
+    await createPrivateMultiplayerGame(host);
     roomId = host.url().split('/').at(-1)!;
     await host.getByLabel('Territories').fill('12');
     await host.getByLabel('Continents').fill('2');
@@ -86,14 +90,14 @@ test('mobile restores an authoritative active match without clipping controls', 
     await host.waitForTimeout(1_200);
     await guest.goto('/multiplayer');
     await expect(
-      guest.getByRole('heading', { name: 'Private multiplayer rooms' }),
+      guest.getByRole('heading', { name: 'Multiplayer' }),
     ).toBeVisible();
     if (!existsSync(mobileGuestAuthState)) {
       await guestContext.storageState({ path: mobileGuestAuthState });
     }
     await guest.getByLabel('Room display name').fill('Mobile Bravo');
     await guest.getByLabel('Room code').fill(code);
-    await guest.getByRole('button', { name: 'Join room' }).click();
+    await submitMultiplayerRoomCode(guest);
     await guest
       .getByTestId('seat-1')
       .getByRole('button', { name: 'Claim Seat 2' })

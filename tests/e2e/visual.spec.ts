@@ -221,6 +221,51 @@ for (const scenario of scenarios) {
   });
 }
 
+for (const fixture of ['populated', 'empty', 'create-dialog'] as const) {
+  test(`visual review: multiplayer-browser-${fixture}`, async ({
+    page,
+  }, testInfo) => {
+    const state = fixture === 'empty' ? 'empty' : 'populated';
+    await page.goto(`/multiplayer?visual-review=1&browser-state=${state}`);
+    await page.addStyleTag({
+      content: ':root { font-family: Arial, sans-serif !important; }',
+    });
+    await expect(
+      page.getByRole('heading', { name: 'Multiplayer', exact: true }),
+    ).toBeVisible();
+    if (fixture === 'create-dialog') {
+      await page.getByRole('button', { name: 'Create Game' }).first().click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+    } else if (fixture === 'empty') {
+      await expect(
+        page.getByRole('heading', {
+          name: 'No public games are waiting',
+        }),
+      ).toBeVisible();
+    } else {
+      await expect(
+        page.getByRole('heading', { name: 'Atlas Prime' }),
+      ).toBeVisible();
+    }
+    const region =
+      fixture === 'create-dialog'
+        ? page.getByRole('dialog')
+        : page.locator(
+            fixture === 'empty'
+              ? '.public-games-section'
+              : '.multiplayer-browser',
+          );
+    await expect(region).toHaveScreenshot(
+      `multiplayer-browser-${fixture}-ui.png`,
+    );
+    await page.screenshot({
+      path: reviewPath(testInfo, `multiplayer-browser-${fixture}`),
+      fullPage: true,
+      animations: 'disabled',
+    });
+  });
+}
+
 for (const fixture of [
   'empty',
   'running',

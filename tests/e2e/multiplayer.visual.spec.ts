@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { createPrivateMultiplayerGame } from './helpers';
 
 const visualAuthState = 'test-results/multiplayer-visual-auth.json';
 
@@ -18,7 +19,7 @@ test('multiplayer lobby visual', async ({ browser }, testInfo) => {
     // multiple hosted Auth signups for one visual assertion.
     await context.storageState({ path: visualAuthState });
   }
-  await page.getByRole('button', { name: 'Create private room' }).click();
+  await createPrivateMultiplayerGame(page);
   await expect(
     page.getByRole('heading', { name: 'Multiplayer lobby' }),
   ).toBeVisible();
