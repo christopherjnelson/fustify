@@ -108,9 +108,11 @@ function RecentRooms({ rooms }: { rooms: AdminRecentRoom[] }) {
 export function AdminOperations({
   source,
   fixture = false,
+  refreshToken = 0,
 }: {
   source: AdminDashboardSource;
   fixture?: boolean;
+  refreshToken?: number;
 }) {
   const [snapshot, setSnapshot] = useState<AdminDashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,7 +138,7 @@ export function AdminOperations({
 
   useEffect(() => {
     queueMicrotask(() => void refresh());
-  }, [refresh]);
+  }, [refresh, refreshToken]);
 
   useEffect(() => {
     const refetch = () => void refresh();
@@ -156,13 +158,6 @@ export function AdminOperations({
           {snapshot && (
             <span>Generated {timestamp(snapshot.overview.generated_at)}</span>
           )}
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            disabled={loading}
-          >
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
         </div>
       </div>
 

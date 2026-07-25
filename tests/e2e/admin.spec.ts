@@ -351,9 +351,7 @@ test('recent report selection, return to latest, refresh, and keyboard use work'
   await expect(
     page.getByRole('heading', { name: 'Current run' }),
   ).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Refresh verification reports' })
-    .click();
+  await page.getByRole('button', { name: 'Refresh dashboard' }).click();
 });
 
 test('mobile dashboard does not overflow horizontally', async ({

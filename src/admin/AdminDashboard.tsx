@@ -501,13 +501,11 @@ function BalanceStudies({
 export function AdminDashboard({
   operationsSource,
   source,
-  accountLabel,
   dataAvailable = true,
   fixture = false,
 }: {
   operationsSource: AdminDashboardSource;
   source: AdminReportSource;
-  accountLabel?: string;
   dataAvailable?: boolean;
   fixture?: boolean;
 }) {
@@ -520,6 +518,7 @@ export function AdminDashboard({
   const [loading, setLoading] = useState(dataAvailable);
   const [study, setStudy] = useState<BalanceStudyReport | null>(null);
   const [recentStudies, setRecentStudies] = useState<BalanceStudyReport[]>([]);
+  const [operationsRefreshToken, setOperationsRefreshToken] = useState(0);
   const fetching = useRef(false);
   const refresh = useCallback(async () => {
     if (fetching.current) return;
@@ -582,6 +581,10 @@ export function AdminDashboard({
         : 0,
     [run],
   );
+  const refreshDashboard = () => {
+    setOperationsRefreshToken((token) => token + 1);
+    if (dataAvailable) void refresh();
+  };
 
   return (
     <main className="admin-shell">
@@ -594,26 +597,23 @@ export function AdminDashboard({
           </p>
         </div>
         <div className="admin-actions">
-          <span>{accountLabel ? `Signed in as ${accountLabel}` : 'Admin'}</span>
           {dataAvailable && (
-            <>
-              <span>
-                {lastFetch
-                  ? `Reports fetched ${timestamp(lastFetch.toISOString())}`
-                  : 'Reports not fetched yet'}
-              </span>
-              <button
-                type="button"
-                onClick={() => void refresh()}
-                aria-label="Refresh verification reports"
-              >
-                Refresh reports
-              </button>
-            </>
+            <span>
+              {lastFetch
+                ? `Reports fetched ${timestamp(lastFetch.toISOString())}`
+                : 'Reports not fetched yet'}
+            </span>
           )}
+          <button type="button" onClick={refreshDashboard}>
+            Refresh dashboard
+          </button>
         </div>
       </header>
-      <AdminOperations source={operationsSource} fixture={fixture} />
+      <AdminOperations
+        source={operationsSource}
+        fixture={fixture}
+        refreshToken={operationsRefreshToken}
+      />
       {!dataAvailable && (
         <section className="admin-notice" aria-labelledby="unavailable">
           <h2 id="unavailable">Developer diagnostics unavailable</h2>

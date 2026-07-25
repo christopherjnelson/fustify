@@ -94,7 +94,6 @@ function AuthorizedAdmin({
     <AdminDashboard
       operationsSource={source}
       source={verificationSource}
-      accountLabel={account.account.profile.displayName}
       dataAvailable={verificationDataAvailable}
     />
   );
@@ -150,7 +149,6 @@ export function AdminFixtureApp({
     <AdminDashboard
       operationsSource={operationsSource}
       source={verificationSource}
-      accountLabel="Fixture Administrator"
       fixture
     />
   );
