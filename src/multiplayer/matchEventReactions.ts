@@ -1,7 +1,7 @@
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import type { MatchEvent } from '../core/game/types';
 import type { Database, Tables } from './database.types';
-import { multiplayerError } from './multiplayerApi';
+import { multiplayerError } from './multiplayerError';
 
 export const MATCH_EVENT_REACTIONS = [
   'fire',

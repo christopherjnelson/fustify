@@ -4,6 +4,9 @@ import type { GameAction } from '../core/game/types';
 import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
 import type { Database, Tables } from './database.types';
 import type { AuthoritativeCommandResult } from './gameProtocol';
+import { MULTIPLAYER_ERRORS, multiplayerError } from './multiplayerError';
+
+export { MULTIPLAYER_ERRORS, multiplayerError };
 
 export type Room = Tables<'rooms'>;
 export type RoomMember = Tables<'room_members'>;
@@ -78,50 +81,6 @@ const DEFAULT_ROOM_SETTINGS = {
   maxSeats: 5,
 } as const;
 
-export const MULTIPLAYER_ERRORS: Record<string, string> = {
-  already_joined: 'You already belong to this room.',
-  already_seated: 'Release your current seat before claiming another.',
-  account_required: 'A registered account is required for multiplayer.',
-  auth_rate_limited: 'Too many account requests. Wait a moment and try again.',
-  closed_room: 'This room is closed.',
-  full_room: 'This room is full.',
-  host_only: 'Only the room host can do that.',
-  invalid_code: 'That room code is invalid.',
-  invalid_display_name: 'Use a display name between 1 and 32 characters.',
-  invalid_seat: 'That seat is not available.',
-  invalid_settings: 'Those room settings are not supported.',
-  invalid_action: 'That action is no longer legal. The match was refreshed.',
-  invalid_authoritative_state:
-    'The authoritative match state is unavailable. Reconnect and try again.',
-  invalid_event_reaction: 'That Activity reaction is not available.',
-  invalid_profile_display_name:
-    'Your profile display name is invalid. Edit your profile and try again.',
-  idempotency_conflict:
-    'That request key was already used for a different action.',
-  legacy_match_incomplete:
-    'This earlier preview cannot become a playable match. Create a new room.',
-  match_snapshot_immutable: 'The match setup snapshot cannot be changed.',
-  match_completed: 'This match is complete. No more actions can be played.',
-  match_event_not_found:
-    'That Activity entry is no longer available for reactions.',
-  match_not_active: 'This match is not active.',
-  multiplayer_draft_unsupported:
-    'Player draft is not available in multiplayer yet. Choose random assignment.',
-  not_authenticated: 'Your account session expired. Sign in and try again.',
-  not_enough_players: 'Claim at least two human seats before starting.',
-  not_your_turn: 'It is another player’s turn.',
-  profile_unavailable:
-    'Your player profile could not be loaded. Please try again.',
-  revision_conflict: 'The match changed before that action was accepted.',
-  room_access_denied: 'This private room is unavailable to this player.',
-  room_active: 'This room has already started.',
-  room_not_waiting: 'This action is available only while the room is waiting.',
-  seat_conflict: 'Another player claimed that seat first.',
-  seat_required: 'Claimed seat membership is required to play this match.',
-  settings_conflict:
-    'Release affected seats or members before reducing capacity.',
-};
-
 const pendingBootstrapByClient = new WeakMap<
   SupabaseClient<Database>,
   Map<string, Promise<MultiplayerMatch>>
@@ -153,37 +112,6 @@ function coalescedMatchRead<T>(
   });
   pendingByMatch.set(matchId, request);
   return request;
-}
-
-export function multiplayerError(error: unknown): Error {
-  const message = multiplayerErrorText(error);
-  const status =
-    typeof error === 'object' && error !== null && 'status' in error
-      ? error.status
-      : null;
-  if (status === 429 || /request rate limit reached/i.test(message)) {
-    return new Error(MULTIPLAYER_ERRORS.auth_rate_limited);
-  }
-  if (Object.values(MULTIPLAYER_ERRORS).includes(message)) {
-    return error instanceof Error ? error : new Error(message);
-  }
-  const key = Object.keys(MULTIPLAYER_ERRORS).find((candidate) =>
-    message.includes(candidate),
-  );
-  return new Error(
-    key ? MULTIPLAYER_ERRORS[key] : 'Multiplayer request failed.',
-  );
-}
-
-function multiplayerErrorText(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : typeof error === 'object' &&
-        error !== null &&
-        'message' in error &&
-        typeof error.message === 'string'
-      ? error.message
-      : String(error);
 }
 
 export async function fetchRoomState(

@@ -43,13 +43,19 @@ async function bootstrap() {
       import('./admin/AdminDashboard'),
       import('./admin/reportSource'),
     ]);
-    const fixtureName = new URLSearchParams(window.location.search).get(
-      'admin-fixture',
-    );
-    const source =
-      import.meta.env.DEV && fixtureName
-        ? reportSources.fixtureAdminReportSource(fixtureName)
-        : reportSources.localAdminReportSource;
+    let source = reportSources.localAdminReportSource;
+    if (import.meta.env.DEV) {
+      // Fixture sources are development-only. Rollup drops this whole branch,
+      // and therefore the fixture chunk, from production builds.
+      const fixtureName = new URLSearchParams(window.location.search).get(
+        'admin-fixture',
+      );
+      if (fixtureName) {
+        const { fixtureAdminReportSource } =
+          await import('./admin/fixtureReportSource');
+        source = fixtureAdminReportSource(fixtureName);
+      }
+    }
     root.render(
       <StrictMode>
         <AdminDashboard source={source} dataAvailable={import.meta.env.DEV} />
