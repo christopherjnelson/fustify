@@ -23,7 +23,7 @@ describe('BrandedAppShell', () => {
     });
   });
 
-  it('renders the real logo, account region, and protected content', () => {
+  it('renders the compact mark, account region, and protected content', () => {
     const markup = renderToStaticMarkup(
       createElement(
         BrandedAppShell,
@@ -38,7 +38,7 @@ describe('BrandedAppShell', () => {
       ),
     );
 
-    expect(markup).toContain('fustify-logo');
+    expect(markup).toContain('fustify-mark');
     expect(markup).toContain('aria-label="Fustify home"');
     expect(markup).toContain('aria-label="Account"');
     expect(markup).toContain('Protected application');

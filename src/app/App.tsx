@@ -10,7 +10,6 @@ import { useGameStore } from '../state/useGameStore';
 import { useBotTurnRunner } from './useBotTurnRunner';
 import { BRAND } from '../branding';
 import { TurnNotificationController } from '../components/TurnNotificationController';
-import { FustifyLogo } from '../brand/FustifyLogo';
 
 export function App() {
   useBotTurnRunner();
@@ -33,9 +32,6 @@ export function App() {
       {mode === 'pregame' && <PregamePanel />}
       {(mode === 'playing' || mode === 'game-over') && <TerritoryHud />}
       {mode === 'handoff' && <HandoffScreen />}
-      <div className="board-brand" aria-label={BRAND.productName}>
-        <FustifyLogo decorative showDescriptor size="standard" />
-      </div>
     </main>
   );
 }

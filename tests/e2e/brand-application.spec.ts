@@ -13,7 +13,7 @@ for (const scenario of applicationBrandScenarios) {
     await openScenario(page, scenario);
 
     await expect(page.locator('.app-shell')).toBeVisible();
-    await expect(page.locator('.board-brand .fustify-logo')).toBeVisible();
+    await expect(page.locator('.board-brand')).toHaveCount(0);
     await expect
       .poll(() =>
         page.evaluate(

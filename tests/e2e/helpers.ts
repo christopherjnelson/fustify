@@ -45,8 +45,21 @@ export type Scenario =
   | 'minimap-focus-north'
   | 'minimap-focus-west';
 
-export async function openScenario(page: Page, scenario: Scenario) {
+export async function openScenario(
+  page: Page,
+  scenario: Scenario,
+  controls: 'collapsed' | 'expanded' = 'collapsed',
+) {
   await page.route('https://fonts.googleapis.com/**', (route) => route.abort());
+  await page.addInitScript((initialControls) => {
+    if (sessionStorage.getItem('fustify:visual-controls-initialized')) return;
+    if (initialControls === 'collapsed') {
+      sessionStorage.setItem('fustify:globe-controls-collapsed', 'true');
+    } else {
+      sessionStorage.removeItem('fustify:globe-controls-collapsed');
+    }
+    sessionStorage.setItem('fustify:visual-controls-initialized', 'true');
+  }, controls);
   await page.goto(
     '/?v=1&seed=visual-review-atlas&territories=42&continents=6&players=4&visual-review=1',
   );

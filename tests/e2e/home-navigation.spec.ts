@@ -45,9 +45,31 @@ test('home choices route through the account-required shell without loading game
   await expect(
     page.getByRole('heading', { name: 'Multiplayer' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('link', { name: 'Play Single Player' }),
-  ).toBeVisible();
+  const singlePlayerAction = page.getByRole('link', {
+    name: 'Play Single Player',
+  });
+  await expect(singlePlayerAction).toBeVisible();
+  await expect(singlePlayerAction).toContainText('Play Single Player');
+  await expect(singlePlayerAction.locator('[aria-hidden="true"]')).toHaveText(
+    '→',
+  );
+  const actionPresentation = await singlePlayerAction.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return {
+      color: style.color,
+      background: style.backgroundColor,
+      overflow: style.overflow,
+      width: rect.width,
+      scrollWidth: element.scrollWidth,
+    };
+  });
+  expect(actionPresentation.color).toBe('rgb(5, 10, 18)');
+  expect(actionPresentation.background).toBe('rgb(204, 255, 0)');
+  expect(actionPresentation.overflow).not.toBe('hidden');
+  expect(actionPresentation.scrollWidth).toBeLessThanOrEqual(
+    actionPresentation.width + 1,
+  );
   await expect(
     page.getByRole('link', { name: 'Play Multiplayer' }),
   ).toBeVisible();

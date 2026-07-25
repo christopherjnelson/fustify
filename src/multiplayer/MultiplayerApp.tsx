@@ -7,6 +7,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react';
+import { publishRouteConnection } from '../brand/routeConnectionStatus';
 import { z } from 'zod';
 import { BRAND } from '../branding';
 import { GlobeScene } from '../components/GlobeScene';
@@ -706,6 +707,11 @@ export function MultiplayerGameScene({
   ) => ReactNode;
   activityReactions?: ActivityReactionController;
 }) {
+  useEffect(() => {
+    publishRouteConnection(connection);
+    return () => publishRouteConnection(null);
+  }, [connection]);
+
   return (
     <main
       className="app-shell mode-playing multiplayer-game-shell"
@@ -721,8 +727,7 @@ export function MultiplayerGameScene({
         renderMultiplayerPostMatchActions={renderPostMatchActions}
         activityReactions={activityReactions}
       />
-      <div className="multiplayer-game-connection">
-        <ConnectionBadge status={connection} />
+      <div className="multiplayer-game-metadata" aria-hidden="true">
         <span data-testid="match-id">{matchId}</span>
         <span data-testid="match-revision">{revision}</span>
       </div>

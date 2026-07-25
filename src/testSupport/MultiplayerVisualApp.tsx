@@ -7,6 +7,7 @@ import type {
 import type { ActivityReactionController } from '../multiplayer/matchEventReactions';
 import { useGameStore } from '../state/useGameStore';
 import { applyScenario } from './visualScenarios';
+import { BrandedAppShell } from '../brand/BrandedAppShell';
 
 const parameters = new URLSearchParams(window.location.search);
 const postMatchFixture = parameters.get('scenario') === 'multiplayer-game-over';
@@ -77,27 +78,48 @@ function navigate(path: string) {
 export function MultiplayerVisualApp() {
   const host = parameters.get('role') !== 'nonhost';
   return (
-    <MultiplayerGameScene
-      matchId="visual-match"
-      revision={0}
-      activityReactions={activityReactions}
-      renderPostMatchActions={
-        postMatchFixture
-          ? (reviewing, onReviewingChange) => (
-              <PostMatchActions
-                reviewing={reviewing}
-                isHost={host}
-                settings={settings}
-                createRoom={async () =>
-                  ({ id: 'visual-replacement-room' }) as Room
-                }
-                generateSeed={() => 'visual-fresh-world-271'}
-                onReviewingChange={onReviewingChange}
-                navigate={navigate}
-              />
-            )
-          : undefined
+    <BrandedAppShell
+      accountControl={
+        <aside className="account-control" aria-label="Account">
+          <div className="account-summary">
+            <span
+              className="account-avatar account-avatar-fallback"
+              aria-hidden="true"
+            >
+              VH
+            </span>
+            <span className="account-identity">
+              <strong>Visual Host</strong>
+            </span>
+            <span className="account-actions">
+              <button type="button">Sign out</button>
+            </span>
+          </div>
+        </aside>
       }
-    />
+    >
+      <MultiplayerGameScene
+        matchId="visual-match"
+        revision={0}
+        activityReactions={activityReactions}
+        renderPostMatchActions={
+          postMatchFixture
+            ? (reviewing, onReviewingChange) => (
+                <PostMatchActions
+                  reviewing={reviewing}
+                  isHost={host}
+                  settings={settings}
+                  createRoom={async () =>
+                    ({ id: 'visual-replacement-room' }) as Room
+                  }
+                  generateSeed={() => 'visual-fresh-world-271'}
+                  onReviewingChange={onReviewingChange}
+                  navigate={navigate}
+                />
+              )
+            : undefined
+        }
+      />
+    </BrandedAppShell>
   );
 }

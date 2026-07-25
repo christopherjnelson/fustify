@@ -3583,29 +3583,64 @@ button:disabled {
   position: absolute;
   z-index: 5;
   bottom: 18px;
-  left: 24px;
-  width: min(310px, calc(100vw - 48px));
-  padding: 9px 11px;
+  left: 50%;
+  width: min(430px, calc(100vw - 48px));
+  padding: 6px;
   color: #9db0c3;
   border: 1px solid rgba(149, 183, 214, 0.12);
   border-radius: 10px;
   background: rgba(5, 11, 20, 0.68);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(9px);
-  pointer-events: none;
+  transform: translateX(-50%);
 }
 
 .mode-world-setup .control-legend,
 .mode-playing .control-legend,
 .mode-game-over .control-legend {
-  left: min(568px, calc(100vw - 334px));
+  left: 50%;
 }
 
 .mode-pregame .control-legend {
-  left: min(688px, calc(100vw - 334px));
+  left: 50%;
 }
 
-.control-legend > strong {
+.control-legend-toggle {
+  display: flex;
+  min-height: 32px;
+  padding: 5px 10px;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand-text-strong);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.control-legend-toggle:hover {
+  color: var(--brand-accent);
+  background: var(--brand-panel-raised);
+}
+
+.control-legend.is-collapsed {
+  width: auto;
+  border-color: color-mix(
+    in srgb,
+    var(--brand-accent) 26%,
+    var(--brand-border)
+  );
+}
+
+.control-legend-content {
+  padding: 4px 5px 5px;
+}
+
+.control-legend-content > strong {
   display: block;
   margin-bottom: 5px;
   color: #d5e3ef;
@@ -3614,29 +3649,29 @@ button:disabled {
   text-transform: uppercase;
 }
 
-.control-legend dl {
+.control-legend-content dl {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
   margin: 0;
 }
 
-.control-legend dl > div {
+.control-legend-content dl > div {
   display: flex;
   gap: 4px;
   font-size: 0.58rem;
 }
 
-.control-legend dt {
+.control-legend-content dt {
   color: #d0deea;
   font-weight: 700;
 }
 
-.control-legend dd {
+.control-legend-content dd {
   margin: 0;
 }
 
-.control-legend kbd {
+.control-legend-content kbd {
   font: inherit;
 }
 
@@ -4517,18 +4552,23 @@ h2 {
   .mode-pregame .control-legend,
   .mode-playing .control-legend,
   .mode-game-over .control-legend {
-    right: 12px;
+    right: auto;
     bottom: 10px;
-    left: 12px;
-    width: auto;
+    left: 50%;
+    width: min(430px, calc(100vw - 24px));
     padding: 7px 9px;
+    transform: translateX(-50%);
   }
 
-  .control-legend > strong {
+  .control-legend.is-collapsed {
+    width: auto;
+  }
+
+  .control-legend-content > strong {
     margin-bottom: 3px;
   }
 
-  .control-legend dl {
+  .control-legend-content dl {
     gap: 2px 9px;
   }
 
@@ -5491,6 +5531,10 @@ html.home-route body {
   font-weight: 800;
 }
 
+.home-shell .mode-card-local .mode-action:visited {
+  color: var(--brand-page);
+}
+
 .mode-action:hover {
   background: var(--brand-accent-hover);
 }
@@ -5814,8 +5858,10 @@ html.multiplayer-match-route .branded-app-content {
 }
 
 .branded-app-shell-immersive .branded-app-header {
-  right: auto;
-  width: min(760px, calc(100vw - 36px));
+  right: 18px;
+  left: auto;
+  width: auto;
+  max-width: min(760px, calc(100vw - 36px));
   background: color-mix(in srgb, var(--brand-panel) 86%, transparent);
 }
 
@@ -5826,9 +5872,10 @@ html.multiplayer-match-route .branded-app-content {
   text-decoration: none;
 }
 
-.branded-app-home .fustify-logo {
-  width: 110px;
-  height: auto;
+.branded-app-mark {
+  display: block;
+  width: 32px;
+  height: 32px;
 }
 
 .branded-app-context {
@@ -6340,8 +6387,8 @@ html.multiplayer-match-route .branded-app-content {
 }
 
 .branded-app-shell .game-setup-shell-overlay {
-  top: 86px;
-  max-height: calc(100dvh - 100px);
+  top: 16px;
+  max-height: calc(100dvh - 32px);
 }
 
 .local-setup-intro,
@@ -6400,7 +6447,7 @@ html.multiplayer-match-route .branded-app-content {
 }
 
 .branded-app-shell .left-hud-rail {
-  top: 86px;
+  top: 16px;
 }
 
 .branded-app-shell .hud {
@@ -6415,9 +6462,21 @@ html.multiplayer-match-route .branded-app-content {
 
 .activity-header h2,
 .minimap-heading strong,
-.control-legend > strong {
+.control-legend-content > strong {
   color: var(--brand-text-strong);
   font-family: var(--brand-display-font);
+}
+
+.multiplayer-connection.connection-closed,
+.multiplayer-connection.connection-channel-error,
+.multiplayer-connection.connection-timed-out {
+  color: var(--brand-danger);
+  border-color: color-mix(
+    in srgb,
+    var(--brand-danger) 34%,
+    var(--brand-border)
+  );
+  background: var(--brand-danger-surface);
 }
 
 .activity-collapse,
@@ -6516,18 +6575,6 @@ html.multiplayer-match-route .branded-app-content {
   color: var(--brand-steel);
 }
 
-.board-brand {
-  top: 92px;
-  width: min(280px, calc(100vw - 500px));
-  color: var(--brand-text-strong);
-  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.55));
-}
-
-.board-brand .fustify-logo {
-  width: min(240px, 100%);
-  height: auto;
-}
-
 .minimap-panel,
 .control-legend {
   border-color: var(--brand-border);
@@ -6535,7 +6582,7 @@ html.multiplayer-match-route .branded-app-content {
 
 .control-legend {
   color: var(--brand-steel);
-  background: color-mix(in srgb, var(--brand-panel) 78%, transparent);
+  background: color-mix(in srgb, var(--brand-panel) 88%, transparent);
 }
 
 .territory-drawer {
@@ -6543,16 +6590,8 @@ html.multiplayer-match-route .branded-app-content {
   background: color-mix(in srgb, var(--brand-panel) 98%, transparent);
 }
 
-.multiplayer-game-connection {
-  top: 27px;
-  z-index: 42;
-}
-
-.branded-app-shell .multiplayer-game-connection {
-  top: 88px;
-  right: 22px;
-  left: auto;
-  transform: none;
+.multiplayer-game-metadata {
+  display: none;
 }
 
 @media (max-width: 900px) {
@@ -6577,8 +6616,9 @@ html.multiplayer-match-route .branded-app-content {
     gap: 7px;
   }
 
-  .branded-app-home .fustify-logo {
-    width: 92px;
+  .branded-app-mark {
+    width: 28px;
+    height: 28px;
   }
 
   .branded-app-back {
@@ -6612,10 +6652,14 @@ html.multiplayer-match-route .branded-app-content {
     padding-top: 82px;
   }
 
-  .protected-route-shell .game-setup-shell-overlay,
+  .protected-route-shell .game-setup-shell-overlay {
+    top: 74px;
+    max-height: calc(100dvh - 84px);
+  }
+
   .protected-route-shell .left-hud-rail {
-    top: 76px;
-    max-height: calc(100dvh - 86px);
+    top: 74px;
+    max-height: calc(100dvh - 84px);
   }
 
   .protected-route-shell .hud {
@@ -6633,22 +6677,6 @@ html.multiplayer-match-route .branded-app-content {
 
   .turn-notification {
     top: calc(47vh + 14px);
-  }
-
-  .board-brand {
-    top: auto;
-    width: 150px;
-  }
-
-  .multiplayer-game-connection {
-    top: auto;
-    bottom: 74px;
-  }
-
-  .branded-app-shell .multiplayer-game-connection {
-    top: auto;
-    right: 12px;
-    bottom: 74px;
   }
 }
 
