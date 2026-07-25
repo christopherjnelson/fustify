@@ -77,6 +77,7 @@ import {
 } from './MultiplayerBrowser';
 import { replaceRoomThumbnail, roomThumbnailPublicUrl } from './worldThumbnail';
 import {
+  closedRoomLandingNotice,
   installWaitingRoomNavigationGuard,
   runWaitingRoomExit,
   WaitingRoomExitDialog,
@@ -229,17 +230,11 @@ function Lobby() {
   }
 
   return (
-    <>
-      {notice && (
-        <p className="multiplayer-browser-notice" role="status">
-          {notice}
-        </p>
-      )}
-      <MultiplayerBrowser
-        profile={account.account.profile}
-        services={services}
-      />
-    </>
+    <MultiplayerBrowser
+      profile={account.account.profile}
+      services={services}
+      notice={notice}
+    />
   );
 }
 
@@ -503,13 +498,10 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     navigate(
       '/multiplayer',
       true,
-      state.room.host_user_id === userId
-        ? 'Room closed.'
-        : 'The host closed this room.',
+      closedRoomLandingNotice(state.room.host_user_id, userId),
     );
   }, [state, userId]);
 
-  const exitingHost = state?.room.host_user_id === userId;
   const confirmExit = async () => {
     if (!exitIntent || exitingRef.current) return;
     setBusy('leave');
@@ -517,22 +509,14 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     await runWaitingRoomExit({
       pending: exitingRef,
       leave: () => leaveRoom(client, roomId),
+      isActive: () => mountedRef.current && !transitionedRef.current,
       onSuccess: () => {
-        if (!mountedRef.current || transitionedRef.current) return;
         const destination = exitIntent.destination || '/multiplayer';
         clearExitGuard();
         if (exitIntent.external) {
           window.location.assign(destination);
         } else {
-          navigate(
-            destination,
-            true,
-            destination.startsWith('/multiplayer')
-              ? exitingHost
-                ? 'Room closed.'
-                : 'You left the room.'
-              : undefined,
-          );
+          navigate(destination, true);
         }
       },
       onFailure: () => {

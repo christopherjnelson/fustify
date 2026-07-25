@@ -2,12 +2,20 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
+  closedRoomLandingNotice,
   runWaitingRoomExit,
   waitingRoomExitCopy,
   WaitingRoomExitDialog,
 } from './WaitingRoomExitDialog';
 
 describe('waiting room exit confirmation', () => {
+  it('returns host and guest closure feedback to the correct lifecycle owner', () => {
+    expect(closedRoomLandingNotice('host-id', 'host-id')).toBeUndefined();
+    expect(closedRoomLandingNotice('host-id', 'guest-id')).toBe(
+      'The host closed this room.',
+    );
+  });
+
   it('uses host-specific close-room language', () => {
     expect(waitingRoomExitCopy(true)).toEqual({
       title: 'Close Room and Leave?',
@@ -112,5 +120,27 @@ describe('waiting room exit confirmation', () => {
     });
 
     expect(calls).toEqual(['contained-error', 'retry-rpc', 'navigate']);
+  });
+
+  it('ignores a late result after the room view has been abandoned', async () => {
+    let resolveLeave!: () => void;
+    const leave = new Promise<void>((resolve) => {
+      resolveLeave = resolve;
+    });
+    const calls: string[] = [];
+    let active = true;
+    const request = runWaitingRoomExit({
+      pending: { current: false },
+      leave: () => leave,
+      isActive: () => active,
+      onSuccess: () => calls.push('navigate'),
+      onFailure: () => calls.push('error'),
+    });
+
+    active = false;
+    resolveLeave();
+    await request;
+
+    expect(calls).toEqual([]);
   });
 });

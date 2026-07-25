@@ -458,9 +458,11 @@ function ActionPanel({
 export function MultiplayerBrowser({
   profile,
   services,
+  notice = null,
 }: {
   profile: UserProfile;
   services: MultiplayerBrowserServices;
+  notice?: string | null;
 }) {
   const [rooms, setRooms] = useState<PublicRoom[]>([]);
   const [loading, setLoading] = useState(true);
@@ -564,6 +566,12 @@ export function MultiplayerBrowser({
           code.
         </p>
       </header>
+
+      {notice && (
+        <p className="multiplayer-browser-notice" role="status">
+          {notice}
+        </p>
+      )}
 
       <div className="multiplayer-browser-actions">
         <ActionPanel

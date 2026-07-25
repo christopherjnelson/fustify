@@ -183,12 +183,11 @@ export function MultiplayerBrowserVisualApp() {
         </aside>
       }
     >
-      {closureNotice && (
-        <p className="multiplayer-browser-notice" role="status">
-          {closureNotice}
-        </p>
-      )}
-      <MultiplayerBrowser profile={profile} services={services} />
+      <MultiplayerBrowser
+        profile={profile}
+        services={services}
+        notice={closureNotice}
+      />
       {dialogOpen && (
         <WaitingRoomExitDialog
           host={exitDialog === 'host'}

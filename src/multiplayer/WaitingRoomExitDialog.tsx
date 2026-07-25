@@ -6,14 +6,26 @@ export type WaitingRoomExitIntent = {
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
+export function closedRoomLandingNotice(
+  hostUserId: string,
+  currentUserId: string,
+): string | undefined {
+  return hostUserId === currentUserId
+    ? undefined
+    : 'The host closed this room.';
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
 export async function runWaitingRoomExit({
   pending,
   leave,
+  isActive = () => true,
   onSuccess,
   onFailure,
 }: {
   pending: { current: boolean };
   leave: () => Promise<void>;
+  isActive?: () => boolean;
   onSuccess: () => void;
   onFailure: () => void;
 }) {
@@ -21,9 +33,9 @@ export async function runWaitingRoomExit({
   pending.current = true;
   try {
     await leave();
-    onSuccess();
+    if (isActive()) onSuccess();
   } catch {
-    onFailure();
+    if (isActive()) onFailure();
   } finally {
     pending.current = false;
   }
