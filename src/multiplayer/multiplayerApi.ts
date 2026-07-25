@@ -96,14 +96,10 @@ export const roomNameSchema = z
     'Game names cannot contain control characters.',
   );
 
-export const roomVisibilitySchema = z.enum(['public', 'private']);
-export type RoomVisibility = z.infer<typeof roomVisibilitySchema>;
-
 export interface CreateRoomOptions {
   settings?: MultiplayerRoomSettings;
   generateSeed?: () => string;
   name?: string;
-  visibility?: RoomVisibility;
 }
 
 const DEFAULT_ROOM_SETTINGS = {
@@ -126,6 +122,10 @@ const publicRoomSchema = z.object({
   current_players: z.number().int().min(0).max(5),
   maximum_players: z.number().int().min(2).max(5),
   room_state: z.enum(['waiting', 'full']),
+  room_seed: z.string().trim().min(1).max(64),
+  territory_count: z.number().int().min(12).max(48),
+  continent_count: z.number().int().min(2).max(5),
+  assignment_mode: z.enum(['random', 'player-draft']),
   thumbnail_path: z.string().nullable(),
   thumbnail_version: z.number().int().nonnegative(),
   players: z.array(publicRoomPlayerSchema).max(5),
@@ -133,6 +133,24 @@ const publicRoomSchema = z.object({
 });
 
 export type PublicRoom = z.infer<typeof publicRoomSchema>;
+export type PublicRoomJoin = { id: string };
+
+const publishRoomResultSchema = z.object({
+  room_id: z.string().uuid(),
+  room_visibility: z.literal('public'),
+  room_revision: z.number().int().nonnegative(),
+});
+
+export type PublishRoomResult = z.infer<typeof publishRoomResultSchema>;
+
+export const PUBLIC_MULTIPLAYER_ORIGIN = 'https://dev.fustify.com';
+
+export function publicRoomUrl(roomId: string): string {
+  return new URL(
+    `/multiplayer/room/${encodeURIComponent(roomId)}`,
+    PUBLIC_MULTIPLAYER_ORIGIN,
+  ).toString();
+}
 
 const pendingBootstrapByClient = new WeakMap<
   SupabaseClient<Database>,
@@ -150,8 +168,12 @@ const pendingHeartbeatByClient = new WeakMap<
   SupabaseClient<Database>,
   Map<string, Promise<boolean>>
 >();
+const pendingPublicationByClient = new WeakMap<
+  SupabaseClient<Database>,
+  Map<string, Promise<PublishRoomResult>>
+>();
 
-function coalescedMatchRead<T>(
+function coalescedRequest<T>(
   pendingByClient: WeakMap<SupabaseClient<Database>, Map<string, Promise<T>>>,
   client: SupabaseClient<Database>,
   matchId: string,
@@ -268,7 +290,7 @@ export function fetchMatchBootstrap(
   client: SupabaseClient<Database>,
   matchId: string,
 ): Promise<MultiplayerMatch> {
-  return coalescedMatchRead(
+  return coalescedRequest(
     pendingBootstrapByClient,
     client,
     matchId,
@@ -290,44 +312,32 @@ export function fetchMatchVersion(
   client: SupabaseClient<Database>,
   matchId: string,
 ): Promise<MatchVersion> {
-  return coalescedMatchRead(
-    pendingVersionByClient,
-    client,
-    matchId,
-    async () => {
-      const result = await client
-        .from('matches')
-        .select(MATCH_VERSION_COLUMNS)
-        .eq('id', matchId)
-        .maybeSingle();
-      if (result.error)
-        throw matchReadError(result.error, false, result.status);
-      if (!result.data) throw matchReadError('room_access_denied', true);
-      return result.data;
-    },
-  );
+  return coalescedRequest(pendingVersionByClient, client, matchId, async () => {
+    const result = await client
+      .from('matches')
+      .select(MATCH_VERSION_COLUMNS)
+      .eq('id', matchId)
+      .maybeSingle();
+    if (result.error) throw matchReadError(result.error, false, result.status);
+    if (!result.data) throw matchReadError('room_access_denied', true);
+    return result.data;
+  });
 }
 
 export function fetchMatchMutableState(
   client: SupabaseClient<Database>,
   matchId: string,
 ): Promise<MatchMutableState> {
-  return coalescedMatchRead(
-    pendingMutableByClient,
-    client,
-    matchId,
-    async () => {
-      const result = await client
-        .from('matches')
-        .select(MATCH_MUTABLE_COLUMNS)
-        .eq('id', matchId)
-        .maybeSingle();
-      if (result.error)
-        throw matchReadError(result.error, false, result.status);
-      if (!result.data) throw matchReadError('room_access_denied', true);
-      return result.data;
-    },
-  );
+  return coalescedRequest(pendingMutableByClient, client, matchId, async () => {
+    const result = await client
+      .from('matches')
+      .select(MATCH_MUTABLE_COLUMNS)
+      .eq('id', matchId)
+      .maybeSingle();
+    if (result.error) throw matchReadError(result.error, false, result.status);
+    if (!result.data) throw matchReadError('room_access_denied', true);
+    return result.data;
+  });
 }
 
 export async function createRoom(
@@ -349,11 +359,17 @@ export async function createRoom(
     assignment_mode: settings.assignmentMode,
     max_seats: settings.maxSeats,
     game_name: roomNameSchema.parse(options.name ?? 'New Game'),
-    room_visibility: roomVisibilitySchema.parse(options.visibility ?? 'public'),
   };
   const { data, error } = await client.rpc('create_room', args);
   if (error) throw multiplayerError(error);
   if (!data) throw multiplayerError('room_creation_failed');
+  if (
+    data.visibility !== 'private' ||
+    data.status !== 'waiting' ||
+    !data.join_code
+  ) {
+    throw multiplayerError('room_creation_failed');
+  }
   return data;
 }
 
@@ -368,12 +384,14 @@ export async function fetchPublicRooms(
 export async function joinPublicRoom(
   client: SupabaseClient<Database>,
   roomId: string,
-): Promise<Room> {
+): Promise<PublicRoomJoin> {
   const { data, error } = await client.rpc('join_public_room', {
     p_room_id: roomId,
   });
   if (error) throw multiplayerError(error);
-  return data;
+  const joined = data?.[0];
+  if (!joined) throw multiplayerError('public_room_unavailable');
+  return joined;
 }
 
 export async function joinRoom(
@@ -393,7 +411,7 @@ export function heartbeatRoomMembership(
   client: SupabaseClient<Database>,
   roomId: string,
 ): Promise<boolean> {
-  return coalescedMatchRead(
+  return coalescedRequest(
     pendingHeartbeatByClient,
     client,
     roomId,
@@ -438,9 +456,28 @@ export async function updateRoomSettings(
     continent_count: room.continent_count,
     assignment_mode: room.assignment_mode,
     max_seats: room.max_seats,
+    game_name: room.name,
   });
   if (error) throw multiplayerError(error);
   return data;
+}
+
+export function publishRoom(
+  client: SupabaseClient<Database>,
+  roomId: string,
+): Promise<PublishRoomResult> {
+  return coalescedRequest(
+    pendingPublicationByClient,
+    client,
+    roomId,
+    async () => {
+      const { data, error } = await client.rpc('publish_room', {
+        p_room_id: roomId,
+      });
+      if (error) throw multiplayerError(error);
+      return publishRoomResultSchema.parse(data?.[0]);
+    },
+  );
 }
 
 async function functionError(error: unknown): Promise<Error> {

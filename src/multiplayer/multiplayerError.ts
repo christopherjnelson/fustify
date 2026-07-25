@@ -25,6 +25,8 @@ export const MULTIPLAYER_ERRORS: Record<string, string> = {
   invalid_profile_display_name:
     'Your profile display name is invalid. Edit your profile and try again.',
   invalid_room_name: 'Use a game name between 1 and 60 characters.',
+  invalid_public_room_configuration:
+    'Review and save valid room settings before opening the public lobby.',
   idempotency_conflict:
     'That request key was already used for a different action.',
   invalid_thumbnail_path: 'That world preview path is not available.',
@@ -46,6 +48,10 @@ export const MULTIPLAYER_ERRORS: Record<string, string> = {
   private_room_thumbnail: 'Private games do not publish world previews.',
   public_room_unavailable:
     'That public game is no longer available. Choose another game.',
+  published_room_settings_locked:
+    'Public lobby settings are permanently locked.',
+  room_already_published:
+    'This room is already public. Refresh to load its locked settings.',
   revision_conflict: 'The match changed before that action was accepted.',
   room_access_denied: 'This private room is unavailable to this player.',
   room_active: 'This room has already started.',

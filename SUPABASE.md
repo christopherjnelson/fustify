@@ -32,6 +32,7 @@ Migration order:
 15. `20260725180409_secure_admin_dashboard.sql`
 16. `20260725193047_expire_inactive_multiplayer_rooms.sql`
 17. `20260725212915_discord_room_announcements.sql`
+18. `20260725231245_publish_immutable_public_lobbies.sql`
 
 The authority migration extends `matches`, creates append-only
 `match_commands`, adds member-scoped read RLS, removes browser execution of the
@@ -67,11 +68,12 @@ The frontend capability model mirrors these restrictions for profile editing,
 reactions, and future chat presentation. Future chat writes must independently
 enforce registered-user status on the server.
 
-Before the Discord announcement migration, the source-controlled and hosted
-histories contain the first sixteen migrations in this order. Edge Function
-`multiplayer-game` is active at version 3 with `verify_jwt=false`. The Discord
-announcement work adds a separate function and does not change or redeploy
-multiplayer authority.
+The immutable-public-lobbies migration makes private waiting the authoritative
+creation result, adds the host-only `publish_room` transaction, locks
+advertised settings after publication, clears published room codes, narrows
+public joining to an ID-only result, and makes the private-to-public update the
+sole Discord enqueue event. Existing public rooms are immediately treated as
+published and locked; existing private waiting rooms remain editable.
 
 ## Secrets and browser configuration
 
@@ -107,16 +109,19 @@ Before applying the Discord announcement migration:
    in Vault as `discord_room_announcement_function_url`.
 
 No value for either secret belongs in Git, a migration, `config.toml`, a test
-fixture, or a browser variable. If either Vault entry is missing, room creation
-continues and the announcement remains pending without an HTTP request.
+fixture, or a browser variable. If either Vault entry is missing, room
+publication still commits and the announcement remains pending without an HTTP
+request.
 
 The single `discord_room_announcement_config` row is editable in Studio.
 Supported placeholders in the title and description templates are
 `{{room_name}}`, `{{join_url}}`, `{{open_seats}}`, `{{max_seats}}`, `{{seed}}`,
 `{{territory_count}}`, `{{continent_count}}`, `{{assignment_mode}}`, and
-`{{configuration_summary}}`. Seed and configuration-summary fields are off by
-default; mentions are always disabled in the Discord payload. Delivery also
-starts disabled and must be enabled as the final controlled rollout step.
+`{{configuration_summary}}`. The locked seed and core world/capacity fields are
+always present; open-seat-at-publication and configuration-summary fields
+remain configurable. Mentions are always disabled in the Discord payload.
+Delivery starts disabled and must be enabled as the final controlled rollout
+step.
 
 ## Email Auth prerequisites
 
@@ -145,19 +150,22 @@ links, and removes its local Auth users and room records.
 
 ## Deployment
 
-Using the authenticated Supabase connector:
+For the immutable-public-lobbies rollout, preserve this compatibility order:
 
-1. Confirm project ref and current remote migration history.
-2. Set the Discord announcement Edge/Vault prerequisites listed above.
-3. Deploy `announce-public-room` with `verify_jwt=false`; its handler performs
-   dedicated `apikey` authentication.
-4. Apply the exact source-controlled migrations in filename order.
-5. Deploy `multiplayer-game` with every relative shared-engine dependency and
-   `verify_jwt=false` because authentication is performed in its handler.
-6. Regenerate `src/multiplayer/database.types.ts` from the deployed schema and
-   review the diff.
-7. Confirm remote migration history, function version/configuration, grants,
-   RLS policies, publication membership, and advisors.
+1. Confirm the project ref, migration history, and Discord Edge/Vault
+   prerequisites.
+2. Deploy the backward-compatible `announce-public-room` source with
+   `verify_jwt=false`; its handler performs dedicated `apikey` authentication.
+3. Apply the exact source-controlled migrations in filename order.
+4. Verify function definitions and grants, RLS, immutable-setting enforcement,
+   private/public joining, discovery, and one publication outbox row.
+5. Regenerate `src/multiplayer/database.types.ts` from the deployed schema,
+   verify the pending migration surface, and preserve the accepted nullable
+   `update_own_profile.p_avatar_url` and
+   `set_match_event_reaction.p_reaction` parameters.
+6. Deploy the frontend.
+7. Run one controlled private-create → publish → public-list → Discord →
+   direct-join test, then enable delivery only when all gates pass.
 
 CLI equivalents, when `SUPABASE_ACCESS_TOKEN` is available, are:
 
@@ -191,15 +199,20 @@ either capability.
 
 Public discovery and public joining are narrow registered-account functions,
 not broad table reads. `list_public_rooms` returns only safe card data for
-public waiting rooms and omits room codes and account identifiers.
+published public waiting rooms and omits room codes and account identifiers.
 `join_public_room` locks the target room and reuses the membership/capacity
-rules before returning the joined room. Both functions pin `search_path`, take
-the caller only from `auth.uid()`, and are executable only by `authenticated`.
+rules before returning only its ID. `publish_room` uses the same row lock,
+derives the caller from `auth.uid()`, requires the registered host, validates
+the complete final configuration and an available seat, clears the private
+code, and crosses the private-to-public boundary once. These functions pin
+`search_path`, revoke default/anonymous execution, and grant execution only to
+`authenticated`.
 
 Discord announcement configuration and outbox tables have RLS enabled and no
-`anon` or `authenticated` grants or policies. A deferred trigger rechecks the
-final room state after creation or an eligibility-field update and inserts at
-most one outbox row per room. The Edge Function revalidates public/waiting
+`anon` or `authenticated` grants or policies. A deferred trigger runs only for
+the private-to-public room update and inserts at most one outbox row per room.
+Creation, private edits, membership changes, heartbeats, and later room updates
+do not enqueue. The Edge Function revalidates public/waiting
 status, member capacity, seats, and configuration after atomically claiming a
 pending row. Failures store only bounded error codes. There is no automatic
 retry: after verifying that Discord did not accept an ambiguous timed-out
@@ -239,8 +252,15 @@ permit weakening grants or policies.
   profile and reaction mutations; registered callers retain normal behavior.
 - Public listing excludes private and non-waiting rooms and exposes no join
   codes, user IDs, emails, or administrative fields.
+- New rooms are private waiting rooms regardless of a deployed old client's
+  requested visibility.
+- Only the registered host can publish a structurally valid, non-full private
+  waiting room; the transition clears the code and enqueues exactly once.
+- Published, active, and closed room settings cannot change, and public
+  visibility cannot be reverted.
 - Public joining rechecks visibility, waiting state, membership, and capacity
-  under a room lock.
+  under a room lock and returns only the room ID; code joining rejects public
+  rooms.
 - Only a public room host can write its exact stable thumbnail object path or
   publish its thumbnail metadata.
 - Member reads and non-member zero-row behavior pass.

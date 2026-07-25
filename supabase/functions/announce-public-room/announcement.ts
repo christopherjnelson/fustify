@@ -22,6 +22,7 @@ export type AnnouncementRoom = {
 export type AnnouncementSeat = {
   seatIndex: number;
   occupantUserId: string | null;
+  controllerType: string;
 };
 
 export type AnnouncementConfig = {
@@ -33,7 +34,6 @@ export type AnnouncementConfig = {
   embedColor: number;
   footerText: string | null;
   canonicalOrigin: string;
-  includeSeed: boolean;
   includeOpenSeats: boolean;
   includeConfigurationSummary: boolean;
 };
@@ -141,6 +141,59 @@ function substitute(
   );
 }
 
+function assignmentLabel(value: string): string {
+  return value === 'random' ? 'Random' : 'Player draft';
+}
+
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0);
+    return (
+      codePoint !== undefined &&
+      (codePoint <= 31 || (codePoint >= 127 && codePoint <= 159))
+    );
+  });
+}
+
+function hasValidLockedSettings(room: AnnouncementRoom): boolean {
+  return (
+    isUuid(room.id) &&
+    room.name === room.name.trim() &&
+    room.name.length >= 1 &&
+    room.name.length <= 60 &&
+    !hasControlCharacter(room.name) &&
+    room.seed === room.seed.trim() &&
+    room.seed.length >= 1 &&
+    room.seed.length <= 64 &&
+    Number.isInteger(room.territoryCount) &&
+    room.territoryCount >= 12 &&
+    room.territoryCount <= 48 &&
+    Number.isInteger(room.continentCount) &&
+    room.continentCount >= 2 &&
+    room.continentCount <= 5 &&
+    room.continentCount <= room.territoryCount &&
+    room.assignmentMode === 'random' &&
+    Number.isInteger(room.maxSeats) &&
+    room.maxSeats >= 2 &&
+    room.maxSeats <= 5
+  );
+}
+
+function hasValidSeatStructure(
+  seats: AnnouncementSeat[],
+  maxSeats: number,
+): boolean {
+  return (
+    seats.length === maxSeats &&
+    seats.every(
+      (seat, index) =>
+        seat.seatIndex === index &&
+        seat.controllerType === 'human' &&
+        (seat.occupantUserId === null || isUuid(seat.occupantUserId)),
+    )
+  );
+}
+
 function assertDiscordPayload(payload: DiscordPayload): void {
   const embed = payload.embeds[0];
   if (
@@ -188,7 +241,8 @@ export function buildDiscordPayload(
     origin,
   ).toString();
   const openSeats = Math.max(0, room.maxSeats - memberCount);
-  const configurationSummary = `${room.territoryCount} territories · ${room.continentCount} continents · ${room.assignmentMode}`;
+  const assignment = assignmentLabel(room.assignmentMode);
+  const configurationSummary = `${room.territoryCount} territories · ${room.continentCount} continents · ${assignment}`;
   const placeholders = {
     room_name: markdownEscape(room.name),
     join_url: joinUrl,
@@ -197,21 +251,40 @@ export function buildDiscordPayload(
     seed: markdownEscape(room.seed),
     territory_count: String(room.territoryCount),
     continent_count: String(room.continentCount),
-    assignment_mode: markdownEscape(room.assignmentMode),
+    assignment_mode: markdownEscape(assignment),
     configuration_summary: markdownEscape(configurationSummary),
   };
-  const fields: Array<{ name: string; value: string; inline: boolean }> = [];
-  if (config.includeOpenSeats) {
-    fields.push({
-      name: 'Open seats',
-      value: `${openSeats} of ${room.maxSeats}`,
+  const fields: Array<{ name: string; value: string; inline: boolean }> = [
+    {
+      name: 'Player capacity',
+      value: `${room.maxSeats} players`,
       inline: true,
-    });
-  }
-  if (config.includeSeed) {
-    fields.push({
+    },
+    {
+      name: 'Territories',
+      value: String(room.territoryCount),
+      inline: true,
+    },
+    {
+      name: 'Continents',
+      value: String(room.continentCount),
+      inline: true,
+    },
+    {
+      name: 'Assignment',
+      value: markdownEscape(assignment),
+      inline: true,
+    },
+    {
       name: 'Seed',
       value: markdownEscape(room.seed),
+      inline: false,
+    },
+  ];
+  if (config.includeOpenSeats) {
+    fields.push({
+      name: 'Open seats at publication',
+      value: `${openSeats} of ${room.maxSeats}`,
       inline: true,
     });
   }
@@ -313,10 +386,20 @@ export async function handleAnnouncementRequest(
       room.visibility !== 'public' ||
       room.status !== 'waiting' ||
       memberCount >= room.maxSeats ||
-      seats.length < room.maxSeats
+      memberCount < 1
     ) {
       await dependencies.store.markSkipped(announcementId, 'room_not_eligible');
       return jsonResponse(200, { code: 'room_not_eligible' });
+    }
+    if (
+      !hasValidLockedSettings(room) ||
+      !hasValidSeatStructure(seats, room.maxSeats)
+    ) {
+      return markFailure(
+        dependencies,
+        announcementId,
+        'invalid_room_configuration',
+      );
     }
 
     const { payload } = buildDiscordPayload(room, memberCount, config);

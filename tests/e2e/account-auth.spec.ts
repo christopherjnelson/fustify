@@ -350,7 +350,9 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
             return {
               data: {
                 id: '30000000-0000-4000-8000-000000000003',
-                join_code: 'TEST-ROOM',
+                join_code: 'ABCD1234',
+                status: 'waiting',
+                visibility: 'private',
               },
               error: null,
             };
@@ -822,9 +824,11 @@ test('profile identity updates before create and room RPC payload has no alias s
   await expect
     .poll(async () => (await called(page, 'create_room')).length)
     .toBe(1);
-  expect((await called(page, 'create_room'))[0]?.payload).toMatchObject({
+  const createPayload = (await called(page, 'create_room'))[0]?.payload;
+  expect(createPayload).toMatchObject({
     display_name: '',
   });
+  expect(createPayload).not.toHaveProperty('room_visibility');
 });
 
 test('join uses only the room code and sends no editable alias state', async ({

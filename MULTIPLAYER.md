@@ -1,8 +1,10 @@
 # Authoritative multiplayer beta
 
 Fustify multiplayer is a registered-account, human-only mode for 2–5 players.
-Players can advertise public waiting rooms, create unlisted private rooms, or
-join either kind through an existing room code. It reuses the local
+Every room begins as an editable private waiting room. Its host may keep it
+private, start it privately, or irreversibly publish its final configuration as
+a public lobby. Private rooms use room codes; public rooms use their canonical
+direct URL and never expose or accept a room code. It reuses the local
 deterministic generator, setup code, `gameReducer`, globe, minimap, territory
 navigator, accessible phase controls, and victory rules. Multiplayer is
 considered playable only after the remote migration, deployed Edge Function,
@@ -10,8 +12,9 @@ security harness, and complete two-browser winner test all pass.
 
 ## Routes and lifecycle
 
-- `/multiplayer` requires a registered Supabase account and renders the public
-  waiting-room browser, public/private creation dialog, and room-code join form.
+- `/multiplayer` requires a registered Supabase account and renders the
+  published waiting-room browser, private creation dialog, and private
+  room-code join form.
 - `/multiplayer/room/:roomId` is the existing pre-game room lobby. It allows one
   human seat per member. Start is disabled until two seats are claimed, while
   the database independently enforces the same minimum against concurrent
@@ -28,16 +31,27 @@ Public discovery uses the registered-only `list_public_rooms` function. It
 returns safe presentation fields for public rooms still in `waiting` status and
 never returns a join code, user ID, email, private room, or started/closed room.
 `join_public_room` locks the room row and rechecks visibility, status,
-membership, and authoritative capacity before returning the code needed by the
-existing route. The browser polls every 12 seconds while visible and refetches
-on focus; private room rows are not exposed through Realtime.
+membership, and authoritative capacity before returning only the joined room
+ID. The browser then uses
+`https://dev.fustify.com/multiplayer/room/<encoded-room-uuid>`. It polls every
+12 seconds while visible and refetches on focus; private room rows are not
+exposed through Realtime.
+
+`publish_room` is the single publication boundary. It takes a room row lock,
+requires the current registered host and a private waiting room, validates the
+room, profile, capacity, member, seat, assignment, and generator configuration,
+then changes visibility to public and clears the private code in one
+transaction. A database trigger permanently rejects changes to advertised
+settings on public, active, or closed rooms. The deferred Discord trigger runs
+only for the same private-to-public visibility transition, while public
+discovery filters on that committed public state.
 
 Public cards render stored 640×360 WebP previews from the public
 `room-thumbnails` bucket. The host alone can upsert the exact
-`{room-id}/world.webp` path. Room creation and world-setting persistence do not
-depend on thumbnail success. A setting change invalidates published thumbnail
-metadata transactionally, and successful publication increments the stable
-cache version used in the image URL.
+`{room-id}/world.webp` path. Room creation, private setting persistence, and
+publication do not depend on thumbnail success. The client requests the
+best-effort preview only after authoritative publication; thumbnail metadata
+remains lifecycle metadata rather than an editable advertised setting.
 
 ## Authority boundary
 
@@ -149,9 +163,11 @@ restores an active match and checks readability/clipping.
 ## Production smoke test (`dev.fustify.com`)
 
 1. Open two separate devices or isolated browser profiles.
-2. Create a public 12-territory, 2-continent, 2-seat random room; verify it is
-   advertised without its code, join from its card, and claim both seats.
-   Verify Start was unavailable before the second claim.
+2. Create a private 12-territory, 2-continent, 2-seat random room; verify it is
+   absent from discovery and Discord, then select **Open Public Lobby** and
+   confirm the irreversible lock. Verify its final settings are advertised
+   without a code, join from its card/direct URL, and claim both seats. Verify
+   Start was unavailable before the second claim.
 3. Start and confirm both browsers show revision 0 and the same fingerprint.
 4. Complete at least one turn on each device, including combat and capture move.
 5. Refresh both devices during active phases and confirm phase, armies,

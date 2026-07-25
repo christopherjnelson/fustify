@@ -34,7 +34,6 @@ const config: AnnouncementConfig = {
   embedColor: 9134824,
   footerText: 'Fustify public multiplayer',
   canonicalOrigin: 'https://dev.fustify.com',
-  includeSeed: true,
   includeOpenSeats: true,
   includeConfigurationSummary: true,
 };
@@ -68,7 +67,9 @@ function storeFixture(overrides?: {
     getSeats: vi.fn(async () =>
       Array.from({ length: room.maxSeats }, (_, seatIndex) => ({
         seatIndex,
-        occupantUserId: seatIndex === 0 ? 'host-id' : null,
+        controllerType: 'human',
+        occupantUserId:
+          seatIndex === 0 ? '63000000-0000-4000-8000-000000000001' : null,
       })),
     ),
     getConfig: vi.fn(async () =>
@@ -200,6 +201,25 @@ describe('public room Discord announcement delivery', () => {
     expect(outbound).not.toHaveBeenCalled();
   });
 
+  it('fails safely when locked room settings are malformed', async () => {
+    const fixture = storeFixture({
+      room: { ...room, seed: '   ' },
+    });
+    const outbound = vi.fn<typeof fetch>();
+
+    const response = await handleAnnouncementRequest(
+      request(),
+      dependencies(fixture.store, outbound),
+    );
+
+    expect(response.status).toBe(502);
+    expect(fixture.state).toMatchObject({
+      status: 'failed',
+      error: 'invalid_room_configuration',
+    });
+    expect(outbound).not.toHaveBeenCalled();
+  });
+
   it('uses wait=true, disables mentions, and marks a confirmed Discord message sent', async () => {
     const fixture = storeFixture();
     const outbound = vi.fn<typeof fetch>(async () =>
@@ -221,12 +241,26 @@ describe('public room Discord announcement delivery', () => {
     expect(String(url)).toBe(`${discordWebhook}?wait=true`);
     const payload = JSON.parse(String(init?.body)) as {
       allowed_mentions: { parse: unknown[] };
-      embeds: Array<{ url: string }>;
+      embeds: Array<{
+        url: string;
+        fields: Array<{ name: string; value: string }>;
+      }>;
     };
     expect(payload.allowed_mentions).toEqual({ parse: [] });
     expect(payload.embeds[0].url).toBe(
       `https://dev.fustify.com/multiplayer/room/${roomId}`,
     );
+    expect(payload.embeds[0].fields).toEqual(
+      expect.arrayContaining([
+        { name: 'Player capacity', value: '4 players', inline: true },
+        { name: 'Territories', value: '42', inline: true },
+        { name: 'Continents', value: '5', inline: true },
+        { name: 'Assignment', value: 'Random', inline: true },
+        { name: 'Seed', value: 'quiet\\_\\[orbit\\]', inline: false },
+      ]),
+    );
+    expect(JSON.stringify(payload)).not.toContain('join_code');
+    expect(JSON.stringify(payload)).not.toContain('host_user_id');
   });
 
   it('stores only a short status code for Discord non-success responses', async () => {
@@ -302,6 +336,18 @@ describe('Discord room payload formatting', () => {
     expect(payload.embeds[0].description).toContain('quiet\\_\\[orbit\\]');
     expect(payload.embeds[0].description).not.toContain('{{');
     expect(payload.allowed_mentions).toEqual({ parse: [] });
+    expect(payload.embeds[0].fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Player capacity',
+          value: '4 players',
+        }),
+        expect.objectContaining({ name: 'Territories', value: '42' }),
+        expect.objectContaining({ name: 'Continents', value: '5' }),
+        expect.objectContaining({ name: 'Assignment', value: 'Random' }),
+        expect.objectContaining({ name: 'Seed', value: 'quiet\\_\\[orbit\\]' }),
+      ]),
+    );
   });
 
   it('rejects an arbitrary origin path instead of constructing an attacker-controlled route', () => {

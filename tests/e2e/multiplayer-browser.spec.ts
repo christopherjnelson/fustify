@@ -115,6 +115,18 @@ test('public browser renders cards without room codes and disables full games', 
     page.getByRole('heading', { name: 'Atlas Prime' }),
   ).toBeVisible();
   await expect(page.getByText('ABCD-1234')).toHaveCount(0);
+  await expect(
+    page.locator('.public-game-card').first().getByText('atlas-prime-271'),
+  ).toBeVisible();
+  await expect(
+    page.locator('.public-game-card').first().getByText('42 territories'),
+  ).toBeVisible();
+  await expect(
+    page.locator('.public-game-card').first().getByText('5 continents'),
+  ).toBeVisible();
+  await expect(
+    page.locator('.public-game-card').first().getByText('Random'),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Full' })).toBeDisabled();
   await expect(page.locator('.public-game-card')).toHaveCount(3);
 });
@@ -153,21 +165,20 @@ test('empty, loading, error, and thumbnail fallback states preserve primary acti
   ).toBeEnabled();
 });
 
-test('create dialog defaults to public, traps focus, preserves inputs, and returns focus', async ({
+test('create dialog always creates private, traps focus, preserves inputs, and returns focus', async ({
   page,
 }) => {
   await page.goto('/multiplayer?visual-review=1&browser-state=empty');
-  const trigger = page
-    .getByRole('button', { name: 'Create Public Game' })
-    .first();
+  const trigger = page.getByRole('button', { name: 'Create Game' }).first();
   await trigger.click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('Game name')).toHaveValue(
     'Visual Host’s Game',
   );
-  await expect(dialog.getByLabel('Public')).toBeChecked();
-  await dialog.getByLabel('Private').check();
+  await expect(dialog).toContainText('New rooms start private.');
+  await expect(dialog.getByLabel('Public')).toHaveCount(0);
+  await expect(dialog.getByLabel('Private')).toHaveCount(0);
   await dialog.getByLabel('Maximum players').selectOption('3');
   await dialog.getByLabel('Game name').fill('  Night Orbit  ');
   await dialog
@@ -186,11 +197,11 @@ test('create dialog defaults to public, traps focus, preserves inputs, and retur
           ).__FUSTIFY_MULTIPLAYER_BROWSER_FIXTURE__?.createInputs,
       ),
     )
-    .toEqual([{ name: 'Night Orbit', visibility: 'private', maxSeats: 3 }]);
+    .toEqual([{ name: 'Night Orbit', maxSeats: 3 }]);
 
   await page.reload();
   const createTrigger = page
-    .getByRole('button', { name: 'Create Public Game' })
+    .getByRole('button', { name: 'Create Game' })
     .first();
   await createTrigger.click();
   await page.getByRole('button', { name: 'Close create game dialog' }).focus();
@@ -283,7 +294,7 @@ test('stored world preview conversion produces a 640 by 360 WebP', async ({
       thumbnail_path: null,
       thumbnail_version: 0,
       updated_at: '2026-07-25T00:00:00.000Z',
-      visibility: 'public',
+      visibility: 'private',
     });
     const bitmap = await createImageBitmap(thumbnail);
     const dimensions = { width: bitmap.width, height: bitmap.height };

@@ -7,12 +7,22 @@ import {
   joinPublicRoom,
   joinRoom,
   multiplayerError,
+  publicRoomUrl,
+  publishRoom,
   roomNameSchema,
+  updateRoomSettings,
+  type Room,
 } from './multiplayerApi';
 
 describe('multiplayer room creation', () => {
   it('persists one freshly generated readable seed during room creation', async () => {
-    const room = { id: 'room-id', seed: 'quiet-harbor-321' };
+    const room = {
+      id: 'room-id',
+      seed: 'quiet-harbor-321',
+      visibility: 'private',
+      status: 'waiting',
+      join_code: 'ABCD1234',
+    };
     const rpc = vi.fn(async () => ({ data: room, error: null }));
     const generateSeed = vi.fn(() => 'quiet-harbor-321');
     const client = { rpc } as unknown as SupabaseClient<Database>;
@@ -27,12 +37,16 @@ describe('multiplayer room creation', () => {
       assignment_mode: 'random',
       max_seats: 5,
       game_name: 'New Game',
-      room_visibility: 'public',
     });
   });
 
   it('passes validated explicit settings through the existing room RPC', async () => {
-    const room = { id: 'replacement-room' };
+    const room = {
+      id: 'replacement-room',
+      visibility: 'private',
+      status: 'waiting',
+      join_code: 'ABCD1234',
+    };
     const rpc = vi.fn(async () => ({ data: room, error: null }));
     const client = { rpc } as unknown as SupabaseClient<Database>;
 
@@ -46,7 +60,6 @@ describe('multiplayer room creation', () => {
           maxSeats: 4,
         },
         name: '  Night Orbit  ',
-        visibility: 'private',
       }),
     ).resolves.toBe(room);
     expect(rpc).toHaveBeenCalledWith('create_room', {
@@ -57,8 +70,24 @@ describe('multiplayer room creation', () => {
       assignment_mode: 'random',
       max_seats: 4,
       game_name: 'Night Orbit',
-      room_visibility: 'private',
     });
+  });
+
+  it('rejects a creation result that is not authoritative private waiting state', async () => {
+    const rpc = vi.fn(async () => ({
+      data: {
+        id: 'unexpected-public-room',
+        visibility: 'public',
+        status: 'waiting',
+        join_code: 'ABCD1234',
+      },
+      error: null,
+    }));
+    const client = { rpc } as unknown as SupabaseClient<Database>;
+
+    await expect(createRoom(client)).rejects.toThrow(
+      'Multiplayer request failed.',
+    );
   });
 
   it('normalizes names and rejects empty or oversized room names', () => {
@@ -135,7 +164,7 @@ describe('multiplayer room joining', () => {
 
   it('joins an advertised room through the public-room RPC', async () => {
     const room = { id: 'joined-public-room' };
-    const rpc = vi.fn(async () => ({ data: room, error: null }));
+    const rpc = vi.fn(async () => ({ data: [room], error: null }));
     const client = { rpc } as unknown as SupabaseClient<Database>;
 
     await expect(
@@ -158,6 +187,10 @@ describe('public multiplayer discovery', () => {
         current_players: 2,
         maximum_players: 5,
         room_state: 'waiting',
+        room_seed: 'atlas-prime-271',
+        territory_count: 42,
+        continent_count: 5,
+        assignment_mode: 'random',
         thumbnail_path: '10000000-0000-4000-8000-000000000001/world.webp',
         thumbnail_version: 3,
         players: [
@@ -174,6 +207,83 @@ describe('public multiplayer discovery', () => {
     expect(rpc).toHaveBeenCalledWith('list_public_rooms');
     expect(JSON.stringify(await fetchPublicRooms(client))).not.toContain(
       'join_code',
+    );
+  });
+});
+
+describe('public room publication', () => {
+  it('persists the room name with the rest of the private settings', async () => {
+    const room = {
+      id: '10000000-0000-4000-8000-000000000001',
+      name: 'Final Atlas',
+      seed: 'final-atlas-271',
+      territory_count: 42,
+      continent_count: 5,
+      assignment_mode: 'random',
+      max_seats: 4,
+      created_at: '2026-07-25T12:00:00.000Z',
+      generator_version: 4,
+      host_user_id: '20000000-0000-4000-8000-000000000002',
+      join_code: 'ABCD1234',
+      revision: 2,
+      status: 'waiting',
+      thumbnail_path: null,
+      thumbnail_version: 0,
+      updated_at: '2026-07-25T12:00:00.000Z',
+      visibility: 'private',
+    } satisfies Room;
+    const rpc = vi.fn(async () => ({ data: room, error: null }));
+    const client = { rpc } as unknown as SupabaseClient<Database>;
+
+    await expect(updateRoomSettings(client, room)).resolves.toBe(room);
+    expect(rpc).toHaveBeenCalledWith('update_room_settings', {
+      room_id: room.id,
+      game_name: 'Final Atlas',
+      seed: 'final-atlas-271',
+      territory_count: 42,
+      continent_count: 5,
+      assignment_mode: 'random',
+      max_seats: 4,
+    });
+  });
+
+  it('coalesces concurrent publication calls and returns the authoritative transition', async () => {
+    const publication = {
+      room_id: '10000000-0000-4000-8000-000000000001',
+      room_visibility: 'public',
+      room_revision: 4,
+    };
+    let resolveRequest!: (value: {
+      data: (typeof publication)[];
+      error: null;
+    }) => void;
+    const request = new Promise<{
+      data: (typeof publication)[];
+      error: null;
+    }>((resolve) => {
+      resolveRequest = resolve;
+    });
+    const rpc = vi.fn(() => request);
+    const client = { rpc } as unknown as SupabaseClient<Database>;
+
+    const first = publishRoom(client, publication.room_id);
+    const duplicate = publishRoom(client, publication.room_id);
+    expect(duplicate).toBe(first);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    resolveRequest({ data: [publication], error: null });
+
+    await expect(Promise.all([first, duplicate])).resolves.toEqual([
+      publication,
+      publication,
+    ]);
+    expect(rpc).toHaveBeenCalledWith('publish_room', {
+      p_room_id: publication.room_id,
+    });
+  });
+
+  it('builds the canonical encoded direct room URL', () => {
+    expect(publicRoomUrl('10000000-0000-4000-8000-000000000001')).toBe(
+      'https://dev.fustify.com/multiplayer/room/10000000-0000-4000-8000-000000000001',
     );
   });
 });
@@ -209,5 +319,8 @@ describe('multiplayer errors', () => {
     expect(multiplayerError(new Error('public_room_unavailable')).message).toBe(
       'That public game is no longer available. Choose another game.',
     );
+    expect(
+      multiplayerError(new Error('published_room_settings_locked')).message,
+    ).toBe('Public lobby settings are permanently locked.');
   });
 });

@@ -65,13 +65,14 @@ function announcementStore(client: SupabaseClient): AnnouncementStore {
     async getSeats(id) {
       const { data, error } = await client
         .from('room_seats')
-        .select('seat_index, occupant_user_id')
+        .select('seat_index, occupant_user_id, controller_type')
         .eq('room_id', id)
         .order('seat_index');
       if (error) serverError();
       return (data ?? []).map((seat): AnnouncementSeat => ({
         seatIndex: seat.seat_index,
         occupantUserId: seat.occupant_user_id,
+        controllerType: seat.controller_type,
       }));
     },
     async getConfig() {
@@ -91,7 +92,6 @@ function announcementStore(client: SupabaseClient): AnnouncementStore {
             embedColor: data.embed_color,
             footerText: data.footer_text,
             canonicalOrigin: data.canonical_origin,
-            includeSeed: data.include_seed,
             includeOpenSeats: data.include_open_seats,
             includeConfigurationSummary: data.include_configuration_summary,
           } satisfies AnnouncementConfig)

@@ -12,20 +12,19 @@ import { profileInitials } from '../auth/guestName';
 import {
   roomNameSchema,
   type PublicRoom,
+  type PublicRoomJoin,
   type Room,
-  type RoomVisibility,
 } from './multiplayerApi';
 
 export type CreateGameInput = {
   name: string;
-  visibility: RoomVisibility;
   maxSeats: number;
 };
 
 export type MultiplayerBrowserServices = {
   createGame: (input: CreateGameInput) => Promise<Room>;
   joinWithCode: (code: string) => Promise<Room>;
-  joinPublicGame: (roomId: string) => Promise<Room>;
+  joinPublicGame: (roomId: string) => Promise<PublicRoomJoin>;
   listPublicGames: () => Promise<PublicRoom[]>;
   thumbnailUrl: (path: string, version: number) => string;
   navigate: (path: string) => void;
@@ -98,12 +97,10 @@ function DecorativeWorld({ className = '' }: { className?: string }) {
 
 function CreateGameDialog({
   profile,
-  initialVisibility,
   onClose,
   onCreate,
 }: {
   profile: UserProfile;
-  initialVisibility: RoomVisibility;
   onClose: () => void;
   onCreate: (input: CreateGameInput) => Promise<void>;
 }) {
@@ -114,8 +111,6 @@ function CreateGameDialog({
     ? `${profile.displayName}’s Game`
     : 'New Game';
   const [name, setName] = useState(defaultName);
-  const [visibility, setVisibility] =
-    useState<RoomVisibility>(initialVisibility);
   const [maxSeats, setMaxSeats] = useState(5);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +176,6 @@ function CreateGameDialog({
     try {
       await onCreate({
         name: parsedName.data,
-        visibility,
         maxSeats,
       });
     } catch (requestError) {
@@ -233,38 +227,10 @@ function CreateGameDialog({
             />
           </label>
 
-          <fieldset className="visibility-choice">
-            <legend>Visibility</legend>
-            {(
-              [
-                [
-                  'public',
-                  'Public',
-                  'Appears in the multiplayer browser and can be joined by other players.',
-                ],
-                [
-                  'private',
-                  'Private',
-                  'Unlisted and joined using the room code.',
-                ],
-              ] as const
-            ).map(([value, label, description]) => (
-              <label key={value} data-selected={visibility === value}>
-                <input
-                  type="radio"
-                  name="visibility"
-                  value={value}
-                  checked={visibility === value}
-                  disabled={busy}
-                  onChange={() => setVisibility(value)}
-                />
-                <span>
-                  <strong>{label}</strong>
-                  <small>{description}</small>
-                </span>
-              </label>
-            ))}
-          </fieldset>
+          <p className="create-game-private-note">
+            New rooms start private. You can tune the world and invite players
+            with the room code before opening a permanently locked public lobby.
+          </p>
 
           <label className="create-game-field">
             <span>Maximum players</span>
@@ -400,6 +366,25 @@ function PublicGameCard({
           </span>
         </div>
         <p>Hosted by {room.host_display_name}</p>
+        <dl className="public-game-configuration">
+          <div>
+            <dt>Seed</dt>
+            <dd>{room.room_seed}</dd>
+          </div>
+          <div>
+            <dt>World</dt>
+            <dd>
+              {room.territory_count} territories · {room.continent_count}{' '}
+              continents
+            </dd>
+          </div>
+          <div>
+            <dt>Assignment</dt>
+            <dd>
+              {room.assignment_mode === 'random' ? 'Random' : 'Player draft'}
+            </dd>
+          </div>
+        </dl>
         <SeatRow room={room} />
         <button
           type="button"
@@ -472,8 +457,7 @@ export function MultiplayerBrowser({
   const [joiningCode, setJoiningCode] = useState(false);
   const [joiningRoomId, setJoiningRoomId] = useState<string | null>(null);
   const [roomActionError, setRoomActionError] = useState<string | null>(null);
-  const [dialogVisibility, setDialogVisibility] =
-    useState<RoomVisibility | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const requestSequence = useRef(0);
 
   const refresh = useCallback(
@@ -577,9 +561,9 @@ export function MultiplayerBrowser({
         <ActionPanel
           icon={<WorldIcon />}
           title="Create Game"
-          description="Start a public or private room."
+          description="Start private, finalize the settings, then open the lobby publicly when you are ready."
         >
-          <button type="button" onClick={() => setDialogVisibility('public')}>
+          <button type="button" onClick={() => setCreateDialogOpen(true)}>
             Create Game
           </button>
         </ActionPanel>
@@ -661,9 +645,11 @@ export function MultiplayerBrowser({
           <div className="public-games-message public-games-empty">
             <DecorativeWorld className="public-games-message-art" />
             <h3>No public games are waiting</h3>
-            <p>Start one now or use a room code.</p>
-            <button type="button" onClick={() => setDialogVisibility('public')}>
-              Create Public Game
+            <p>
+              Create a private room, finalize it, then open its public lobby.
+            </p>
+            <button type="button" onClick={() => setCreateDialogOpen(true)}>
+              Create Game
             </button>
           </div>
         ) : (
@@ -681,11 +667,10 @@ export function MultiplayerBrowser({
         )}
       </section>
 
-      {dialogVisibility && (
+      {createDialogOpen && (
         <CreateGameDialog
           profile={profile}
-          initialVisibility={dialogVisibility}
-          onClose={() => setDialogVisibility(null)}
+          onClose={() => setCreateDialogOpen(false)}
           onCreate={create}
         />
       )}

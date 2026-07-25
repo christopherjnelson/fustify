@@ -33,6 +33,7 @@ import {
   leaveRoom,
   multiplayerError,
   isAccountRequiredError,
+  publishRoom,
   releaseSeat,
   startMatch,
   submitGameplayCommand,
@@ -50,6 +51,12 @@ import { getSupabaseClient } from './supabaseClient';
 import { isMatchState } from './gameProtocol';
 import { ReadonlyMinimap } from './ReadonlyWorld';
 import { RoomCodeCopyButton } from './RoomCodeCopyButton';
+import { RoomLinkCopyButton } from './RoomLinkCopyButton';
+import { RoomPublicationDialog } from './RoomPublicationDialog';
+import {
+  roomLobbyPresentation,
+  shouldReplaceRoomSettingsDraft,
+} from './roomLobbyPresentation';
 import { generateRoomPreviewPlanet, withFreshRoomSeed } from './roomWorld';
 import { TurnNotificationController } from '../components/TurnNotificationController';
 import {
@@ -180,11 +187,10 @@ function Lobby() {
 
   const services = useMemo<MultiplayerBrowserServices>(
     () => ({
-      createGame: async ({ name, visibility, maxSeats }) => {
-        const room = await runAuthorized(() =>
+      createGame: async ({ name, maxSeats }) =>
+        runAuthorized(() =>
           createRoom(client, {
             name,
-            visibility,
             settings: {
               seed: generateReadableWorldSeed(),
               territoryCount: 42,
@@ -193,14 +199,7 @@ function Lobby() {
               maxSeats,
             },
           }),
-        );
-        if (visibility === 'public') {
-          void replaceRoomThumbnail(client, room).catch(() => {
-            console.warn('Initial public room thumbnail publication failed.');
-          });
-        }
-        return room;
-      },
+        ),
       joinWithCode: (code) =>
         runAuthorized(() => joinRoom(client, code)).catch((error) => {
           throw multiplayerError(error);
@@ -304,6 +303,8 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     null,
   );
   const [exitError, setExitError] = useState<string | null>(null);
+  const [publicationOpen, setPublicationOpen] = useState(false);
+  const [publicationError, setPublicationError] = useState<string | null>(null);
   const exitingRef = useRef(false);
   const transitionedRef = useRef(false);
 
@@ -328,7 +329,19 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
       const canonical = await fetchRoomState(client, roomId);
       if (sequence !== requestSequence.current) return;
       setState(canonical);
-      if (!settingsDirty.current) setSettings(canonical.room);
+      if (
+        shouldReplaceRoomSettingsDraft(canonical.room, settingsDirty.current)
+      ) {
+        if (
+          canonical.room.visibility === 'public' ||
+          canonical.room.status !== 'waiting'
+        ) {
+          settingsDirty.current = false;
+          setPublicationOpen(false);
+          setPublicationError(null);
+        }
+        setSettings(canonical.room);
+      }
       setError(null);
     } catch (requestError) {
       if (sequence === requestSequence.current) {
@@ -545,12 +558,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   };
 
   const saveWorldSettings = async (room: Room) => {
-    const updatedRoom = await updateRoomSettings(client, room);
-    if (updatedRoom.visibility === 'public') {
-      void replaceRoomThumbnail(client, updatedRoom).catch(() => {
-        console.warn('Public room thumbnail replacement failed.');
-      });
-    }
+    await updateRoomSettings(client, room);
   };
 
   if (!state || !settings) {
@@ -563,8 +571,9 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     );
   }
 
-  const host = state.room.host_user_id === userId;
-  const waiting = state.room.status === 'waiting';
+  const lobby = roomLobbyPresentation(state.room, userId);
+  const { host, waiting, published, settingsEditable } = lobby;
+  const directUrl = lobby.join.kind === 'public-link' ? lobby.join.value : null;
   const ownSeat = state.seats.find((seat) => seat.occupant_user_id === userId);
   const roster = buildMultiplayerRosterDisplay(
     state.seats,
@@ -588,15 +597,31 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
             <span>Game</span>
             <strong>{state.room.name}</strong>
           </div>
-          <div className="room-summary-code">
-            <span>Room</span>
-            <strong data-testid="room-code">
-              {formatRoomCode(state.room.join_code)}
-            </strong>
-            <RoomCodeCopyButton
-              roomCode={formatRoomCode(state.room.join_code)}
-            />
-          </div>
+          {published && directUrl ? (
+            <div className="room-summary-code room-summary-link">
+              <span>Direct link</span>
+              <a data-testid="room-direct-link" href={directUrl}>
+                {directUrl}
+              </a>
+              <RoomLinkCopyButton roomUrl={directUrl} />
+            </div>
+          ) : (
+            <div className="room-summary-code">
+              <span>Private room code</span>
+              {state.room.join_code ? (
+                <>
+                  <strong data-testid="room-code">
+                    {formatRoomCode(state.room.join_code)}
+                  </strong>
+                  <RoomCodeCopyButton
+                    roomCode={formatRoomCode(state.room.join_code)}
+                  />
+                </>
+              ) : (
+                <strong>Unavailable</strong>
+              )}
+            </div>
+          )}
           <div className="room-summary-status">
             <span>
               {state.room.status === 'waiting' ? 'Waiting' : state.room.status}{' '}
@@ -623,7 +648,21 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
       world={
         <SetupWorldPanel
           title="World settings"
-          notice={!host && <p>Only the host can change room settings.</p>}
+          notice={
+            published ? (
+              <p>
+                This public lobby is published. Its game and world settings are
+                permanently locked.
+              </p>
+            ) : !host ? (
+              <p>Only the host can change room settings.</p>
+            ) : (
+              <p>
+                Opening the public lobby locks these settings and allows players
+                to join from the public game list or direct link.
+              </p>
+            )
+          }
           onSubmit={(event) => {
             event.preventDefault();
             void act('settings', async () => {
@@ -633,24 +672,36 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
           }}
           controls={
             <>
+              <label className="create-game-field multiplayer-room-name-setting">
+                <span>Game name</span>
+                <input
+                  value={settings.name}
+                  maxLength={60}
+                  disabled={!settingsEditable || busy !== null}
+                  onChange={(event) => {
+                    settingsDirty.current = true;
+                    setSettings({ ...settings, name: event.target.value });
+                  }}
+                />
+              </label>
               <div className="multiplayer-seed-setting">
                 <label>
                   Seed
                   <input
                     value={settings.seed}
                     maxLength={64}
-                    disabled={!host || !waiting || busy !== null}
+                    disabled={!settingsEditable || busy !== null}
                     onChange={(event) => {
                       settingsDirty.current = true;
                       setSettings({ ...settings, seed: event.target.value });
                     }}
                   />
                 </label>
-                {host && (
+                {settingsEditable && (
                   <button
                     type="button"
                     className="secondary"
-                    disabled={busy !== null || !waiting}
+                    disabled={busy !== null}
                     aria-busy={busy === 'generate-world'}
                     onClick={() => {
                       if (busyRef.current !== null) return;
@@ -677,7 +728,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                     min={12}
                     max={48}
                     value={settings.territory_count}
-                    disabled={!host || !waiting || busy !== null}
+                    disabled={!settingsEditable || busy !== null}
                     onChange={(event) => {
                       settingsDirty.current = true;
                       setSettings({
@@ -694,7 +745,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                     min={2}
                     max={5}
                     value={settings.continent_count}
-                    disabled={!host || !waiting || busy !== null}
+                    disabled={!settingsEditable || busy !== null}
                     onChange={(event) => {
                       settingsDirty.current = true;
                       setSettings({
@@ -711,7 +762,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                     min={2}
                     max={5}
                     value={settings.max_seats}
-                    disabled={!host || !waiting || busy !== null}
+                    disabled={!settingsEditable || busy !== null}
                     onChange={(event) => {
                       settingsDirty.current = true;
                       setSettings({
@@ -725,7 +776,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                   Assignment
                   <select
                     value={settings.assignment_mode}
-                    disabled={!host || !waiting || busy !== null}
+                    disabled={!settingsEditable || busy !== null}
                     onChange={(event) => {
                       settingsDirty.current = true;
                       setSettings({
@@ -739,8 +790,8 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                   <small>Random assignment only in multiplayer.</small>
                 </label>
               </div>
-              {host && (
-                <button type="submit" disabled={busy !== null || !waiting}>
+              {settingsEditable && (
+                <button type="submit" disabled={busy !== null}>
                   {busy === 'settings' ? 'Saving…' : 'Save settings'}
                 </button>
               )}
@@ -762,19 +813,34 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
           <SetupActionBar
             primary={
               host && waiting ? (
-                <button
-                  type="button"
-                  disabled={busy !== null || !canStart}
-                  onClick={() =>
-                    void act('start', async () => {
-                      const match = await startMatch(client, roomId);
-                      clearExitGuard();
-                      navigate(`/multiplayer/match/${match.id}`, true);
-                    })
-                  }
-                >
-                  {busy === 'start' ? 'Starting…' : 'Start Match'}
-                </button>
+                <>
+                  {lobby.canPublish && (
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => {
+                        setPublicationError(null);
+                        setPublicationOpen(true);
+                      }}
+                    >
+                      Open Public Lobby
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={!published ? 'secondary' : undefined}
+                    disabled={busy !== null || !canStart}
+                    onClick={() =>
+                      void act('start', async () => {
+                        const match = await startMatch(client, roomId);
+                        clearExitGuard();
+                        navigate(`/multiplayer/match/${match.id}`, true);
+                      })
+                    }
+                  >
+                    {busy === 'start' ? 'Starting…' : 'Start Match'}
+                  </button>
+                </>
               ) : undefined
             }
             status={
@@ -822,6 +888,99 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                 setExitIntent(null);
               }}
               onConfirm={() => void confirmExit()}
+            />
+          )}
+          {publicationOpen && lobby.canPublish && (
+            <RoomPublicationDialog
+              busy={busy === 'publish'}
+              error={publicationError}
+              onCancel={() => {
+                if (busyRef.current !== null) return;
+                setPublicationError(null);
+                setPublicationOpen(false);
+              }}
+              onConfirm={() => {
+                if (busyRef.current !== null) return;
+                busyRef.current = 'publish';
+                setBusy('publish');
+                setError(null);
+                setPublicationError(null);
+                void (async () => {
+                  try {
+                    if (settingsDirty.current) {
+                      const saved = await updateRoomSettings(client, settings);
+                      settingsDirty.current = false;
+                      if (mountedRef.current) setSettings(saved);
+                    }
+                    await publishRoom(client, roomId);
+                    const sequence = ++requestSequence.current;
+                    const canonical = await fetchRoomState(client, roomId);
+                    if (
+                      !mountedRef.current ||
+                      sequence !== requestSequence.current
+                    ) {
+                      return;
+                    }
+                    settingsDirty.current = false;
+                    setState(canonical);
+                    setSettings(canonical.room);
+                    setPublicationOpen(false);
+                    if (canonical.room.visibility === 'public') {
+                      void replaceRoomThumbnail(client, canonical.room).catch(
+                        () => {
+                          console.warn(
+                            'Public room thumbnail publication failed.',
+                          );
+                        },
+                      );
+                    }
+                  } catch (requestError) {
+                    try {
+                      const sequence = ++requestSequence.current;
+                      const canonical = await fetchRoomState(client, roomId);
+                      if (
+                        !mountedRef.current ||
+                        sequence !== requestSequence.current
+                      ) {
+                        return;
+                      }
+                      setState(canonical);
+                      if (
+                        shouldReplaceRoomSettingsDraft(
+                          canonical.room,
+                          settingsDirty.current,
+                        )
+                      ) {
+                        setSettings(canonical.room);
+                      }
+                      if (canonical.room.visibility === 'public') {
+                        settingsDirty.current = false;
+                        setPublicationOpen(false);
+                        setPublicationError(null);
+                        void replaceRoomThumbnail(client, canonical.room).catch(
+                          () => {
+                            console.warn(
+                              'Public room thumbnail publication failed.',
+                            );
+                          },
+                        );
+                        return;
+                      }
+                    } catch {
+                      // Keep the safe publication error below if reconciliation
+                      // is temporarily unavailable.
+                    }
+                    if (mountedRef.current) {
+                      setPublicationError(
+                        multiplayerError(requestError).message,
+                      );
+                    }
+                  } finally {
+                    if (mountedRef.current) setBusy(null);
+                    busyRef.current = null;
+                  }
+                })();
+              }}
             />
           )}
         </>

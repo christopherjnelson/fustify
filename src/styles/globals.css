@@ -6566,6 +6566,23 @@ html.multiplayer-match-route .branded-app-content {
   letter-spacing: 0.08em;
 }
 
+.room-summary-link {
+  min-width: 0;
+  flex: 1 1 480px;
+  flex-wrap: wrap;
+}
+
+.room-summary-link a {
+  min-width: 0;
+  max-width: 520px;
+  flex: 1 1 220px;
+  overflow: hidden;
+  color: var(--brand-accent);
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .multiplayer-connection {
   color: var(--brand-warning);
   border-color: color-mix(
@@ -7278,6 +7295,37 @@ html.multiplayer-match-route .branded-app-content {
   font-size: 0.8rem;
 }
 
+.public-game-configuration {
+  display: grid;
+  margin: 0 0 16px;
+  gap: 7px;
+}
+
+.public-game-configuration > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.public-game-configuration dt,
+.public-game-configuration dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.public-game-configuration dt {
+  color: var(--brand-steel);
+}
+
+.public-game-configuration dd {
+  overflow-wrap: anywhere;
+  color: var(--brand-text);
+  font-weight: 700;
+}
+
 .public-game-seats {
   display: flex;
   min-width: 0;
@@ -7496,19 +7544,28 @@ html.multiplayer-match-route .branded-app-content {
   gap: 18px;
 }
 
-.waiting-room-exit-body > p {
+.waiting-room-exit-body > p,
+.room-publication-body > p {
   margin: 0;
   color: var(--brand-steel);
   line-height: 1.55;
 }
 
-.waiting-room-exit-body footer {
+.room-publication-body {
+  display: grid;
+  padding: 20px 22px 22px;
+  gap: 14px;
+}
+
+.waiting-room-exit-body footer,
+.room-publication-body footer {
   display: flex;
   justify-content: end;
   gap: 10px;
 }
 
-.waiting-room-exit-body footer button {
+.waiting-room-exit-body footer button,
+.room-publication-body footer button {
   min-width: 112px;
 }
 
@@ -7531,64 +7588,19 @@ html.multiplayer-match-route .branded-app-content {
   font-weight: 800;
 }
 
-.visibility-choice {
-  display: grid;
-  padding: 0;
-  gap: 10px;
-  border: 0;
-}
-
-.visibility-choice legend {
-  margin-bottom: 8px;
-  color: var(--brand-text);
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-
-.visibility-choice > label {
-  display: flex;
-  padding: 13px;
-  align-items: start;
-  gap: 11px;
+.create-game-private-note {
+  margin: 0;
+  padding: 12px 13px;
+  color: var(--brand-steel);
   border: 1px solid var(--brand-border);
   border-radius: 9px;
   background: var(--brand-panel-raised);
-  cursor: pointer;
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 
-.visibility-choice > label[data-selected='true'] {
-  border-color: var(--brand-accent);
-  background: color-mix(
-    in srgb,
-    var(--brand-accent) 6%,
-    var(--brand-panel-raised)
-  );
-}
-
-.visibility-choice input {
-  width: 17px;
-  height: 17px;
-  min-height: 0;
-  margin-top: 2px;
-  padding: 0;
-  accent-color: var(--brand-accent);
-}
-
-.visibility-choice span {
-  display: grid;
-  gap: 4px;
-}
-
-.visibility-choice strong {
-  color: var(--brand-text-strong);
-  font-size: 0.85rem;
-}
-
-.visibility-choice small {
-  color: var(--brand-steel);
-  font-size: 0.74rem;
-  font-weight: 500;
-  line-height: 1.45;
+.multiplayer-room-name-setting {
+  margin-bottom: 12px;
 }
 
 .create-game-dialog footer {
@@ -7700,17 +7712,20 @@ html.multiplayer-match-route .branded-app-content {
     min-width: 0;
   }
 
-  .waiting-room-exit-body {
+  .waiting-room-exit-body,
+  .room-publication-body {
     padding-right: 16px;
     padding-left: 16px;
   }
 
-  .waiting-room-exit-body footer {
+  .waiting-room-exit-body footer,
+  .room-publication-body footer {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
 
-  .waiting-room-exit-body footer button {
+  .waiting-room-exit-body footer button,
+  .room-publication-body footer button {
     min-width: 0;
   }
 }

@@ -16,7 +16,6 @@ const thumbnailFailure = parameters.get('thumbnail-failure') === '1';
 const fixtureEvents: {
   createInputs: Array<{
     name: string;
-    visibility: string;
     maxSeats: number;
   }>;
   navigations: string[];
@@ -50,6 +49,10 @@ const publicRooms: PublicRoom[] = [
     current_players: 3,
     maximum_players: 5,
     room_state: 'waiting',
+    room_seed: 'atlas-prime-271',
+    territory_count: 42,
+    continent_count: 5,
+    assignment_mode: 'random',
     thumbnail_path: 'atlas/world.webp',
     thumbnail_version: 2,
     players: [
@@ -67,6 +70,10 @@ const publicRooms: PublicRoom[] = [
     current_players: 2,
     maximum_players: 4,
     room_state: 'waiting',
+    room_seed: 'verdant-reach-481',
+    territory_count: 36,
+    continent_count: 4,
+    assignment_mode: 'random',
     thumbnail_path: 'verdant/world.webp',
     thumbnail_version: 4,
     players: [
@@ -83,6 +90,10 @@ const publicRooms: PublicRoom[] = [
     current_players: 3,
     maximum_players: 3,
     room_state: 'full',
+    room_seed: 'frosthold-312',
+    territory_count: 24,
+    continent_count: 3,
+    assignment_mode: 'random',
     thumbnail_path: null,
     thumbnail_version: 0,
     players: [
@@ -111,7 +122,7 @@ const roomResult: Room = {
   thumbnail_path: null,
   thumbnail_version: 0,
   updated_at: '2026-07-25T12:00:00.000Z',
-  visibility: 'public',
+  visibility: 'private',
 };
 
 function thumbnailData(path: string): string {
@@ -123,12 +134,11 @@ function thumbnailData(path: string): string {
 }
 
 const services: MultiplayerBrowserServices = {
-  createGame: async ({ name, visibility, maxSeats }) => {
-    fixtureEvents.createInputs.push({ name, visibility, maxSeats });
+  createGame: async ({ name, maxSeats }) => {
+    fixtureEvents.createInputs.push({ name, maxSeats });
     return {
       ...roomResult,
       name,
-      visibility,
       max_seats: maxSeats,
     };
   },

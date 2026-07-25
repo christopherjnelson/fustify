@@ -87,7 +87,6 @@ export async function createPrivateMultiplayerGame(page: Page) {
     .first()
     .click();
   const dialog = page.getByRole('dialog', { name: 'Create Game' });
-  await dialog.getByLabel('Private').check();
   await dialog
     .getByRole('button', { name: 'Create Game', exact: true })
     .click();

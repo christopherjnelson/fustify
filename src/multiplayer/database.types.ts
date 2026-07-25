@@ -369,7 +369,7 @@ export type Database = {
           generator_version: number;
           host_user_id: string;
           id: string;
-          join_code: string;
+          join_code: string | null;
           max_seats: number;
           name: string;
           revision: number;
@@ -388,7 +388,7 @@ export type Database = {
           generator_version?: number;
           host_user_id: string;
           id?: string;
-          join_code: string;
+          join_code?: string | null;
           max_seats?: number;
           name?: string;
           revision?: number;
@@ -407,7 +407,7 @@ export type Database = {
           generator_version?: number;
           host_user_id?: string;
           id?: string;
-          join_code?: string;
+          join_code?: string | null;
           max_seats?: number;
           name?: string;
           revision?: number;
@@ -566,7 +566,7 @@ export type Database = {
           generator_version: number;
           host_user_id: string;
           id: string;
-          join_code: string;
+          join_code: string | null;
           max_seats: number;
           name: string;
           revision: number;
@@ -603,7 +603,7 @@ export type Database = {
           generator_version: number;
           host_user_id: string;
           id: string;
-          join_code: string;
+          join_code: string | null;
           max_seats: number;
           name: string;
           revision: number;
@@ -648,31 +648,7 @@ export type Database = {
       };
       join_public_room: {
         Args: { p_room_id: string };
-        Returns: {
-          assignment_mode: string;
-          continent_count: number;
-          created_at: string;
-          generator_version: number;
-          host_user_id: string;
-          id: string;
-          join_code: string;
-          max_seats: number;
-          name: string;
-          revision: number;
-          seed: string;
-          status: string;
-          territory_count: number;
-          thumbnail_path: string | null;
-          thumbnail_version: number;
-          updated_at: string;
-          visibility: string;
-        };
-        SetofOptions: {
-          from: '*';
-          to: 'rooms';
-          isOneToOne: true;
-          isSetofReturn: false;
-        };
+        Returns: { id: string }[];
       };
       join_room: {
         Args: { display_name: string; join_code: string };
@@ -683,7 +659,7 @@ export type Database = {
           generator_version: number;
           host_user_id: string;
           id: string;
-          join_code: string;
+          join_code: string | null;
           max_seats: number;
           name: string;
           revision: number;
@@ -706,6 +682,8 @@ export type Database = {
       list_public_rooms: {
         Args: never;
         Returns: {
+          assignment_mode: string;
+          continent_count: number;
           created_at: string;
           current_players: number;
           host_avatar_url: string | null;
@@ -714,9 +692,19 @@ export type Database = {
           players: Json;
           room_id: string;
           room_name: string;
+          room_seed: string;
           room_state: string;
+          territory_count: number;
           thumbnail_path: string | null;
           thumbnail_version: number;
+        }[];
+      };
+      publish_room: {
+        Args: { p_room_id: string };
+        Returns: {
+          room_id: string;
+          room_revision: number;
+          room_visibility: string;
         }[];
       };
       publish_room_thumbnail: {
@@ -728,7 +716,7 @@ export type Database = {
           generator_version: number;
           host_user_id: string;
           id: string;
-          join_code: string;
+          join_code: string | null;
           max_seats: number;
           name: string;
           revision: number;
@@ -802,6 +790,7 @@ export type Database = {
         Args: {
           assignment_mode: string;
           continent_count: number;
+          game_name?: string;
           max_seats: number;
           room_id: string;
           seed: string;
@@ -814,7 +803,7 @@ export type Database = {
           generator_version: number;
           host_user_id: string;
           id: string;
-          join_code: string;
+          join_code: string | null;
           max_seats: number;
           name: string;
           revision: number;
