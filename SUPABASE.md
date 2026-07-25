@@ -10,7 +10,8 @@ The only authorized deployment target is:
 - PostgreSQL: 17
 
 Never reset this project or delete unrelated audit rows. The source of truth is
-`supabase/migrations/` plus `supabase/functions/multiplayer-game/`.
+`supabase/migrations/` plus the source-controlled directories under
+`supabase/functions/`.
 
 Migration order:
 
@@ -28,6 +29,9 @@ Migration order:
 12. `20260724211217_canonical_profile_multiplayer_names.sql`
 13. `20260725083521_default_rooms_to_normalized_generator.sql`
 14. `20260725083532_add_public_multiplayer_browser.sql`
+15. `20260725180409_secure_admin_dashboard.sql`
+16. `20260725193047_expire_inactive_multiplayer_rooms.sql`
+17. `20260725212915_discord_room_announcements.sql`
 
 The authority migration extends `matches`, creates append-only
 `match_commands`, adds member-scoped read RLS, removes browser execution of the
@@ -63,11 +67,11 @@ The frontend capability model mirrors these restrictions for profile editing,
 reactions, and future chat presentation. Future chat writes must independently
 enforce registered-user status on the server.
 
-The source-controlled and hosted histories contain all fourteen migrations in
-this order. Edge Function `multiplayer-game` is active at version 3 with
-`verify_jwt=false`. The Activity reaction, profile-foundation, account, and
-public-browser work do not change authority-imported source and therefore do
-not redeploy this function.
+Before the Discord announcement migration, the source-controlled and hosted
+histories contain the first sixteen migrations in this order. Edge Function
+`multiplayer-game` is active at version 3 with `verify_jwt=false`. The Discord
+announcement work adds a separate function and does not change or redeploy
+multiplayer authority.
 
 ## Secrets and browser configuration
 
@@ -84,6 +88,35 @@ or database URL to a `VITE_` variable. Hosted Edge Functions receive
 automatically. `multiplayer-game` disables the legacy gateway JWT check in
 `config.toml` and explicitly verifies the bearer token with `auth.getUser()` so
 current asymmetric and legacy user JWTs share one controlled path.
+
+`announce-public-room` also uses `verify_jwt=false`, but it is not public. It
+requires a dedicated secret in the `apikey` header and compares that value to
+the Edge Function secret
+`DISCORD_ROOM_ANNOUNCEMENT_INVOCATION_SECRET`. The outbound
+`DISCORD_WEBHOOK` secret is never accepted for inbound authentication.
+
+Before applying the Discord announcement migration:
+
+1. Keep the existing `DISCORD_WEBHOOK` Edge Function secret.
+2. Generate one new high-entropy value and store it as the Edge Function secret
+   `DISCORD_ROOM_ANNOUNCEMENT_INVOCATION_SECRET`.
+3. Store the same value in Vault as
+   `discord_room_announcement_invocation_secret`.
+4. Store
+   `https://qwmsybhpjnfjiyxcspwj.supabase.co/functions/v1/announce-public-room`
+   in Vault as `discord_room_announcement_function_url`.
+
+No value for either secret belongs in Git, a migration, `config.toml`, a test
+fixture, or a browser variable. If either Vault entry is missing, room creation
+continues and the announcement remains pending without an HTTP request.
+
+The single `discord_room_announcement_config` row is editable in Studio.
+Supported placeholders in the title and description templates are
+`{{room_name}}`, `{{join_url}}`, `{{open_seats}}`, `{{max_seats}}`, `{{seed}}`,
+`{{territory_count}}`, `{{continent_count}}`, `{{assignment_mode}}`, and
+`{{configuration_summary}}`. Seed and configuration-summary fields are off by
+default; mentions are always disabled in the Discord payload. Delivery also
+starts disabled and must be enabled as the final controlled rollout step.
 
 ## Email Auth prerequisites
 
@@ -115,12 +148,15 @@ links, and removes its local Auth users and room records.
 Using the authenticated Supabase connector:
 
 1. Confirm project ref and current remote migration history.
-2. Apply the exact source-controlled migrations in filename order.
-3. Deploy `multiplayer-game` with every relative shared-engine dependency and
+2. Set the Discord announcement Edge/Vault prerequisites listed above.
+3. Deploy `announce-public-room` with `verify_jwt=false`; its handler performs
+   dedicated `apikey` authentication.
+4. Apply the exact source-controlled migrations in filename order.
+5. Deploy `multiplayer-game` with every relative shared-engine dependency and
    `verify_jwt=false` because authentication is performed in its handler.
-4. Regenerate `src/multiplayer/database.types.ts` from the deployed schema and
+6. Regenerate `src/multiplayer/database.types.ts` from the deployed schema and
    review the diff.
-5. Confirm remote migration history, function version/configuration, grants,
+7. Confirm remote migration history, function version/configuration, grants,
    RLS policies, publication membership, and advisors.
 
 CLI equivalents, when `SUPABASE_ACCESS_TOKEN` is available, are:
@@ -128,6 +164,8 @@ CLI equivalents, when `SUPABASE_ACCESS_TOKEN` is available, are:
 ```bash
 pnpm supabase:link
 pnpm supabase:migrations:list
+pnpm exec supabase functions deploy announce-public-room \
+  --project-ref qwmsybhpjnfjiyxcspwj --no-verify-jwt --use-api
 pnpm supabase:db:push
 pnpm exec supabase functions deploy multiplayer-game \
   --project-ref qwmsybhpjnfjiyxcspwj --no-verify-jwt --use-api
@@ -157,6 +195,17 @@ public waiting rooms and omits room codes and account identifiers.
 `join_public_room` locks the target room and reuses the membership/capacity
 rules before returning the joined room. Both functions pin `search_path`, take
 the caller only from `auth.uid()`, and are executable only by `authenticated`.
+
+Discord announcement configuration and outbox tables have RLS enabled and no
+`anon` or `authenticated` grants or policies. A deferred trigger rechecks the
+final room state after creation or an eligibility-field update and inserts at
+most one outbox row per room. The Edge Function revalidates public/waiting
+status, member capacity, seats, and configuration after atomically claiming a
+pending row. Failures store only bounded error codes. There is no automatic
+retry: after verifying that Discord did not accept an ambiguous timed-out
+request, an operator may call
+`multiplayer_private.reset_discord_room_announcement(uuid)` in the SQL editor
+to reset and asynchronously redispatch failed or stuck work.
 
 The public `room-thumbnails` bucket accepts only WebP objects up to 1 MiB.
 Object writes are restricted to authenticated hosts, public rooms, and the

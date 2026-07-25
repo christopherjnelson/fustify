@@ -9,6 +9,104 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      discord_room_announcement_config: {
+        Row: {
+          avatar_url: string | null;
+          canonical_origin: string;
+          created_at: string;
+          embed_color: number;
+          embed_description_template: string;
+          embed_title_template: string;
+          enabled: boolean;
+          footer_text: string | null;
+          id: boolean;
+          include_configuration_summary: boolean;
+          include_open_seats: boolean;
+          include_seed: boolean;
+          updated_at: string;
+          webhook_username: string;
+        };
+        Insert: {
+          avatar_url?: string | null;
+          canonical_origin?: string;
+          created_at?: string;
+          embed_color?: number;
+          embed_description_template?: string;
+          embed_title_template?: string;
+          enabled?: boolean;
+          footer_text?: string | null;
+          id?: boolean;
+          include_configuration_summary?: boolean;
+          include_open_seats?: boolean;
+          include_seed?: boolean;
+          updated_at?: string;
+          webhook_username?: string;
+        };
+        Update: {
+          avatar_url?: string | null;
+          canonical_origin?: string;
+          created_at?: string;
+          embed_color?: number;
+          embed_description_template?: string;
+          embed_title_template?: string;
+          enabled?: boolean;
+          footer_text?: string | null;
+          id?: boolean;
+          include_configuration_summary?: boolean;
+          include_open_seats?: boolean;
+          include_seed?: boolean;
+          updated_at?: string;
+          webhook_username?: string;
+        };
+        Relationships: [];
+      };
+      discord_room_announcements: {
+        Row: {
+          attempt_count: number;
+          created_at: string;
+          discord_message_id: string | null;
+          id: string;
+          last_error: string | null;
+          processing_at: string | null;
+          room_id: string;
+          sent_at: string | null;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          attempt_count?: number;
+          created_at?: string;
+          discord_message_id?: string | null;
+          id?: string;
+          last_error?: string | null;
+          processing_at?: string | null;
+          room_id: string;
+          sent_at?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          attempt_count?: number;
+          created_at?: string;
+          discord_message_id?: string | null;
+          id?: string;
+          last_error?: string | null;
+          processing_at?: string | null;
+          room_id?: string;
+          sent_at?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'discord_room_announcements_room_id_fkey';
+            columns: ['room_id'];
+            isOneToOne: true;
+            referencedRelation: 'rooms';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       match_commands: {
         Row: {
           actor_seat_index: number;
@@ -433,6 +531,14 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      claim_discord_room_announcement: {
+        Args: { p_announcement_id: string };
+        Returns: {
+          announcement_id: string;
+          attempt_count: number;
+          room_id: string;
+        }[];
       };
       claim_room_seat: {
         Args: { room_id: string; seat_index: number };
