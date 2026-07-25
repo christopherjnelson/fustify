@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import {
+  CURRENT_GENERATOR_VERSION,
+  DEFAULT_GENERATOR_VERSION,
+} from '../core/generation/constants';
 import type { Room } from './multiplayerApi';
 import { generateRoomPreviewPlanet, withFreshRoomSeed } from './roomWorld';
 
@@ -14,6 +18,7 @@ const room = {
   max_seats: 3,
   revision: 4,
   created_at: '2026-07-23T00:00:00.000Z',
+  generator_version: DEFAULT_GENERATOR_VERSION,
   updated_at: '2026-07-23T00:00:00.000Z',
 } satisfies Room;
 
@@ -35,6 +40,24 @@ describe('multiplayer room worlds', () => {
       territoryCount: room.territory_count,
       continentCount: room.continent_count,
       playerCount: room.max_seats,
+      generatorVersion: DEFAULT_GENERATOR_VERSION,
     });
+  });
+
+  it('defaults missing room metadata to v2 and preserves explicit v1', () => {
+    const unversioned = generateRoomPreviewPlanet({
+      seed: room.seed,
+      territory_count: room.territory_count,
+      continent_count: room.continent_count,
+      max_seats: room.max_seats,
+    });
+    const explicitV1 = generateRoomPreviewPlanet({
+      ...room,
+      generator_version: CURRENT_GENERATOR_VERSION,
+    });
+
+    expect(unversioned.generatorVersion).toBe(DEFAULT_GENERATOR_VERSION);
+    expect(unversioned).toEqual(generateRoomPreviewPlanet(room));
+    expect(explicitV1.generatorVersion).toBe(CURRENT_GENERATOR_VERSION);
   });
 });

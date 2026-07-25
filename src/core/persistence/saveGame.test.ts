@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMatch } from '../game/createMatch';
 import {
-  CURRENT_GENERATOR_VERSION,
+  DEFAULT_GENERATOR_VERSION,
   GENERATOR_VERSION,
   NORMALIZED_GENERATOR_VERSION,
 } from '../generation/constants';
@@ -190,7 +190,7 @@ describe('local match persistence', () => {
     },
   );
 
-  it('reloads explicit v2 saves while legacy saves infer v1', () => {
+  it('reloads explicit v2 saves while missing versions infer v2', () => {
     const normalizedWorldSetup: WorldSetup = {
       ...DEFAULT_WORLD_SETUP,
       seed: 'normalized-save',
@@ -230,7 +230,23 @@ describe('local match persistence', () => {
     const legacyResult = parseLocalMatchSave(JSON.stringify(legacy));
     expect(
       legacyResult.ok ? legacyResult.save.worldSetup.generatorVersion : null,
-    ).toBe(CURRENT_GENERATOR_VERSION);
+    ).toBe(DEFAULT_GENERATOR_VERSION);
+  });
+
+  it('defaults missing current-schema generator metadata to v2', () => {
+    const unversioned = structuredClone(save) as unknown as Record<
+      string,
+      unknown
+    >;
+    delete unversioned.generatorVersion;
+    delete (unversioned.worldSetup as Record<string, unknown>).generatorVersion;
+    const result = parseLocalMatchSave(JSON.stringify(unversioned));
+    expect(result.ok ? result.save.generatorVersion : null).toBe(
+      DEFAULT_GENERATOR_VERSION,
+    );
+    expect(result.ok ? result.save.worldSetup.generatorVersion : null).toBe(
+      DEFAULT_GENERATOR_VERSION,
+    );
   });
 
   it('contains data only and no rendering objects', () => {

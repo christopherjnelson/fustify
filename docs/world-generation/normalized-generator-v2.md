@@ -1,7 +1,7 @@
 # Normalized world generator v2
 
-Status: experimental prototype. The production default remains the current
-generator.
+Status: canonical production generator. Version 3 remains available as the
+explicit `v1-current` diagnostic profile.
 
 ## Current pipeline (`v1-current`, generator version 3)
 
@@ -75,7 +75,7 @@ The current appearance is not caused by one polygon-smoothing omission:
   independently. Adding renderer-only smoothing would create disagreement
   between fill, outlines, raycasts, minimap, and route/label placement.
 
-## Proposed v2 pipeline (`v2-normalized`, generator version 4)
+## Canonical v2 pipeline (`v2-normalized`, generator version 4)
 
 1. Keep the fixed icosphere topology and deterministic terrain construction so
    cell ownership remains compact, serializable, and compatible with current
@@ -120,21 +120,21 @@ topology and ownership cannot change.
 
 - Numeric generator version 3 is named `v1-current`; version 4 is named
   `v2-normalized`.
-- `generatePlanet` defaults to version 3. No existing call site changes meaning.
-- A setup URL without `generator` infers version 3. Only
-  `generator=v2-normalized` opts into v2. Version-3 serialization omits the new
-  parameter, preserving existing URL text; v2 copy/share retains it.
+- `generatePlanet` defaults to version 4. Explicit version 3 selection preserves
+  the established v1 output and fingerprint.
+- A setup URL without `generator` infers version 4. Canonical v2 serialization
+  omits the parameter; explicit v1 URLs retain `generator=v1-current`.
 - New save schema data records the generator version in `worldSetup` as well as
-  the existing top-level field. Legacy saves without setup metadata infer
-  version 3 and rebuild with the old path. Saves are not rewritten until the
-  user explicitly saves again.
-- Hosted room preview and authoritative match creation explicitly request
-  version 3. Existing complete hosted planet snapshots remain read-only data.
+  the existing top-level field. Missing version metadata resolves to version 4.
+- Hosted rooms persist generator version 4 by default. Lobby previews and
+  authoritative match creation resolve that same room value, while match
+  snapshots retain the complete generated planet across refresh and reconnect.
 - The world fingerprint includes v2 canonical vertices and already includes the
   generator version. The version-3 canonical payload is deliberately unchanged,
   so version-3 fingerprints do not change.
-- The development selector is compiled behind `import.meta.env.DEV`. Production
-  creation remains on version 3, and multiplayer has no v2 toggle.
+- The development selector is compiled behind `import.meta.env.DEV` and keeps
+  version 3 available as a diagnostic path. Production creation and multiplayer
+  use version 4.
 
 ## Deterministic quality metrics
 

@@ -15,6 +15,7 @@ import { Minimap } from '../components/Minimap';
 import { TerritoryHud } from '../components/TerritoryHud';
 import { ControlLegend } from '../components/ControlLegend';
 import type { MatchState } from '../core/game/types';
+import { resolveGeneratorVersion } from '../core/generation/constants';
 import type { PlanetDefinition } from '../core/types/planet';
 import { createNeutralMatchSetup } from '../core/setup/startingPositions';
 import {
@@ -273,7 +274,13 @@ function ConnectionBadge({ status }: { status: string }) {
 }
 
 function RoomWorldPreview({ room }: { room: Room }) {
-  const { seed, territory_count, continent_count, max_seats } = room;
+  const {
+    seed,
+    territory_count,
+    continent_count,
+    max_seats,
+    generator_version,
+  } = room;
   const planet = useMemo(
     () =>
       generateRoomPreviewPlanet({
@@ -281,8 +288,9 @@ function RoomWorldPreview({ room }: { room: Room }) {
         territory_count,
         continent_count,
         max_seats,
+        generator_version,
       }),
-    [seed, territory_count, continent_count, max_seats],
+    [seed, territory_count, continent_count, max_seats, generator_version],
   );
   return (
     <ReadonlyMinimap
@@ -766,6 +774,9 @@ function MatchView({
   const install = useCallback(
     (canonical: MultiplayerMatch) => {
       const snapshots = authoritativeSnapshots(canonical, userId);
+      const generatorVersion = resolveGeneratorVersion(
+        snapshots.planet.generatorVersion,
+      );
       matchRef.current = canonical;
       setMatch(canonical);
       setError(null);
@@ -785,6 +796,7 @@ function MatchView({
           territoryCount: snapshots.planet.territoryCount,
           continentCount: snapshots.planet.continentCount,
           playerCount: snapshots.players.length,
+          generatorVersion,
           assignmentMode: 'random',
         },
         setupDraft: {
@@ -793,6 +805,7 @@ function MatchView({
           territoryCount: snapshots.planet.territoryCount,
           continentCount: snapshots.planet.continentCount,
           playerCount: snapshots.players.length,
+          generatorVersion,
           assignmentMode: 'random',
         },
         lastActionError: null,

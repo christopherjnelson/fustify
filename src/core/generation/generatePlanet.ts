@@ -21,11 +21,12 @@ import {
 } from './buildConnections.ts';
 import {
   CONTINENT_PALETTE,
+  CURRENT_GENERATOR_VERSION,
   DEFAULT_CONTINENT_COUNT,
+  DEFAULT_GENERATOR_VERSION,
   DEFAULT_LAND_COVERAGE,
   DEFAULT_PLAYER_COUNT,
   DEFAULT_TERRITORY_COUNT,
-  GENERATOR_VERSION,
   NORMALIZED_GENERATOR_VERSION,
   PLANET_SUBDIVISIONS,
 } from './constants.ts';
@@ -449,9 +450,10 @@ export function generatePlanet(
   if (!Number.isInteger(playerCount) || playerCount < 2 || playerCount > 6) {
     throw new Error('Player count must be an integer between 2 and 6.');
   }
-  const generatorVersion = options.generatorVersion ?? GENERATOR_VERSION;
+  const generatorVersion =
+    options.generatorVersion ?? DEFAULT_GENERATOR_VERSION;
   if (
-    generatorVersion !== GENERATOR_VERSION &&
+    generatorVersion !== CURRENT_GENERATOR_VERSION &&
     generatorVersion !== NORMALIZED_GENERATOR_VERSION
   ) {
     throw new Error(`Unsupported world generator version ${generatorVersion}.`);
@@ -471,7 +473,7 @@ export function generatePlanet(
   const sphere = createIcosphere(PLANET_SUBDIVISIONS);
   const cellAdjacency = buildCellAdjacency(sphere);
   const terrain = generateTerrain(
-    `${normalizedSeed}|v${GENERATOR_VERSION}`,
+    `${normalizedSeed}|v${CURRENT_GENERATOR_VERSION}`,
     sphere,
     cellAdjacency,
     targetLandCoverage,
@@ -500,7 +502,7 @@ export function generatePlanet(
     cellAdjacency,
   );
   const routeRandom = createSeededRandom(
-    `${normalizedSeed}|routes|${GENERATOR_VERSION}`,
+    `${normalizedSeed}|routes|${CURRENT_GENERATOR_VERSION}`,
   );
   const additionalRouteCount = routeRandom.integer(0, 3);
   const seaRoutes = buildSeaRoutes(
@@ -521,7 +523,7 @@ export function generatePlanet(
     landAdjacency,
     borderWeights,
     continentCount,
-    `${normalizedSeed}|v${GENERATOR_VERSION}`,
+    `${normalizedSeed}|v${CURRENT_GENERATOR_VERSION}`,
   );
   options.timingObserver?.(
     'candidate-scoring',
@@ -529,7 +531,7 @@ export function generatePlanet(
   );
   const players = generatePlayers(playerCount);
   const detailRandom = createSeededRandom(
-    `${normalizedSeed}|details|${GENERATOR_VERSION}`,
+    `${normalizedSeed}|details|${CURRENT_GENERATOR_VERSION}`,
   );
 
   const territories: TerritoryDefinition[] = layout.territoryCenters.map(
@@ -621,7 +623,7 @@ export function generatePlanet(
 
   const planet: PlanetDefinition = {
     seed: normalizedSeed,
-    generatorVersion: GENERATOR_VERSION,
+    generatorVersion: CURRENT_GENERATOR_VERSION,
     territoryCount,
     continentCount,
     playerCount,

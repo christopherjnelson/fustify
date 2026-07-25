@@ -1,8 +1,8 @@
 import { createMatch } from '../core/game/createMatch.ts';
 import type { MatchState } from '../core/game/types.ts';
 import {
-  CURRENT_GENERATOR_VERSION,
-  GENERATOR_VERSION,
+  generatorProfile,
+  resolveGeneratorVersion,
 } from '../core/generation/constants.ts';
 import { generatePlanet } from '../core/generation/generatePlanet.ts';
 import type { PlanetDefinition } from '../core/types/planet.ts';
@@ -38,6 +38,7 @@ export async function createAuthoritativeMatch(
     territory_count: number;
     continent_count: number;
     assignment_mode: string;
+    generator_version?: number | null;
   },
   claimedSeats: ClaimedSeat[],
 ): Promise<AuthoritativeMatchInitialization> {
@@ -53,10 +54,12 @@ export async function createAuthoritativeMatch(
     playerId: `player-${String(index + 1).padStart(2, '0')}`,
   }));
   const players = createMultiplayerPlayerConfigs(seatOrderSnapshot);
+  const generatorVersion = resolveGeneratorVersion(room.generator_version);
   const planet = generatePlanet(room.seed, {
     territoryCount: room.territory_count,
     continentCount: room.continent_count,
     playerCount: players.length,
+    generatorVersion,
   });
   const startingPosition = generateStartingPosition(planet, players, 0);
   const setup = {
@@ -79,15 +82,15 @@ export async function createAuthoritativeMatch(
       territoryCount: room.territory_count,
       continentCount: room.continent_count,
       playerCount: players.length,
-      generatorVersion: CURRENT_GENERATOR_VERSION,
+      generatorVersion,
       assignmentMode: 'random',
       ownershipVariant: 0,
     },
     seatOrderSnapshot,
     generatorMetadata: {
-      generatorVersion: GENERATOR_VERSION,
+      generatorVersion,
       worldSetupVersion: 1,
-      correctionProfile: 'corrected-v1',
+      profile: generatorProfile(generatorVersion),
       authorityVersion: 1,
     },
     planet,

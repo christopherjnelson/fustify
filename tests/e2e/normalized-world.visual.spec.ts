@@ -235,7 +235,7 @@ test('normalized canonical mesh raycasts the rendered ownership surface', async 
   ).toBe(true);
 });
 
-test('explicit normalized URL previews v2 while an unmarked URL stays on v1', async ({
+test('explicit and unmarked normalized URLs both preview v2', async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'laptop-1366');
@@ -257,5 +257,5 @@ test('explicit normalized URL previews v2 while an unmarked URL stays on v1', as
   expect(
     (await page.evaluate(() => window.__WORLDSEED_VISUAL__!.getState())).planet
       .generatorVersion,
-  ).toBe(CURRENT_GENERATOR_VERSION);
+  ).toBe(NORMALIZED_GENERATOR_VERSION);
 });

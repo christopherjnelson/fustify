@@ -273,6 +273,7 @@ export type Database = {
           assignment_mode: string;
           continent_count: number;
           created_at: string;
+          generator_version: number;
           host_user_id: string;
           id: string;
           join_code: string;
@@ -287,6 +288,7 @@ export type Database = {
           assignment_mode?: string;
           continent_count?: number;
           created_at?: string;
+          generator_version?: number;
           host_user_id: string;
           id?: string;
           join_code: string;
@@ -301,6 +303,7 @@ export type Database = {
           assignment_mode?: string;
           continent_count?: number;
           created_at?: string;
+          generator_version?: number;
           host_user_id?: string;
           id?: string;
           join_code?: string;
@@ -400,6 +403,7 @@ export type Database = {
           assignment_mode: string;
           continent_count: number;
           created_at: string;
+          generator_version: number;
           host_user_id: string;
           id: string;
           join_code: string;
@@ -430,6 +434,7 @@ export type Database = {
           assignment_mode: string;
           continent_count: number;
           created_at: string;
+          generator_version: number;
           host_user_id: string;
           id: string;
           join_code: string;
@@ -469,6 +474,7 @@ export type Database = {
           assignment_mode: string;
           continent_count: number;
           created_at: string;
+          generator_version: number;
           host_user_id: string;
           id: string;
           join_code: string;
@@ -535,6 +541,7 @@ export type Database = {
           assignment_mode: string;
           continent_count: number;
           created_at: string;
+          generator_version: number;
           host_user_id: string;
           id: string;
           join_code: string;

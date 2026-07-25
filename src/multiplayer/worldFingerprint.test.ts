@@ -24,9 +24,9 @@ describe('multiplayer world fingerprint', () => {
     );
   });
 
-  it('accounts for an explicit generator version without changing v1 semantics', () => {
+  it('accounts for explicit v1 without changing its semantics', () => {
     const options = { territoryCount: 42, continentCount: 5, playerCount: 4 };
-    const implicitCurrent = generatePlanet('versioned-fingerprint', options);
+    const implicitNormalized = generatePlanet('versioned-fingerprint', options);
     const explicitCurrent = generatePlanet('versioned-fingerprint', {
       ...options,
       generatorVersion: CURRENT_GENERATOR_VERSION,
@@ -35,12 +35,13 @@ describe('multiplayer world fingerprint', () => {
       ...options,
       generatorVersion: NORMALIZED_GENERATOR_VERSION,
     });
-    expect(worldFingerprint(explicitCurrent)).toBe(
-      worldFingerprint(implicitCurrent),
+    expect(worldFingerprint(normalized)).toBe(
+      worldFingerprint(implicitNormalized),
     );
-    expect(worldFingerprint(normalized)).not.toBe(
-      worldFingerprint(implicitCurrent),
+    expect(worldFingerprint(explicitCurrent)).not.toBe(
+      worldFingerprint(implicitNormalized),
     );
+    expect(explicitCurrent.surfaceVertices).toBeUndefined();
     expect(normalized.surfaceVertices).toBeDefined();
   });
 });

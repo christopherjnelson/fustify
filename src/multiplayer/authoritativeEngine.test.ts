@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { createAuthoritativeMatch } from './authoritativeEngine';
 import { sha256Fingerprint } from './gameProtocol';
 import { createMultiplayerPlayerConfigs } from './multiplayerPlayerConfig';
-import { CURRENT_GENERATOR_VERSION } from '../core/generation/constants';
+import {
+  CURRENT_GENERATOR_VERSION,
+  DEFAULT_GENERATOR_VERSION,
+} from '../core/generation/constants';
 
 const room = {
   id: '00000000-0000-4000-8000-000000000010',
@@ -10,6 +13,7 @@ const room = {
   territory_count: 12,
   continent_count: 2,
   assignment_mode: 'random',
+  generator_version: DEFAULT_GENERATOR_VERSION,
 };
 const seats = [
   {
@@ -40,11 +44,12 @@ describe('authoritative multiplayer initialization', () => {
     );
     expect(first).toEqual(second);
     expect(first.planet.territories).toHaveLength(12);
-    expect(first.planet.generatorVersion).toBe(CURRENT_GENERATOR_VERSION);
-    expect(first.planet.surfaceVertices).toBeUndefined();
+    expect(first.planet.generatorVersion).toBe(DEFAULT_GENERATOR_VERSION);
+    expect(first.planet.surfaceVertices).toHaveLength(2562);
     expect(first.generatorMetadata.generatorVersion).toBe(
-      CURRENT_GENERATOR_VERSION,
+      DEFAULT_GENERATOR_VERSION,
     );
+    expect(first.generatorMetadata.profile).toBe('v2-normalized');
     expect(Object.keys(first.state.territories)).toHaveLength(12);
     expect(first.state.activePlayerId).toBe('player-01');
     expect(first.state.phase).toBe('reinforce');
@@ -81,6 +86,29 @@ describe('authoritative multiplayer initialization', () => {
     await expect(sha256Fingerprint(first.state)).resolves.toBe(
       first.stateFingerprint,
     );
+  });
+
+  it('defaults missing room metadata to v2 and preserves explicit v1', async () => {
+    const unversionedRoom = { ...room };
+    delete (unversionedRoom as { generator_version?: number })
+      .generator_version;
+    const unversioned = await createAuthoritativeMatch(
+      '00000000-0000-4000-8000-000000000021',
+      unversionedRoom,
+      seats,
+    );
+    const explicitV1 = await createAuthoritativeMatch(
+      '00000000-0000-4000-8000-000000000022',
+      { ...room, generator_version: CURRENT_GENERATOR_VERSION },
+      seats,
+    );
+
+    expect(unversioned.planet.generatorVersion).toBe(DEFAULT_GENERATOR_VERSION);
+    expect(unversioned.generatorMetadata.generatorVersion).toBe(
+      DEFAULT_GENERATOR_VERSION,
+    );
+    expect(explicitV1.planet.generatorVersion).toBe(CURRENT_GENERATOR_VERSION);
+    expect(explicitV1.generatorMetadata.profile).toBe('v1-current');
   });
 
   it('rejects player draft without changing local-play support', async () => {

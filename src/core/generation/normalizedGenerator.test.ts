@@ -4,6 +4,7 @@ import { sphericalTriangleArea } from '../geometry/sphericalGeometry';
 import { getPlanetSurfaceSphere } from '../geometry/planetSurface';
 import {
   CURRENT_GENERATOR_VERSION,
+  DEFAULT_GENERATOR_VERSION,
   NORMALIZED_GENERATOR_VERSION,
   PLANET_SUBDIVISIONS,
 } from './constants';
@@ -54,22 +55,30 @@ function signedOrientation(
 }
 
 describe('normalized world generator v2', () => {
-  it('leaves default v1 output and its existing fingerprint unchanged', () => {
+  it('is the canonical default while explicit v1 output stays unchanged', () => {
     const defaultPlanet = generatePlanet('atlas-prime', {
       territoryCount: 42,
       continentCount: 5,
       playerCount: 4,
     });
-    const explicitPlanet = generatePlanet('atlas-prime', {
+    const explicitNormalized = generatePlanet('atlas-prime', {
+      territoryCount: 42,
+      continentCount: 5,
+      playerCount: 4,
+      generatorVersion: DEFAULT_GENERATOR_VERSION,
+    });
+    const explicitV1 = generatePlanet('atlas-prime', {
       territoryCount: 42,
       continentCount: 5,
       playerCount: 4,
       generatorVersion: CURRENT_GENERATOR_VERSION,
     });
-    expect(explicitPlanet).toEqual(defaultPlanet);
-    expect(defaultPlanet.surfaceVertices).toBeUndefined();
-    expect(defaultPlanet.generationDiagnostics).toBeUndefined();
-    expect(worldFingerprint(defaultPlanet)).toBe('fnv-c99c03d8');
+    expect(defaultPlanet).toEqual(explicitNormalized);
+    expect(defaultPlanet.generatorVersion).toBe(DEFAULT_GENERATOR_VERSION);
+    expect(defaultPlanet.generationDiagnostics?.profile).toBe('v2-normalized');
+    expect(explicitV1.surfaceVertices).toBeUndefined();
+    expect(explicitV1.generationDiagnostics).toBeUndefined();
+    expect(worldFingerprint(explicitV1)).toBe('fnv-c99c03d8');
   });
 
   it('is byte-identical and selects the same bounded candidate repeatedly', () => {

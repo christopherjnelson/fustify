@@ -1,6 +1,7 @@
 export const CURRENT_GENERATOR_VERSION = 3;
 export const NORMALIZED_GENERATOR_VERSION = 4;
-export const GENERATOR_VERSION = CURRENT_GENERATOR_VERSION;
+export const DEFAULT_GENERATOR_VERSION = NORMALIZED_GENERATOR_VERSION;
+export const GENERATOR_VERSION = DEFAULT_GENERATOR_VERSION;
 export const CURRENT_GENERATOR_PROFILE = 'v1-current';
 export const NORMALIZED_GENERATOR_PROFILE = 'v2-normalized';
 
@@ -21,9 +22,17 @@ export function generatorProfile(
 export function generatorVersionFromProfile(
   profile: string | null | undefined,
 ): WorldGeneratorVersion {
-  return profile === NORMALIZED_GENERATOR_PROFILE
-    ? NORMALIZED_GENERATOR_VERSION
-    : CURRENT_GENERATOR_VERSION;
+  return profile === CURRENT_GENERATOR_PROFILE
+    ? CURRENT_GENERATOR_VERSION
+    : DEFAULT_GENERATOR_VERSION;
+}
+
+export function resolveGeneratorVersion(
+  version: unknown,
+): WorldGeneratorVersion {
+  return version === CURRENT_GENERATOR_VERSION
+    ? CURRENT_GENERATOR_VERSION
+    : DEFAULT_GENERATOR_VERSION;
 }
 export const DEFAULT_TERRITORY_COUNT = 42;
 // Engine compatibility default for canonical fixtures and legacy callers.

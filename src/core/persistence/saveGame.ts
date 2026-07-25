@@ -4,6 +4,7 @@ import type { MatchState } from '../game/types';
 import { generatePlanet } from '../generation/generatePlanet';
 import {
   CURRENT_GENERATOR_VERSION,
+  DEFAULT_GENERATOR_VERSION,
   NORMALIZED_GENERATOR_VERSION,
   type WorldGeneratorVersion,
 } from '../generation/constants';
@@ -69,10 +70,12 @@ const legacyMatchSetupSchema = z.object({
 });
 const worldSetupSchema = z.object({
   version: z.number().int(),
-  generatorVersion: z.union([
-    z.literal(CURRENT_GENERATOR_VERSION),
-    z.literal(NORMALIZED_GENERATOR_VERSION),
-  ]),
+  generatorVersion: z
+    .union([
+      z.literal(CURRENT_GENERATOR_VERSION),
+      z.literal(NORMALIZED_GENERATOR_VERSION),
+    ])
+    .default(DEFAULT_GENERATOR_VERSION),
   seed: z.string().min(1),
   territoryCount: z.number().int().min(12).max(48),
   continentCount: z.number().int().min(2).max(8),
@@ -168,10 +171,12 @@ export function validateMatchState(
 const currentSaveSchema = z.object({
   schemaVersion: z.literal(SAVE_SCHEMA_VERSION),
   savedAt: z.string().datetime(),
-  generatorVersion: z.union([
-    z.literal(CURRENT_GENERATOR_VERSION),
-    z.literal(NORMALIZED_GENERATOR_VERSION),
-  ]),
+  generatorVersion: z
+    .union([
+      z.literal(CURRENT_GENERATOR_VERSION),
+      z.literal(NORMALIZED_GENERATOR_VERSION),
+    ])
+    .default(DEFAULT_GENERATOR_VERSION),
   worldSetup: worldSetupSchema,
   matchSetup: matchSetupSchema,
   matchState: matchStateSchema.nullable(),
@@ -215,7 +220,7 @@ function migrateSave(
   return {
     ...value,
     schemaVersion: SAVE_SCHEMA_VERSION,
-    generatorVersion: CURRENT_GENERATOR_VERSION,
+    generatorVersion: DEFAULT_GENERATOR_VERSION,
     savedAt:
       typeof value.savedAt === 'string'
         ? value.savedAt
@@ -224,12 +229,12 @@ function migrateSave(
       version === 4 && versionFourWorldSetup.success
         ? {
             ...versionFourWorldSetup.data,
-            generatorVersion: CURRENT_GENERATOR_VERSION,
+            generatorVersion: DEFAULT_GENERATOR_VERSION,
           }
         : oldWorldSetup.success
           ? {
               ...oldWorldSetup.data,
-              generatorVersion: CURRENT_GENERATOR_VERSION,
+              generatorVersion: DEFAULT_GENERATOR_VERSION,
               assignmentMode: 'random',
             }
           : value.worldSetup,

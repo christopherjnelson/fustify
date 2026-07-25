@@ -6,7 +6,6 @@ import { gameReducer } from '../core/game/gameReducer';
 import type { MatchState } from '../core/game/types';
 import {
   CURRENT_GENERATOR_VERSION,
-  GENERATOR_VERSION,
   type WorldGeneratorVersion,
 } from '../core/generation/constants';
 import { generatePlanet } from '../core/generation/generatePlanet';
@@ -667,7 +666,7 @@ export function applyScenario(scenario: VisualScenario) {
     writeLocalMatchSave({
       schemaVersion: SAVE_SCHEMA_VERSION,
       savedAt,
-      generatorVersion: GENERATOR_VERSION,
+      generatorVersion: FIXED_SETUP.generatorVersion,
       worldSetup: FIXED_SETUP,
       matchSetup,
       matchState: match,

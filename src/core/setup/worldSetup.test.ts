@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { generatePlanet } from '../generation/generatePlanet';
 import {
   CURRENT_GENERATOR_VERSION,
+  DEFAULT_GENERATOR_VERSION,
+  CURRENT_GENERATOR_PROFILE,
   NORMALIZED_GENERATOR_PROFILE,
   NORMALIZED_GENERATOR_VERSION,
 } from '../generation/constants';
@@ -46,7 +48,7 @@ describe('versioned world setup URLs', () => {
     );
     const second = serializeWorldSetup(setup, first);
     expect(first.toString()).toBe(
-      'v=1&seed=shared-world&territories=36&continents=5&players=3&assignment=player-draft&a=first&logo=a&z=last',
+      `v=1&generator=${CURRENT_GENERATOR_PROFILE}&seed=shared-world&territories=36&continents=5&players=3&assignment=player-draft&a=first&logo=a&z=last`,
     );
     expect(second.toString()).toBe(first.toString());
     expect(worldSetupsEqual(parseWorldSetup(first).setup, setup)).toBe(true);
@@ -61,11 +63,11 @@ describe('versioned world setup URLs', () => {
     expect(planetB).toEqual(planetA);
   });
 
-  it('keeps old URLs valid and round-trips assignment mode', () => {
-    const legacy = parseWorldSetup('v=1&seed=legacy').setup;
-    expect(legacy.assignmentMode).toBe('random');
-    expect(legacy.generatorVersion).toBe(CURRENT_GENERATOR_VERSION);
-    expect(serializeWorldSetup(legacy).has('generator')).toBe(false);
+  it('defaults unversioned URLs to v2 and round-trips assignment mode', () => {
+    const unversioned = parseWorldSetup('v=1&seed=unversioned').setup;
+    expect(unversioned.assignmentMode).toBe('random');
+    expect(unversioned.generatorVersion).toBe(DEFAULT_GENERATOR_VERSION);
+    expect(serializeWorldSetup(unversioned).has('generator')).toBe(false);
     const drafted = parseWorldSetup(
       'v=1&seed=draft&assignment=player-draft',
     ).setup;
@@ -73,14 +75,12 @@ describe('versioned world setup URLs', () => {
     expect(serializeWorldSetup(drafted).get('assignment')).toBe('player-draft');
   });
 
-  it('only opts into normalized geometry through explicit version metadata', () => {
+  it('accepts explicit v2 metadata and serializes it as the canonical default', () => {
     const parsed = parseWorldSetup(
       `v=1&generator=${NORMALIZED_GENERATOR_PROFILE}&seed=normalized`,
     ).setup;
     expect(parsed.generatorVersion).toBe(NORMALIZED_GENERATOR_VERSION);
-    expect(serializeWorldSetup(parsed).get('generator')).toBe(
-      NORMALIZED_GENERATOR_PROFILE,
-    );
+    expect(serializeWorldSetup(parsed).get('generator')).toBeNull();
     expect(
       generatePlanet(parsed.seed, parsed).generationDiagnostics?.profile,
     ).toBe(NORMALIZED_GENERATOR_PROFILE);
