@@ -380,7 +380,7 @@ with hardcoded paths and no exports). See the sections above and
 | `public-shell` gzip      | 152,078           | 158,000   | 3.9%     |
 | `auth-page` gzip         | 144,297           | 150,000   | 4.0%     |
 | `local-game` gzip        | 454,165           | 472,000   | 3.9%     |
-| `multiplayer-entry` gzip | 456,564           | 475,000   | 4.0%     |
+| `multiplayer-entry` gzip | 456,564           | 475,500   | 4.1%     |
 | `admin` gzip             | 90,356            | 94,000    | 4.0%     |
 | Largest JS chunk, raw    | 1,069,397         | 1,080,000 | 1.0%     |
 

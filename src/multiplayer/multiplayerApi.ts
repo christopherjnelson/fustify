@@ -136,6 +136,10 @@ const pendingMutableByClient = new WeakMap<
   SupabaseClient<Database>,
   Map<string, Promise<MatchMutableState>>
 >();
+const pendingHeartbeatByClient = new WeakMap<
+  SupabaseClient<Database>,
+  Map<string, Promise<boolean>>
+>();
 
 function coalescedMatchRead<T>(
   pendingByClient: WeakMap<SupabaseClient<Database>, Map<string, Promise<T>>>,
@@ -369,6 +373,24 @@ export async function joinRoom(
   });
   if (error) throw multiplayerError(error);
   return data;
+}
+
+export function heartbeatRoomMembership(
+  client: SupabaseClient<Database>,
+  roomId: string,
+): Promise<boolean> {
+  return coalescedMatchRead(
+    pendingHeartbeatByClient,
+    client,
+    roomId,
+    async () => {
+      const { data, error } = await client.rpc('heartbeat_room_membership', {
+        p_room_id: roomId,
+      });
+      if (error) throw error;
+      return data;
+    },
+  );
 }
 
 export async function claimSeat(

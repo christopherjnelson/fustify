@@ -90,6 +90,20 @@ test('waiting-room navigation guard covers links, history, unload, and cleanup',
   ]);
 });
 
+test('remote stale-room closure preserves the Task 1 guest notice path', async ({
+  page,
+}) => {
+  await page.goto(
+    '/multiplayer/room/closed-fixture?visual-review=1&browser-state=empty&remote-closure=guest',
+  );
+  await expect(
+    page.getByRole('status').filter({ hasText: 'The host closed this room.' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'No public games are waiting' }),
+  ).toBeVisible();
+});
+
 test('public browser renders cards without room codes and disables full games', async ({
   page,
 }) => {

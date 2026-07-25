@@ -27,6 +27,7 @@ import {
   fetchPublicRooms,
   fetchRoomState,
   formatRoomCode,
+  heartbeatRoomMembership,
   joinRoom,
   joinPublicRoom,
   leaveRoom,
@@ -398,6 +399,25 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   const waitingMember =
     state?.room.status === 'waiting' &&
     state.members.some((member) => member.user_id === userId);
+
+  useEffect(() => {
+    if (!waitingMember) return;
+    let cancelled = false;
+    let stop: (() => void) | undefined;
+    void import('./roomHeartbeatScheduler').then(
+      ({ startRoomHeartbeatScheduler }) => {
+        if (cancelled) return;
+        stop = startRoomHeartbeatScheduler({
+          touch: () => heartbeatRoomMembership(client, roomId),
+          reconcile: refresh,
+        });
+      },
+    );
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, [client, refresh, roomId, userId, waitingMember]);
 
   useEffect(() => {
     guardCleanupRef.current?.();

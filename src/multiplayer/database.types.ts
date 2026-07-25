@@ -536,6 +536,10 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      heartbeat_room_membership: {
+        Args: { p_room_id: string };
+        Returns: boolean;
+      };
       join_public_room: {
         Args: { p_room_id: string };
         Returns: {

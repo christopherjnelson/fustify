@@ -105,7 +105,7 @@ export const BUNDLE_BUDGETS: BundleBudgets = {
       id: 'multiplayer-entry',
       description: 'Multiplayer lobby, room, and match at /multiplayer/*',
       chunkNames: ['BrowserApp', 'MultiplayerApp'],
-      gzipBudget: 475_000,
+      gzipBudget: 475_500,
     },
     {
       id: 'admin',

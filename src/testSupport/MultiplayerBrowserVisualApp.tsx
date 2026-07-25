@@ -157,6 +157,9 @@ const services: MultiplayerBrowserServices = {
 export function MultiplayerBrowserVisualApp() {
   const parameters = new URLSearchParams(window.location.search);
   const exitDialog = parameters.get('exit-dialog');
+  const remoteClosure = parameters.get('remote-closure');
+  const closureNotice =
+    remoteClosure === 'guest' ? 'The host closed this room.' : null;
   const [dialogOpen, setDialogOpen] = useState(Boolean(exitDialog));
   const [confirmations, setConfirmations] = useState(0);
   return (
@@ -180,6 +183,11 @@ export function MultiplayerBrowserVisualApp() {
         </aside>
       }
     >
+      {closureNotice && (
+        <p className="multiplayer-browser-notice" role="status">
+          {closureNotice}
+        </p>
+      )}
       <MultiplayerBrowser profile={profile} services={services} />
       {dialogOpen && (
         <WaitingRoomExitDialog
