@@ -584,11 +584,20 @@ html.game-route .protected-route-shell {
 }
 
 .account-provider-status {
+  display: inline-flex;
+  align-items: center;
   flex: 0 0 auto;
+  gap: 0.3rem;
   color: var(--brand-steel);
   font-size: 0.61rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+.discord-icon {
+  width: 1.1em;
+  height: 1.1em;
+  flex: 0 0 auto;
 }
 
 .account-actions {
@@ -719,8 +728,12 @@ html.game-route .protected-route-shell {
 }
 
 .auth-oauth-option .auth-discord-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   grid-column: 1 / -1;
   grid-row: 2;
+  gap: 0.45rem;
   width: 100%;
   color: #e8eaff;
   border-color: rgba(145, 152, 229, 0.34);

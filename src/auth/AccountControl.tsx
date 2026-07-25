@@ -35,6 +35,7 @@ import type { UserProfile } from './profileModel';
 import { currentSafeReturnPath, validatedReturnPath } from './returnPath';
 import { BrandedAppShell } from '../brand/BrandedAppShell';
 import { useAdminAccess } from '../admin/adminAccessContext';
+import { DiscordIcon } from './DiscordIcon';
 
 export type DialogView =
   | 'sign-in'
@@ -460,6 +461,7 @@ export function AuthDialog({
                   disabled={status.kind === 'busy'}
                   onClick={() => void startDiscord()}
                 >
+                  <DiscordIcon />
                   {status.kind === 'busy'
                     ? 'Connecting…'
                     : 'Continue with Discord'}
@@ -660,7 +662,10 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
             </span>
           </div>
           {!identity.isAnonymous && hasDiscordIdentity(identity.user) && (
-            <span className="account-provider-status">Discord connected</span>
+            <span className="account-provider-status">
+              <DiscordIcon />
+              Discord connected
+            </span>
           )}
           {identity.isAnonymous ? (
             <div className="account-actions">

@@ -1162,6 +1162,11 @@ test('Discord remains a secondary signed-out option while email/password stays a
   await expect(
     dialog.getByRole('button', { name: 'Continue with Discord' }),
   ).toBeVisible();
+  await expect(
+    dialog
+      .getByRole('button', { name: 'Continue with Discord' })
+      .locator('.discord-icon[aria-hidden="true"]'),
+  ).toBeVisible();
   await capture(page, testInfo.project.name, 'discord-signed-out-auth-dialog');
   await dialog.getByRole('button', { name: 'Continue with Discord' }).click();
 
@@ -1220,6 +1225,9 @@ test('Discord manual linking returns to the same registered profile and updates 
   await expect(page.locator('.account-provider-status')).toHaveText(
     'Discord connected',
   );
+  await expect(
+    page.locator('.account-provider-status .discord-icon[aria-hidden="true"]'),
+  ).toBeVisible();
   await capture(page, testInfo.project.name, 'discord-connected-account-menu');
   await expect(
     page.getByRole('button', { name: 'Connect Discord' }),
