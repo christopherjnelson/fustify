@@ -69,7 +69,7 @@ export function GraphDebugOverlay({ planet, visible }: GraphDebugOverlayProps) {
       <DebugInstances
         territoryIds={planet.analysis.gatewayTerritoryIds}
         planet={planet}
-        color="#55e2db"
+        color="#ccff00"
         radius={1.075}
         scale={0.035}
       />

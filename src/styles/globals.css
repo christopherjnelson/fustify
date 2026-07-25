@@ -472,7 +472,7 @@
   color: #dff4ff;
   border: 1px solid rgba(132, 205, 234, 0.3);
   border-radius: 50%;
-  background: linear-gradient(145deg, #174b65, #172b43);
+  background: var(--brand-panel-raised);
   font-family: 'Space Grotesk', sans-serif;
   font-size: 0.9rem;
   font-weight: 600;
@@ -556,7 +556,7 @@ html.game-route .protected-route-shell {
   display: grid;
   place-items: center;
   color: #d8edf8;
-  background: linear-gradient(145deg, #174b65, #283951);
+  background: var(--brand-panel-raised);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -585,7 +585,7 @@ html.game-route .protected-route-shell {
 
 .account-provider-status {
   flex: 0 0 auto;
-  color: #90c7dd;
+  color: var(--brand-steel);
   font-size: 0.61rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -843,7 +843,7 @@ html.game-route .protected-route-shell {
 .auth-route-card > a {
   display: inline-block;
   margin-top: 18px;
-  color: #9edcff;
+  color: var(--brand-accent);
 }
 
 .home-main {
@@ -907,7 +907,7 @@ html.game-route .protected-route-shell {
   height: 2px;
   inset: 0 0 auto;
   content: '';
-  background: linear-gradient(90deg, #3e9fc3, transparent 72%);
+  background: linear-gradient(90deg, var(--brand-accent), transparent 72%);
   opacity: 0.8;
 }
 
@@ -959,8 +959,8 @@ html.game-route .protected-route-shell {
   flex: 0 0 auto;
   content: '';
   border-radius: 50%;
-  background: #61b5d2;
-  box-shadow: 0 0 0 3px rgba(97, 181, 210, 0.09);
+  background: var(--brand-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 9%, transparent);
 }
 
 .mode-action {
@@ -974,13 +974,13 @@ html.game-route .protected-route-shell {
   color: #eef7ff;
   border: 1px solid rgba(122, 202, 234, 0.28);
   border-radius: 9px;
-  background: #126b91;
+  background: var(--brand-accent);
   font-weight: 700;
   text-decoration: none;
 }
 
 .mode-action:hover {
-  background: #1680aa;
+  background: var(--brand-accent-hover);
 }
 
 .mode-card-online .mode-action {
@@ -1078,7 +1078,7 @@ html.game-route .protected-route-shell {
 }
 
 .step-number {
-  color: #67b7d4;
+  color: var(--brand-accent);
   font-family: 'Space Grotesk', sans-serif;
   font-size: 0.65rem;
   letter-spacing: 0.08em;
@@ -1121,7 +1121,7 @@ html.game-route .protected-route-shell {
   width: 16px;
   height: 1px;
   flex: 0 0 auto;
-  background: #4e99b7;
+  background: var(--brand-accent);
 }
 
 .home-footer {
@@ -1313,7 +1313,7 @@ html.game-route .protected-route-shell {
 }
 
 .mode-action:focus-visible {
-  outline: 3px solid #8bd8ff;
+  outline: 3px solid var(--brand-focus);
   outline-offset: 3px;
 }
 
@@ -1402,7 +1402,7 @@ html.game-route .protected-route-shell {
   padding: 10px 14px;
   border: 1px solid rgba(122, 202, 234, 0.28);
   border-radius: 9px;
-  background: #126b91;
+  background: var(--brand-accent);
   cursor: pointer;
   font-weight: 700;
 }
@@ -2067,7 +2067,7 @@ html.game-route .protected-route-shell {
 .multiplayer-authority-status code {
   display: block;
   overflow: hidden;
-  color: #8ab7cc;
+  color: var(--brand-steel);
   font-size: 0.56rem;
   text-overflow: ellipsis;
 }
@@ -2337,7 +2337,7 @@ button {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 3px solid #8bd8ff;
+  outline: 3px solid var(--brand-focus);
   outline-offset: 2px;
 }
 
@@ -2466,7 +2466,7 @@ select:focus-visible {
 .variant-badge {
   flex: none;
   padding: 6px 9px;
-  color: #a8dff5;
+  color: var(--brand-accent);
   border: 1px solid rgba(122, 202, 234, 0.24);
   border-radius: 999px;
   background: rgba(33, 104, 132, 0.25);
@@ -2691,7 +2691,7 @@ select:focus-visible {
 
 .assignment-modes input {
   margin-top: 2px;
-  accent-color: #78cdeb;
+  accent-color: var(--brand-accent);
 }
 
 .assignment-modes span,
@@ -2754,7 +2754,7 @@ select:focus-visible {
   color: #f3f9ff;
   border: 1px solid rgba(134, 204, 238, 0.28);
   border-radius: 8px;
-  background: linear-gradient(135deg, #226e90, #285f7c);
+  background: var(--brand-accent);
 }
 
 .draft-totals {
@@ -2783,7 +2783,7 @@ select:focus-visible {
   color: #f3f9ff;
   border: 1px solid rgba(134, 204, 238, 0.28);
   border-radius: 8px;
-  background: #2876a8;
+  background: var(--brand-accent);
   cursor: pointer;
   font-size: 0.7rem;
   font-weight: 700;
@@ -2927,7 +2927,7 @@ select:focus-visible {
 
 .bot-pacing-selector input {
   margin: 0;
-  accent-color: #58b9df;
+  accent-color: var(--brand-accent);
 }
 
 .bot-pacing-setup {
@@ -2970,7 +2970,7 @@ select:focus-visible {
   width: 16px;
   height: 16px;
   margin: 0;
-  accent-color: #58b9df;
+  accent-color: var(--brand-accent);
 }
 
 .game-menu-separator {
@@ -3003,7 +3003,7 @@ select:focus-visible {
 }
 
 .turn-notification span {
-  color: #7ddcf4;
+  color: var(--brand-accent);
 }
 
 .turn-notification strong {
@@ -3207,7 +3207,7 @@ select:focus-visible {
   color: #eef7ff;
   border: 1px solid rgba(134, 204, 238, 0.32);
   border-radius: 8px;
-  background: #2876a8;
+  background: var(--brand-accent);
   cursor: pointer;
   font-weight: 700;
 }
@@ -3275,7 +3275,7 @@ select:focus-visible {
   color: #f3f9ff;
   border: 1px solid rgba(134, 204, 238, 0.28);
   border-radius: 8px;
-  background: #2876a8;
+  background: var(--brand-accent);
   cursor: pointer;
   font-size: 0.7rem;
   font-weight: 700;
@@ -3356,7 +3356,7 @@ button:disabled {
 
 .amount-control input {
   width: 100%;
-  accent-color: #52a4d3;
+  accent-color: var(--brand-accent);
 }
 
 .amount-control strong {
@@ -3510,7 +3510,7 @@ button:disabled {
 
 .activity-launcher strong {
   margin-left: 4px;
-  color: #9edcff;
+  color: var(--brand-accent);
   font: inherit;
 }
 
@@ -3819,7 +3819,7 @@ button:disabled {
   margin-left: 1px;
   flex: 0 0 auto;
   border: 1px solid rgba(138, 205, 239, 0.3);
-  border-top-color: #9edcff;
+  border-top-color: var(--brand-accent);
   border-radius: 50%;
   animation: event-reaction-saving 700ms linear infinite;
 }
@@ -3901,7 +3901,7 @@ button:disabled {
 
 .board-brand-tagline {
   margin-top: 0.55rem;
-  color: #9ee8ff;
+  color: var(--brand-accent);
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.22em;
@@ -4259,7 +4259,7 @@ h2 {
 .seed-row button {
   border: 1px solid rgba(153, 190, 224, 0.2);
   border-radius: 9px;
-  background: #2876a8;
+  background: var(--brand-accent);
   cursor: pointer;
   transition:
     border-color 150ms ease,
@@ -4354,7 +4354,7 @@ h2 {
   padding: 8px;
   border: 1px solid rgba(153, 190, 224, 0.2);
   border-radius: 8px;
-  background: #2876a8;
+  background: var(--brand-accent);
   cursor: pointer;
   font-size: 0.67rem;
   font-weight: 700;
@@ -4504,7 +4504,7 @@ h2 {
 }
 
 .territory-navigator li.valid-source > button {
-  border-left: 3px solid #8bd8ff;
+  border-left: 3px solid var(--brand-accent);
 }
 
 .territory-navigator li.valid-target > button {
@@ -4555,7 +4555,7 @@ h2 {
   color: #f3f9ff;
   border: 1px solid rgba(134, 204, 238, 0.28);
   border-radius: 8px;
-  background: #2876a8;
+  background: var(--brand-accent);
   cursor: pointer;
   font-size: 0.7rem;
   font-weight: 700;
@@ -4578,8 +4578,8 @@ h2 {
 }
 
 .seed-row input:focus {
-  border-color: #4b94c4;
-  box-shadow: 0 0 0 3px rgba(55, 130, 178, 0.16);
+  border-color: var(--brand-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 16%, transparent);
 }
 
 .seed-row button {
@@ -4850,7 +4850,7 @@ h2 {
 
 .globe-glyph {
   margin-bottom: 8px;
-  color: #3e779c;
+  color: var(--brand-accent);
   font-size: 2.4rem;
 }
 
@@ -4987,7 +4987,7 @@ h2 {
   color: #90a9bc;
 }
 .admin-eyebrow {
-  color: #65d8c3 !important;
+  color: var(--brand-accent) !important;
   font-size: 0.76rem;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -5003,7 +5003,7 @@ h2 {
 .admin-actions button,
 .latest-button {
   padding: 9px 14px;
-  border: 1px solid #4c718a;
+  border: 1px solid var(--brand-border);
   border-radius: 8px;
   color: #e8f4fc;
   background: #152b3b;
@@ -5014,8 +5014,8 @@ h2 {
 .admin-empty {
   margin-top: 24px;
   padding: 24px;
-  border: 1px solid #315066;
-  border-left: 5px solid #58b9a6;
+  border: 1px solid var(--brand-border);
+  border-left: 5px solid var(--brand-accent);
   border-radius: 12px;
   background: rgba(13, 30, 43, 0.9);
 }
@@ -5030,7 +5030,7 @@ h2 {
 }
 .status-label {
   margin-bottom: 5px;
-  color: #72dec9;
+  color: var(--brand-accent);
   font-weight: 850;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -5092,12 +5092,12 @@ h2 {
   min-width: 0;
   padding: 18px;
   border: 1px solid #2d4659;
-  border-top: 3px solid #5d7c91;
+  border-top: 3px solid var(--brand-steel);
   border-radius: 10px;
   background: #0e202d;
 }
 .suite-card.status-passed {
-  border-top-color: #5bd3b9;
+  border-top-color: var(--brand-success);
 }
 .suite-card.status-failed {
   border-top-color: #ff776f;
@@ -5142,7 +5142,7 @@ h2 {
   overflow-wrap: anywhere;
   border-radius: 5px;
   background: #07141d;
-  color: #a9dcff;
+  color: var(--brand-accent);
 }
 .suite-card details {
   margin-top: 12px;
@@ -5205,7 +5205,7 @@ h2 {
   display: block;
   height: 6px;
   border-radius: 3px;
-  background: #61cfb8;
+  background: var(--brand-accent);
 }
 .failure-card + .failure-card {
   margin-top: 12px;
@@ -5220,7 +5220,7 @@ h2 {
   min-height: 70px;
   padding: 10px;
   resize: vertical;
-  border: 1px solid #4a6577;
+  border: 1px solid var(--brand-border);
   border-radius: 6px;
   color: #dce8f2;
   background: #07141d;
@@ -5245,7 +5245,7 @@ h2 {
 }
 .recent-list button:hover,
 .recent-list button:focus-visible {
-  border-color: #66cbb6;
+  border-color: var(--brand-focus);
 }
 .recent-list span {
   overflow-wrap: anywhere;
@@ -5257,7 +5257,7 @@ h2 {
 .study-section {
   margin-top: 28px;
   padding: 22px;
-  border: 1px solid #315066;
+  border: 1px solid var(--brand-border);
   border-radius: 12px;
   background: rgba(9, 25, 37, 0.94);
 }
@@ -5296,7 +5296,7 @@ h2 {
   padding: 9px;
   border: 1px solid #405b6f;
   border-radius: 5px;
-  color: #a9dcff;
+  color: var(--brand-accent);
   background: #07141d;
   font-family: monospace;
 }
@@ -5306,7 +5306,7 @@ h2 {
   gap: 24px;
   margin-top: 18px;
   padding: 18px;
-  border-left: 5px solid #5bd3b9;
+  border-left: 5px solid var(--brand-success);
   border-radius: 9px;
   background: #0e202d;
 }
@@ -5387,7 +5387,7 @@ h2 {
   padding: 7px;
   color: #dce8f2;
   background: #102635;
-  border: 1px solid #4a6577;
+  border: 1px solid var(--brand-border);
   border-radius: 5px;
 }
 .configuration-table {
@@ -5428,7 +5428,7 @@ h2 {
   padding: 8px;
   color: #dce8f2;
   background: #07141d;
-  border: 1px solid #4a6577;
+  border: 1px solid var(--brand-border);
 }
 .recent-studies {
   display: grid;
