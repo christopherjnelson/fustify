@@ -1,7 +1,6 @@
 import type { SVGProps } from 'react';
 import { FustifyMark, type FustifyLogoVariant } from './FustifyMark';
 import { FUSTIFY_LOGO_VIEW_BOX } from './logoGeometry';
-import './brand.css';
 
 const LOGO_HEIGHTS = {
   compact: 32,

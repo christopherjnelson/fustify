@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react';
 import { AccountControl } from '../auth/AccountControl';
+import { FustifyLogo } from '../brand/FustifyLogo';
 import { BRAND } from '../branding';
 
 type Navigate = (event: MouseEvent<HTMLAnchorElement>) => void;
@@ -31,16 +32,57 @@ function HomeHeader() {
   return (
     <header className="home-header">
       <a className="home-wordmark" href="/" aria-label="Fustify home">
-        <span className="home-wordmark-mark" aria-hidden="true">
-          F
-        </span>
-        <span>
-          <strong>{BRAND.productName}</strong>
-          <small>{BRAND.shortDescription}</small>
-        </span>
+        <FustifyLogo decorative showDescriptor size="standard" />
       </a>
       <AccountControl />
     </header>
+  );
+}
+
+function OrbitalGlobe() {
+  return (
+    <div className="hero-orbit" aria-hidden="true">
+      <svg
+        className="hero-orbit__graphic"
+        focusable="false"
+        viewBox="0 0 420 420"
+      >
+        <defs>
+          <radialGradient id="hero-globe-field" cx="50%" cy="42%" r="58%">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.09" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <circle className="hero-orbit__field" cx="210" cy="210" r="132" />
+        <g className="hero-orbit__sphere">
+          <circle cx="210" cy="210" r="126" />
+          <ellipse cx="210" cy="210" rx="62" ry="126" />
+          <ellipse cx="210" cy="210" rx="126" ry="46" />
+          <path d="M101 147c33 18 70 27 109 27s76-9 109-27" />
+          <path d="M101 273c33-18 70-27 109-27s76 9 109 27" />
+          <path d="M210 84v252M84 210h252" />
+        </g>
+        <g className="hero-orbit__rings">
+          <ellipse
+            cx="210"
+            cy="210"
+            rx="184"
+            ry="62"
+            transform="rotate(-18 210 210)"
+          />
+          <ellipse
+            cx="210"
+            cy="210"
+            rx="164"
+            ry="92"
+            transform="rotate(48 210 210)"
+          />
+        </g>
+        <circle className="hero-orbit__node" cx="361" cy="151" r="6" />
+        <circle className="hero-orbit__focus" cx="173" cy="192" r="5" />
+      </svg>
+      <span className="hero-orbit__label">Procedural sphere / seed locked</span>
+    </div>
   );
 }
 
@@ -118,18 +160,22 @@ function GameModeCards({ onNavigate }: { onNavigate: Navigate }) {
 function Hero({ onNavigate }: { onNavigate: Navigate }) {
   return (
     <section className="home-hero" aria-labelledby="home-title">
-      <div className="home-hero-copy">
-        <span className="eyebrow">
-          Strategy on a different world every time
-        </span>
-        <h1 id="home-title">{BRAND.productName}</h1>
-        <p className="home-lede">
-          A strategy game played across procedurally generated spherical worlds.
-        </p>
-        <p className="home-supporting">
-          Generate a unique globe, claim territories, build armies, and conquer
-          continents in local or online multiplayer.
-        </p>
+      <div className="home-hero-intro">
+        <div className="home-hero-copy">
+          <span className="eyebrow">
+            Strategy on a different world every time
+          </span>
+          <h1 id="home-title">{BRAND.productName}</h1>
+          <p className="home-lede">
+            A strategy game played across procedurally generated spherical
+            worlds.
+          </p>
+          <p className="home-supporting">
+            Generate a unique globe, claim territories, build armies, and
+            conquer continents in local or online multiplayer.
+          </p>
+        </div>
+        <OrbitalGlobe />
       </div>
       <GameModeCards onNavigate={onNavigate} />
     </section>

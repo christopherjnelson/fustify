@@ -1,3 +1,4 @@
+@import '../brand/brand.css';
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600&display=swap');
 
 :root {
@@ -5159,5 +5160,569 @@ h2 {
     scroll-behavior: auto !important;
     transition: none !important;
     animation: none !important;
+  }
+}
+
+/* Production chartreuse brand integration */
+html.home-route,
+html.home-route body {
+  color: var(--brand-text);
+  background: var(--brand-page);
+}
+
+.home-shell {
+  color: var(--brand-text);
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--brand-slate) 14%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--brand-slate) 14%, transparent) 1px,
+      transparent 1px
+    ),
+    radial-gradient(
+      circle at 72% 9%,
+      color-mix(in srgb, var(--brand-slate) 55%, transparent),
+      transparent 32rem
+    ),
+    var(--brand-page);
+  background-size:
+    52px 52px,
+    52px 52px,
+    auto,
+    auto;
+  font-family: var(--brand-body-font);
+}
+
+.home-shell::before {
+  display: none;
+}
+
+.home-header {
+  min-height: 82px;
+  border-color: var(--brand-border);
+}
+
+.home-wordmark {
+  border-radius: 5px;
+}
+
+.home-wordmark .fustify-logo {
+  width: auto;
+  height: 42px;
+}
+
+.home-wordmark:focus-visible,
+.mode-action:focus-visible,
+.home-shell .account-actions button:focus-visible,
+.auth-dialog button:focus-visible,
+.auth-dialog input:focus-visible {
+  outline: 3px solid var(--brand-focus);
+  outline-offset: 3px;
+}
+
+.home-shell .account-summary {
+  color: var(--brand-steel);
+  border-color: var(--brand-border);
+  background: color-mix(in srgb, var(--brand-panel-raised) 94%, transparent);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.3);
+}
+
+.home-shell .account-identity strong {
+  color: var(--brand-text-strong);
+}
+
+.home-shell .account-identity span {
+  color: var(--brand-steel);
+}
+
+.home-shell .account-provider-status {
+  color: var(--brand-accent);
+}
+
+.home-shell .account-avatar {
+  border-color: var(--brand-border);
+}
+
+.home-shell .account-avatar-fallback {
+  color: var(--brand-text-strong);
+  background: var(--brand-slate);
+}
+
+.home-shell .account-actions button {
+  color: var(--brand-text-strong);
+  border-color: var(--brand-border);
+  background: var(--brand-slate);
+}
+
+.home-shell .account-actions button:hover {
+  border-color: var(--brand-accent);
+  background: var(--brand-panel-raised);
+}
+
+.home-main {
+  padding: 46px 0 66px;
+}
+
+.home-hero-intro {
+  display: grid;
+  min-height: 330px;
+  margin-bottom: 34px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.7fr);
+  align-items: center;
+  gap: clamp(28px, 5vw, 72px);
+}
+
+.home-hero-copy {
+  max-width: 760px;
+  margin: 0;
+}
+
+.eyebrow {
+  color: var(--brand-accent);
+  font-family: var(--brand-display-font);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.home-hero-copy h1 {
+  margin: 13px 0 14px;
+  color: var(--brand-text-strong);
+  font-family: var(--brand-display-font);
+  font-size: clamp(3rem, 6.2vw, 5.2rem);
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
+}
+
+.home-hero-copy h1::after {
+  display: inline-block;
+  width: 0.18em;
+  height: 0.18em;
+  margin-left: 0.11em;
+  content: '';
+  border-radius: 50%;
+  background: var(--brand-accent);
+}
+
+.home-lede {
+  max-width: 660px;
+  color: var(--brand-text);
+  font-size: clamp(1.15rem, 2vw, 1.45rem);
+}
+
+.home-supporting {
+  max-width: 670px;
+  margin-top: 12px;
+  color: var(--brand-steel);
+}
+
+.hero-orbit {
+  position: relative;
+  width: min(100%, 390px);
+  justify-self: end;
+  color: var(--brand-accent);
+}
+
+.hero-orbit::before {
+  position: absolute;
+  z-index: -1;
+  inset: 16% 14%;
+  content: '';
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--brand-accent) 6%, transparent);
+  filter: blur(34px);
+}
+
+.hero-orbit__graphic {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.hero-orbit__field {
+  fill: url('#hero-globe-field');
+  stroke: var(--brand-border);
+  stroke-width: 1;
+}
+
+.hero-orbit__sphere,
+.hero-orbit__rings {
+  fill: none;
+  stroke: var(--brand-steel);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.hero-orbit__sphere {
+  opacity: 0.34;
+}
+
+.hero-orbit__rings {
+  stroke: var(--brand-accent);
+  opacity: 0.52;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: home-orbit-drift 24s linear infinite;
+}
+
+.hero-orbit__node,
+.hero-orbit__focus {
+  fill: var(--brand-accent);
+}
+
+.hero-orbit__node {
+  stroke: var(--brand-page);
+  stroke-width: 3;
+}
+
+.hero-orbit__focus {
+  opacity: 0.8;
+  animation: home-orbit-pulse 3.6s ease-in-out infinite;
+}
+
+.hero-orbit__label {
+  position: absolute;
+  right: 3%;
+  bottom: 5%;
+  color: var(--brand-steel);
+  font-family: var(--brand-display-font);
+  font-size: 0.48rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+@keyframes home-orbit-drift {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes home-orbit-pulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(1.55);
+    transform-origin: 173px 192px;
+  }
+}
+
+.mode-grid {
+  gap: 20px;
+}
+
+.mode-card {
+  min-height: 310px;
+  padding: 27px;
+  gap: 19px;
+  border-color: var(--brand-border);
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--brand-slate) 30%, transparent),
+      transparent 45%
+    ),
+    var(--brand-panel);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease,
+    background-color 160ms ease;
+}
+
+.mode-card::before,
+.mode-card-online::before {
+  background: linear-gradient(90deg, var(--brand-accent), transparent 72%);
+  opacity: 0.8;
+}
+
+.mode-card:hover,
+.mode-card:focus-within {
+  border-color: color-mix(
+    in srgb,
+    var(--brand-accent) 58%,
+    var(--brand-border)
+  );
+  transform: translateY(-2px);
+}
+
+.mode-card-online {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--brand-slate) 40%, transparent),
+      transparent 54%
+    ),
+    var(--brand-panel-raised);
+}
+
+.mode-card h2 {
+  color: var(--brand-text-strong);
+  font-family: var(--brand-display-font);
+  font-size: 1.45rem;
+  letter-spacing: 0.015em;
+}
+
+.mode-card p {
+  color: var(--brand-text);
+}
+
+.mode-card .mode-card-detail,
+.mode-features {
+  color: var(--brand-steel);
+}
+
+.mode-features li::before {
+  border-radius: 1px;
+  background: var(--brand-accent);
+  box-shadow: none;
+}
+
+.mode-action {
+  color: var(--brand-page);
+  border-color: var(--brand-accent);
+  border-radius: 7px;
+  background: var(--brand-accent);
+  font-weight: 800;
+}
+
+.mode-action:hover {
+  background: var(--brand-accent-hover);
+}
+
+.mode-card-online .mode-action {
+  color: var(--brand-text-strong);
+  border-color: color-mix(in srgb, var(--brand-steel) 48%, var(--brand-border));
+  background: transparent;
+}
+
+.mode-card-online .mode-action:hover {
+  color: var(--brand-page);
+  border-color: var(--brand-accent);
+  background: var(--brand-accent);
+}
+
+.home-section {
+  margin-top: 42px;
+  border-color: var(--brand-border);
+}
+
+.home-section h2 {
+  color: var(--brand-text-strong);
+  font-family: var(--brand-display-font);
+  font-size: 1.45rem;
+  letter-spacing: 0.01em;
+}
+
+.generated-worlds {
+  padding-top: 42px;
+}
+
+.generated-worlds > div > p,
+.world-traits span,
+.match-steps p {
+  color: var(--brand-steel);
+}
+
+.world-traits li {
+  border-color: var(--brand-accent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--brand-slate) 28%, transparent),
+    transparent
+  );
+}
+
+.world-traits strong,
+.match-steps h3 {
+  color: var(--brand-text);
+}
+
+.match-steps li {
+  border-color: var(--brand-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand-panel) 84%, transparent);
+}
+
+.step-number {
+  color: var(--brand-accent);
+  font-family: var(--brand-display-font);
+}
+
+.match-steps h3 {
+  font-family: var(--brand-display-font);
+}
+
+.feature-strip {
+  border-color: var(--brand-border);
+  color: var(--brand-text);
+}
+
+.feature-strip li span {
+  background: var(--brand-accent);
+}
+
+.home-footer {
+  color: var(--brand-steel);
+  border-color: var(--brand-border);
+}
+
+.home-footer strong {
+  color: var(--brand-text);
+  font-family: var(--brand-display-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.auth-dialog {
+  color: var(--brand-text);
+  border-color: var(--brand-border);
+  background: var(--brand-panel-raised);
+}
+
+.auth-dialog h2 {
+  color: var(--brand-text-strong);
+  font-family: var(--brand-display-font);
+}
+
+.auth-dialog .auth-field input {
+  color: var(--brand-text-strong);
+  border-color: var(--brand-border);
+  background: var(--brand-page);
+}
+
+.auth-dialog .auth-field input:focus {
+  border-color: var(--brand-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 16%, transparent);
+}
+
+.auth-dialog button:not(.auth-discord-action):not(.auth-danger-action) {
+  border-color: var(--brand-border);
+  background: var(--brand-slate);
+}
+
+.auth-dialog button:not(.auth-discord-action):not(.auth-danger-action):hover {
+  border-color: var(--brand-accent);
+  background: var(--brand-panel-raised);
+}
+
+@media (max-width: 720px) {
+  .home-header {
+    min-height: 68px;
+  }
+
+  .home-header:has(.account-summary) {
+    padding: 12px 0;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .home-header:has(.account-summary) .account-control {
+    width: 100%;
+    max-width: none;
+  }
+
+  .home-header .account-control .account-summary {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .home-header .account-control .account-identity {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .home-header .account-control:not(.account-control-compact) .account-actions {
+    width: 100%;
+  }
+
+  .home-header
+    .account-control:not(.account-control-compact)
+    .account-actions
+    button {
+    flex: 1;
+  }
+
+  .home-wordmark .fustify-logo {
+    width: 108px;
+    height: auto;
+  }
+
+  .home-main {
+    padding-top: 30px;
+  }
+
+  .home-hero-intro {
+    min-height: 0;
+    margin-bottom: 24px;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    align-items: start;
+    gap: 8px;
+  }
+
+  .home-hero-copy h1 {
+    margin-top: 10px;
+    font-size: clamp(2.35rem, 12vw, 3.15rem);
+  }
+
+  .home-lede {
+    font-size: 1rem;
+  }
+
+  .home-supporting {
+    font-size: 0.78rem;
+  }
+
+  .hero-orbit {
+    width: 142px;
+    margin-top: 30px;
+    margin-right: -22px;
+    opacity: 0.82;
+  }
+
+  .hero-orbit__label {
+    display: none;
+  }
+
+  .mode-card {
+    padding: 22px;
+  }
+}
+
+@media (max-width: 430px) {
+  .home-hero-intro {
+    display: block;
+  }
+
+  .hero-orbit {
+    position: absolute;
+    width: 118px;
+    top: 90px;
+    right: -28px;
+    margin: 0;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  .home-hero-copy {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-orbit__rings,
+  .hero-orbit__focus {
+    animation: none;
+  }
+
+  .mode-card {
+    transition: none;
   }
 }

@@ -1,6 +1,5 @@
 import type { CSSProperties, SVGProps } from 'react';
 import { FUSTIFY_MARK_GEOMETRY, FUSTIFY_MARK_VIEW_BOX } from './logoGeometry';
-import './brand.css';
 
 export type FustifyLogoVariant =
   'full-color' | 'monochrome-light' | 'monochrome-dark';
