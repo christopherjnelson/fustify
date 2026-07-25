@@ -243,9 +243,6 @@ test('explicit and unmarked normalized URLs both preview v2', async ({
     '/?v=1&generator=v2-normalized&seed=normalized-url-preview&territories=42&continents=5&players=4&visual-review=1',
   );
   await page.waitForFunction(() => window.__WORLDSEED_VISUAL__ !== undefined);
-  await expect(page.getByLabel('Experimental generator version')).toHaveValue(
-    String(NORMALIZED_GENERATOR_VERSION),
-  );
   expect(
     (await page.evaluate(() => window.__WORLDSEED_VISUAL__!.getState())).planet
       .generatorVersion,

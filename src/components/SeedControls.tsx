@@ -1,11 +1,5 @@
 import type { FormEvent } from 'react';
 import {
-  CURRENT_GENERATOR_PROFILE,
-  CURRENT_GENERATOR_VERSION,
-  NORMALIZED_GENERATOR_PROFILE,
-  NORMALIZED_GENERATOR_VERSION,
-} from '../core/generation/constants';
-import {
   MAX_NEW_CONTINENT_COUNT,
   MAX_TERRITORY_COUNT,
   MIN_CONTINENT_COUNT,
@@ -18,7 +12,6 @@ export function SeedControls() {
   const seedInput = useGameStore((state) => state.seedInput);
   const setSeedInput = useGameStore((state) => state.setSeedInput);
   const setup = useGameStore((state) => state.setup);
-  const planet = useGameStore((state) => state.planet);
   const draft = useGameStore((state) => state.setupDraft);
   const setDraft = useGameStore((state) => state.setSetupDraft);
   const warning = useGameStore((state) => state.setupWarning);
@@ -85,94 +78,7 @@ export function SeedControls() {
             disabled={operation !== null}
           />
         </label>
-        {import.meta.env.DEV && (
-          <label className="experimental-generator-control">
-            <span>Generator</span>
-            <select
-              value={draft.generatorVersion}
-              onChange={(event) =>
-                setDraft({
-                  generatorVersion:
-                    Number(event.target.value) === NORMALIZED_GENERATOR_VERSION
-                      ? NORMALIZED_GENERATOR_VERSION
-                      : CURRENT_GENERATOR_VERSION,
-                })
-              }
-              aria-label="Experimental generator version"
-              disabled={operation !== null}
-            >
-              <option value={CURRENT_GENERATOR_VERSION}>
-                {CURRENT_GENERATOR_PROFILE}
-              </option>
-              <option value={NORMALIZED_GENERATOR_VERSION}>
-                {NORMALIZED_GENERATOR_PROFILE}
-              </option>
-            </select>
-          </label>
-        )}
       </div>
-      {import.meta.env.DEV &&
-        setup.generatorVersion === NORMALIZED_GENERATOR_VERSION && (
-          <details className="normalized-generator-diagnostics">
-            <summary>Experimental v2 diagnostics</summary>
-            {planet.generationDiagnostics ? (
-              <dl>
-                <div>
-                  <dt>Selected candidate</dt>
-                  <dd>
-                    {planet.generationDiagnostics.selectedCandidateIndex} of{' '}
-                    {planet.generationDiagnostics.candidateCount}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Selected score</dt>
-                  <dd>
-                    {planet.generationDiagnostics.candidates
-                      .find(
-                        (candidate) =>
-                          candidate.candidateIndex ===
-                          planet.generationDiagnostics!.selectedCandidateIndex,
-                      )
-                      ?.score.total.toFixed(2)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Area CV</dt>
-                  <dd>
-                    {planet.generationDiagnostics.worldMetrics.territoryAreaCoefficientOfVariation.toFixed(
-                      3,
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Area outliers</dt>
-                  <dd>
-                    {
-                      planet.generationDiagnostics.worldMetrics
-                        .outlierTerritoryCount
-                    }
-                  </dd>
-                </div>
-                <div>
-                  <dt>Tiny edges</dt>
-                  <dd>
-                    {planet.generationDiagnostics.worldMetrics.tinyEdgeTotal}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Mean sides</dt>
-                  <dd>
-                    {planet.generationDiagnostics.worldMetrics.averageMeaningfulSideCount.toFixed(
-                      2,
-                    )}
-                  </dd>
-                </div>
-              </dl>
-            ) : (
-              <p>Apply the seed to generate normalized diagnostics.</p>
-            )}
-          </details>
-        )}
       <p className="setup-guidance">
         Recommended world: 42 territories and 5 continents. New worlds are
         temporarily capped at 5 continents while 6-continent generation is
