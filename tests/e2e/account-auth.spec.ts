@@ -565,6 +565,50 @@ test('registered account can edit its profile and sign out', async ({
   expect(await called(page, 'signInAnonymously')).toHaveLength(0);
 });
 
+test('registered protected routes render the branded shell and button hierarchy without overflow', async ({
+  page,
+}, testInfo) => {
+  await installAuthFixture(page, 'registered');
+  await page.goto(
+    '/local?v=1&seed=brand-shell&territories=42&continents=5&players=4&assignment=random',
+  );
+
+  const shell = page.locator('.branded-app-shell');
+  await expect(shell).toBeVisible();
+  await expect(page.locator('.branded-app-header .fustify-logo')).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Fustify home' }),
+  ).toHaveAttribute('href', '/');
+  await expect(
+    page.locator('.branded-app-header .account-identity strong'),
+  ).toHaveText('Player One');
+  await expect(
+    page.getByRole('heading', { name: 'Choose your world' }),
+  ).toBeVisible();
+
+  const buttonColors = await page.evaluate(() => {
+    const start = document.querySelector<HTMLElement>('.continue-setup');
+    const generate = Array.from(
+      document.querySelectorAll<HTMLElement>('button'),
+    ).find((button) => button.textContent?.trim() === 'Generate World');
+    return {
+      accent: getComputedStyle(document.documentElement)
+        .getPropertyValue('--brand-accent')
+        .trim(),
+      start: start ? getComputedStyle(start).backgroundColor : '',
+      generate: generate ? getComputedStyle(generate).backgroundColor : '',
+      overflow:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    };
+  });
+  expect(buttonColors.accent).toBeTruthy();
+  expect(buttonColors.start).not.toBe(buttonColors.generate);
+  expect(buttonColors.overflow).toBeLessThanOrEqual(1);
+
+  await capture(page, testInfo.project.name, 'brand-local-protected-shell');
+});
+
 test('registered home-to-multiplayer navigation keeps one ready account without a signed-out frame', async ({
   page,
 }, testInfo) => {

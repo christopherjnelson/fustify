@@ -200,6 +200,7 @@ function Lobby() {
               <strong>{profile.displayName}</strong>
               <button
                 type="button"
+                className="quiet"
                 onClick={() =>
                   window.dispatchEvent(new Event(OPEN_PROFILE_EDITOR_EVENT))
                 }
@@ -234,6 +235,7 @@ function Lobby() {
           </label>
           <button
             type="submit"
+            className="secondary"
             disabled={busy !== null || !accountReady || !profile}
           >
             {busy === 'join' ? 'Joining…' : 'Join room'}

@@ -11,6 +11,14 @@
   --brand-steel: #8a96a8;
   --brand-text: #e6edf3;
   --brand-text-strong: #f7f9fc;
+  --brand-danger: #ef776d;
+  --brand-danger-surface: #3c1d24;
+  --brand-warning: #e7bd70;
+  --brand-warning-surface: #332819;
+  --brand-success: #72d29b;
+  --brand-success-surface: #173326;
+  --brand-discord: #8b92e8;
+  --brand-discord-surface: #292d54;
 
   --brand-accent: var(--brand-chartreuse);
   --brand-accent-hover: var(--brand-chartreuse-hover);
@@ -18,6 +26,7 @@
   --brand-panel: var(--brand-surface);
   --brand-panel-raised: var(--brand-surface-raised);
   --brand-focus: #ddff57;
+  --brand-grid-line: color-mix(in srgb, var(--brand-steel) 5%, transparent);
   --brand-display-font: 'Orbitron', 'Arial Wide', system-ui, sans-serif;
   --brand-body-font:
     Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;

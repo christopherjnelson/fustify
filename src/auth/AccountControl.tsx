@@ -33,6 +33,7 @@ import { profileInitials } from './guestName';
 import { updateCurrentProfile } from './profileApi';
 import type { UserProfile } from './profileModel';
 import { currentSafeReturnPath, validatedReturnPath } from './returnPath';
+import { BrandedAppShell } from '../brand/BrandedAppShell';
 
 export type DialogView =
   | 'sign-in'
@@ -736,10 +737,9 @@ export function AccountRequiredGate({
     application?.userId === account.account.userId
   ) {
     return (
-      <div className="protected-route-shell">
-        <AccountControl compact />
+      <BrandedAppShell accountControl={<AccountControl compact />}>
         {application.node}
-      </div>
+      </BrandedAppShell>
     );
   }
 

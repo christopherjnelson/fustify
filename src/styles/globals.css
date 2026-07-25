@@ -5726,3 +5726,959 @@ html.home-route body {
     transition: none;
   }
 }
+
+/* Application-wide chartreuse brand integration */
+
+:root {
+  color: var(--brand-text);
+  background: var(--brand-page);
+  font-family: var(--brand-body-font);
+}
+
+:where(.protected-route-shell, .auth-route-shell, .auth-dialog, .home-shell) a {
+  color: var(--brand-accent);
+  text-decoration-color: color-mix(
+    in srgb,
+    var(--brand-accent) 42%,
+    transparent
+  );
+  text-underline-offset: 0.2em;
+}
+
+:where(.protected-route-shell, .auth-route-shell, .auth-dialog, .home-shell)
+  a:visited {
+  color: var(--brand-accent);
+}
+
+:where(.protected-route-shell, .auth-route-shell, .auth-dialog, .home-shell)
+  a:hover {
+  color: var(--brand-accent-hover);
+  text-decoration-color: currentColor;
+}
+
+:where(a, button, input, select, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--brand-focus);
+  outline-offset: 2px;
+}
+
+input,
+select {
+  accent-color: var(--brand-accent);
+}
+
+.branded-app-shell {
+  position: relative;
+  min-height: 100dvh;
+  color: var(--brand-text);
+  background:
+    linear-gradient(var(--brand-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--brand-grid-line) 1px, transparent 1px),
+    radial-gradient(
+      circle at 82% 4%,
+      color-mix(in srgb, var(--brand-slate) 52%, transparent),
+      transparent 28rem
+    ),
+    var(--brand-page);
+  background-size:
+    48px 48px,
+    48px 48px,
+    auto,
+    auto;
+}
+
+html.game-route .branded-app-shell,
+html.game-route .branded-app-content,
+html.multiplayer-match-route .branded-app-shell,
+html.multiplayer-match-route .branded-app-content {
+  height: 100%;
+}
+
+.branded-app-header {
+  position: absolute;
+  z-index: 40;
+  top: 14px;
+  right: 18px;
+  left: 18px;
+  display: flex;
+  width: auto;
+  min-height: 58px;
+  padding: 8px 9px 8px 12px;
+  align-items: center;
+  gap: 12px;
+  color: var(--brand-text);
+  border: 1px solid var(--brand-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-panel) 92%, transparent);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(16px);
+}
+
+.branded-app-shell-immersive .branded-app-header {
+  right: auto;
+  width: min(760px, calc(100vw - 36px));
+  background: color-mix(in srgb, var(--brand-panel) 86%, transparent);
+}
+
+.branded-app-home {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  text-decoration: none;
+}
+
+.branded-app-home .fustify-logo {
+  width: 110px;
+  height: auto;
+}
+
+.branded-app-context {
+  display: grid;
+  min-width: 0;
+  padding-left: 12px;
+  border-left: 1px solid var(--brand-border);
+}
+
+.branded-app-context span {
+  color: var(--brand-steel);
+  font-family: var(--brand-display-font);
+  font-size: 0.48rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.branded-app-context strong {
+  overflow: hidden;
+  color: var(--brand-text-strong);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branded-app-back {
+  display: inline-flex;
+  min-height: 34px;
+  margin-left: auto;
+  padding: 7px 9px;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand-text) !important;
+  border: 1px solid var(--brand-border);
+  border-radius: 7px;
+  background: var(--brand-panel-raised);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.branded-app-back:hover {
+  color: var(--brand-page) !important;
+  border-color: var(--brand-accent);
+  background: var(--brand-accent);
+}
+
+.branded-app-header .account-control {
+  position: static;
+  max-width: min(390px, 42vw);
+  margin: 0;
+}
+
+.branded-app-header .account-summary {
+  padding: 5px 7px;
+  border-color: var(--brand-border);
+  border-radius: 8px;
+  background: var(--brand-panel-raised);
+  box-shadow: none;
+}
+
+.branded-app-header .account-avatar {
+  width: 30px;
+  height: 30px;
+  border-color: color-mix(
+    in srgb,
+    var(--brand-accent) 36%,
+    var(--brand-border)
+  );
+}
+
+.branded-app-header .account-avatar-fallback,
+.multiplayer-playing-as > div > span {
+  color: var(--brand-page);
+  background: var(--brand-accent);
+}
+
+.branded-app-header .account-identity {
+  min-width: 84px;
+}
+
+.branded-app-header .account-identity strong {
+  color: var(--brand-text-strong);
+}
+
+.account-provider-status {
+  color: var(--brand-accent);
+}
+
+.branded-app-header .account-actions button {
+  min-height: 30px;
+  padding: 5px 8px;
+  color: color-mix(in srgb, var(--brand-danger) 82%, var(--brand-text-strong));
+  border-color: color-mix(
+    in srgb,
+    var(--brand-danger) 36%,
+    var(--brand-border)
+  );
+  background: transparent;
+  font-size: 0.64rem;
+}
+
+.branded-app-header .account-actions button:hover {
+  border-color: var(--brand-danger);
+  background: color-mix(in srgb, var(--brand-danger-surface) 78%, transparent);
+}
+
+.branded-app-content {
+  position: relative;
+  min-height: 100dvh;
+}
+
+.branded-app-content > :where(.multiplayer-shell, .game-setup-shell) {
+  padding-top: 100px;
+}
+
+.auth-route-shell,
+.multiplayer-shell,
+.game-setup-shell,
+.app-shell,
+.handoff-backdrop {
+  color: var(--brand-text);
+  background-color: var(--brand-page);
+}
+
+.auth-route-shell,
+.multiplayer-shell,
+.game-setup-shell {
+  background:
+    linear-gradient(var(--brand-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--brand-grid-line) 1px, transparent 1px),
+    radial-gradient(
+      circle at 75% 12%,
+      color-mix(in srgb, var(--brand-slate) 56%, transparent),
+      transparent 32rem
+    ),
+    var(--brand-page);
+  background-size:
+    48px 48px,
+    48px 48px,
+    auto,
+    auto;
+}
+
+.auth-route-card,
+.auth-dialog,
+.multiplayer-card,
+.setup-panel,
+.hud,
+.match-dock,
+.minimap-panel,
+.control-legend,
+.territory-drawer,
+.handoff-card {
+  color: var(--brand-text);
+  border-color: var(--brand-border);
+  background-color: var(--brand-panel);
+}
+
+.auth-route-card,
+.auth-dialog,
+.multiplayer-card,
+.setup-panel,
+.handoff-card {
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-panel) 96%, transparent);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.38);
+}
+
+:where(
+    .auth-route-card,
+    .auth-dialog,
+    .multiplayer-card,
+    .game-setup-shell,
+    .setup-panel,
+    .hud,
+    .handoff-card,
+    .activity-panel,
+    .victory-panel
+  )
+  :where(h1, h2) {
+  color: var(--brand-text-strong);
+  font-family: var(--brand-display-font);
+  letter-spacing: 0.01em;
+}
+
+.eyebrow,
+.setup-heading-row .eyebrow,
+.activity-header .eyebrow {
+  color: var(--brand-accent);
+  font-family: var(--brand-display-font);
+}
+
+:where(
+    .auth-route-card,
+    .auth-dialog,
+    .multiplayer-card,
+    .setup-panel,
+    .hud,
+    .handoff-card
+  )
+  p {
+  color: var(--brand-steel);
+}
+
+:where(
+  .auth-field input,
+  .multiplayer-card input,
+  .multiplayer-card select,
+  .player-count-control input,
+  .player-config input,
+  .player-config select,
+  .draft-card select,
+  .seed-row input,
+  .setup-counts input,
+  .combat-control select,
+  .territory-search input
+) {
+  color: var(--brand-text-strong);
+  border-color: var(--brand-border);
+  background: var(--brand-page);
+}
+
+:where(
+  .auth-field input,
+  .multiplayer-card input,
+  .multiplayer-card select,
+  .player-count-control input,
+  .player-config input,
+  .player-config select,
+  .draft-card select,
+  .seed-row input,
+  .setup-counts input,
+  .combat-control select,
+  .territory-search input
+):focus {
+  border-color: var(--brand-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 14%, transparent);
+  outline: 0;
+}
+
+.auth-field,
+.multiplayer-entry-card > label,
+.multiplayer-join-form label,
+.settings-card > label,
+.multiplayer-setting-grid label,
+.seed-controls label {
+  color: var(--brand-text);
+}
+
+.multiplayer-card button,
+.multiplayer-actions button,
+.setup-action-primary button,
+.setup-actions .continue-setup,
+.pregame-actions button:not(.secondary),
+.handoff-card button,
+.action-row button,
+.reinforcement-actions button:not(.amount-shortcut),
+.combat-control button,
+.phase-card > button,
+.victory-panel button.primary,
+.drawer-footer button {
+  color: var(--brand-page);
+  border-color: var(--brand-accent);
+  background: var(--brand-accent);
+  box-shadow: none;
+}
+
+:where(
+    .multiplayer-card button,
+    .multiplayer-actions button,
+    .setup-action-primary button,
+    .setup-actions .continue-setup,
+    .pregame-actions button:not(.secondary),
+    .handoff-card button,
+    .action-row button,
+    .reinforcement-actions button:not(.amount-shortcut),
+    .combat-control button,
+    .phase-card > button,
+    .victory-panel button.primary,
+    .drawer-footer button
+  ):hover:not(:disabled) {
+  border-color: var(--brand-accent-hover);
+  background: var(--brand-accent-hover);
+}
+
+:where(
+  .multiplayer-card button.secondary,
+  .multiplayer-actions button.secondary,
+  .setup-action-secondary button,
+  .setup-actions button.secondary,
+  .pregame-actions .secondary,
+  .secondary-action,
+  .victory-panel button.secondary,
+  .room-code-copy,
+  .quiet
+) {
+  color: var(--brand-text) !important;
+  border-color: var(--brand-border) !important;
+  background: var(--brand-panel-raised) !important;
+}
+
+:where(
+    .multiplayer-card button.secondary,
+    .multiplayer-actions button.secondary,
+    .setup-action-secondary button,
+    .setup-actions button.secondary,
+    .pregame-actions .secondary,
+    .secondary-action,
+    .victory-panel button.secondary,
+    .quiet
+  ):hover:not(:disabled) {
+  color: var(--brand-text-strong) !important;
+  border-color: var(--brand-accent) !important;
+  background: color-mix(
+    in srgb,
+    var(--brand-panel-raised) 78%,
+    var(--brand-accent)
+  ) !important;
+}
+
+:where(
+  .multiplayer-actions button.danger,
+  .setup-action-bar button.danger,
+  .auth-danger-action,
+  button.danger
+) {
+  color: color-mix(
+    in srgb,
+    var(--brand-danger) 80%,
+    var(--brand-text-strong)
+  ) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--brand-danger) 52%,
+    var(--brand-border)
+  ) !important;
+  background: var(--brand-danger-surface) !important;
+}
+
+.auth-dialog .auth-form > button[type='submit'],
+.auth-route-card .account-actions button:first-child {
+  color: var(--brand-page);
+  border-color: var(--brand-accent);
+  background: var(--brand-accent);
+}
+
+.auth-dialog .auth-dialog-close,
+.auth-dialog-nav button {
+  color: var(--brand-steel);
+  border-color: transparent;
+  background: transparent;
+}
+
+.auth-oauth-option::before,
+.auth-oauth-option::after,
+.game-menu-separator {
+  background: var(--brand-border);
+}
+
+.auth-oauth-option .auth-discord-action {
+  color: var(--brand-text-strong);
+  border-color: color-mix(
+    in srgb,
+    var(--brand-discord) 48%,
+    var(--brand-border)
+  );
+  background: var(--brand-discord-surface);
+}
+
+.auth-success {
+  color: var(--brand-success);
+  border-color: color-mix(
+    in srgb,
+    var(--brand-success) 38%,
+    var(--brand-border)
+  );
+  background: var(--brand-success-surface);
+}
+
+.auth-warning,
+.setup-message:not(.error) {
+  color: var(--brand-warning);
+}
+
+.auth-warning {
+  border-color: color-mix(
+    in srgb,
+    var(--brand-warning) 38%,
+    var(--brand-border)
+  );
+  background: var(--brand-warning-surface);
+}
+
+.auth-error,
+.multiplayer-error,
+.action-feedback.error,
+.setup-message.error,
+.event-reaction-error {
+  color: var(--brand-danger) !important;
+}
+
+.auth-error,
+.multiplayer-error,
+.action-feedback.error {
+  border-color: color-mix(
+    in srgb,
+    var(--brand-danger) 42%,
+    var(--brand-border)
+  );
+  background: var(--brand-danger-surface);
+}
+
+.account-summary,
+.multiplayer-playing-as > div {
+  border-color: var(--brand-border);
+  background: var(--brand-panel-raised);
+}
+
+.account-avatar-fallback,
+.multiplayer-playing-as > div > span {
+  border-color: var(--brand-accent);
+}
+
+.account-identity strong,
+.multiplayer-playing-as strong {
+  color: var(--brand-text-strong);
+}
+
+.account-identity span,
+.multiplayer-playing-as,
+.multiplayer-session-note {
+  color: var(--brand-steel);
+}
+
+.multiplayer-entry-card {
+  width: min(620px, 100%);
+  padding: clamp(24px, 4vw, 40px);
+}
+
+.multiplayer-entry-card::before {
+  display: block;
+  width: 42px;
+  height: 2px;
+  margin-bottom: 20px;
+  background: var(--brand-accent);
+  content: '';
+}
+
+.multiplayer-playing-as > div {
+  border-left: 3px solid var(--brand-accent);
+}
+
+.room-summary-code strong {
+  color: var(--brand-accent);
+  font-family: var(--brand-display-font);
+  letter-spacing: 0.08em;
+}
+
+.multiplayer-connection {
+  color: var(--brand-warning);
+  border-color: color-mix(
+    in srgb,
+    var(--brand-warning) 34%,
+    var(--brand-border)
+  );
+  background: var(--brand-warning-surface);
+}
+
+.multiplayer-connection.connected {
+  color: var(--brand-success);
+  border-color: color-mix(
+    in srgb,
+    var(--brand-success) 34%,
+    var(--brand-border)
+  );
+  background: var(--brand-success-surface);
+}
+
+.setup-summary,
+.setup-roster,
+.setup-world-panel,
+.setup-action-bar {
+  border-color: var(--brand-border);
+  background: var(--brand-panel);
+}
+
+.setup-status-badge {
+  color: var(--brand-accent);
+  border-color: color-mix(
+    in srgb,
+    var(--brand-accent) 34%,
+    var(--brand-border)
+  );
+  background: color-mix(in srgb, var(--brand-accent) 8%, transparent);
+}
+
+.setup-seat-row {
+  background: color-mix(
+    in srgb,
+    var(--setup-seat-color) 7%,
+    var(--brand-panel-raised)
+  );
+}
+
+.game-setup-shell-overlay {
+  border-color: var(--brand-border);
+  background: color-mix(in srgb, var(--brand-panel) 94%, transparent);
+}
+
+.branded-app-shell .game-setup-shell-overlay {
+  top: 86px;
+  max-height: calc(100dvh - 100px);
+}
+
+.local-setup-intro,
+.setup-guidance,
+.assignment-description,
+.multiplayer-start-helper {
+  color: var(--brand-steel);
+}
+
+.resume-card,
+.balance-card,
+.neutral-preview-card,
+.draft-card,
+.selection-card,
+.phase-card,
+.waiting-faction,
+.fixed-amount,
+.debug-panel {
+  border-color: var(--brand-border);
+  background: color-mix(in srgb, var(--brand-panel-raised) 74%, transparent);
+}
+
+.assignment-modes label,
+.bot-pacing-setup,
+.view-modes,
+.territory-filter {
+  border-color: var(--brand-border);
+  background: var(--brand-page);
+}
+
+.assignment-modes label.selected,
+.view-modes button.active,
+.territory-filter button.active,
+.icon-button.active {
+  color: var(--brand-text-strong);
+  border-color: var(--brand-accent);
+  background: color-mix(
+    in srgb,
+    var(--brand-accent) 12%,
+    var(--brand-panel-raised)
+  );
+}
+
+.assignment-modes input,
+.bot-pacing-selector input,
+.turn-sound-toggle input,
+.amount-control input {
+  accent-color: var(--brand-accent);
+}
+
+.hud,
+.match-dock,
+.minimap-panel {
+  border-color: var(--brand-border);
+  background: color-mix(in srgb, var(--brand-panel) 88%, transparent);
+}
+
+.branded-app-shell .left-hud-rail {
+  top: 86px;
+}
+
+.branded-app-shell .hud {
+  top: auto;
+  max-height: 100%;
+}
+
+.activity-header,
+.minimap-heading {
+  border-color: var(--brand-border);
+}
+
+.activity-header h2,
+.minimap-heading strong,
+.control-legend > strong {
+  color: var(--brand-text-strong);
+  font-family: var(--brand-display-font);
+}
+
+.activity-collapse,
+.activity-launcher,
+.event-focus-button,
+.event-reaction-picker,
+.game-menu > div,
+.game-menu summary,
+.game-menu button {
+  color: var(--brand-text);
+  border-color: var(--brand-border);
+  background: var(--brand-panel-raised);
+}
+
+.activity-launcher strong,
+.new-activity-button,
+.event-add-reaction-button:hover,
+.event-add-reaction-button:focus-visible,
+.event-add-reaction-button[aria-expanded='true'],
+.event-account-required:hover,
+.event-account-required:focus-visible {
+  color: var(--brand-accent);
+}
+
+.new-activity-button {
+  border-color: var(--brand-accent);
+  background: var(--brand-panel-raised);
+}
+
+.event-log li {
+  color: var(--brand-steel);
+  border-color: color-mix(in srgb, var(--brand-border) 42%, transparent);
+}
+
+.event-territory-name {
+  color: var(--brand-text);
+}
+
+.event-reaction-button {
+  color: var(--brand-steel);
+  border-color: var(--brand-border);
+  background: var(--brand-panel-raised);
+}
+
+.event-reaction-button.active {
+  color: var(--brand-text-strong);
+  border-color: var(--brand-accent);
+  background: color-mix(
+    in srgb,
+    var(--brand-accent) 10%,
+    var(--brand-panel-raised)
+  );
+  box-shadow: none;
+}
+
+.event-reaction-picker button:hover,
+.event-reaction-picker button:focus-visible,
+.event-reaction-picker button[aria-pressed='true'] {
+  color: var(--brand-page);
+  background: var(--brand-accent);
+}
+
+.turn-notification {
+  top: 86px;
+  color: var(--brand-text-strong);
+  border-color: var(--brand-accent);
+  background: color-mix(in srgb, var(--brand-panel-raised) 96%, transparent);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.42);
+}
+
+.turn-notification span {
+  color: var(--brand-accent);
+}
+
+.phase-heading h2,
+.turn-notification strong {
+  font-family: var(--brand-display-font);
+}
+
+.victory-panel {
+  color: var(--brand-text-strong);
+  border-color: color-mix(
+    in srgb,
+    var(--brand-accent) 52%,
+    var(--brand-border)
+  );
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--brand-accent) 9%, var(--brand-panel-raised)),
+    var(--brand-panel)
+  );
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.34);
+}
+
+.victory-panel p {
+  color: var(--brand-steel);
+}
+
+.board-brand {
+  top: 92px;
+  width: min(280px, calc(100vw - 500px));
+  color: var(--brand-text-strong);
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.55));
+}
+
+.board-brand .fustify-logo {
+  width: min(240px, 100%);
+  height: auto;
+}
+
+.minimap-panel,
+.control-legend {
+  border-color: var(--brand-border);
+}
+
+.control-legend {
+  color: var(--brand-steel);
+  background: color-mix(in srgb, var(--brand-panel) 78%, transparent);
+}
+
+.territory-drawer {
+  border-color: var(--brand-border);
+  background: color-mix(in srgb, var(--brand-panel) 98%, transparent);
+}
+
+.multiplayer-game-connection {
+  top: 27px;
+  z-index: 42;
+}
+
+.branded-app-shell .multiplayer-game-connection {
+  top: 88px;
+  right: 22px;
+  left: auto;
+  transform: none;
+}
+
+@media (max-width: 900px) {
+  .branded-app-context {
+    display: none;
+  }
+
+  .branded-app-header .account-provider-status {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .branded-app-header,
+  .branded-app-shell-immersive .branded-app-header {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    width: auto;
+    min-height: 54px;
+    padding: 7px;
+    gap: 7px;
+  }
+
+  .branded-app-home .fustify-logo {
+    width: 92px;
+  }
+
+  .branded-app-back {
+    min-height: 30px;
+    margin-left: auto;
+    padding: 5px 7px;
+    font-size: 0.62rem;
+  }
+
+  .branded-app-header .account-control {
+    position: static;
+    width: auto;
+    max-width: 150px;
+  }
+
+  .branded-app-header .account-summary {
+    width: auto;
+    flex-wrap: nowrap;
+  }
+
+  .branded-app-header .account-identity,
+  .branded-app-header .account-provider-status {
+    display: none;
+  }
+
+  .branded-app-header .account-actions {
+    width: auto;
+  }
+
+  .branded-app-content > :where(.multiplayer-shell, .game-setup-shell) {
+    padding-top: 82px;
+  }
+
+  .protected-route-shell .game-setup-shell-overlay,
+  .protected-route-shell .left-hud-rail {
+    top: 76px;
+    max-height: calc(100dvh - 86px);
+  }
+
+  .protected-route-shell .hud {
+    top: auto;
+    max-height: 100%;
+  }
+
+  .match-dock {
+    height: min(16dvh, 150px);
+  }
+
+  .match-dock-slot {
+    align-items: flex-start;
+  }
+
+  .turn-notification {
+    top: calc(47vh + 14px);
+  }
+
+  .board-brand {
+    top: auto;
+    width: 150px;
+  }
+
+  .multiplayer-game-connection {
+    top: auto;
+    bottom: 74px;
+  }
+
+  .branded-app-shell .multiplayer-game-connection {
+    top: auto;
+    right: 12px;
+    bottom: 74px;
+  }
+}
+
+@media (max-width: 430px) {
+  .branded-app-back {
+    font-size: 0;
+  }
+
+  .branded-app-back span {
+    font-size: 0.8rem;
+  }
+
+  .branded-app-header .account-actions button {
+    max-width: 70px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .multiplayer-entry-card {
+    padding: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .match-dock,
+  .turn-notification,
+  .event-reaction-button,
+  .minimap-map[data-interactive='true'] .minimap-territories path {
+    animation: none;
+    transition: none;
+  }
+}

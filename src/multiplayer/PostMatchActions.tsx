@@ -40,6 +40,7 @@ export function PostMatchActions({
       <div className="victory-actions">
         <button
           type="button"
+          className="secondary"
           disabled={pending}
           onClick={() => onReviewingChange(!reviewing)}
         >
@@ -49,6 +50,7 @@ export function PostMatchActions({
           <>
             <button
               type="button"
+              className="primary"
               disabled={pending}
               aria-busy={pending}
               onClick={() => void creator.rematchSameWorld()}
@@ -57,6 +59,7 @@ export function PostMatchActions({
             </button>
             <button
               type="button"
+              className="secondary"
               disabled={pending}
               aria-busy={pending}
               onClick={() => void creator.generateNewWorld()}

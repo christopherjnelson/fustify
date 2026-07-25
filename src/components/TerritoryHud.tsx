@@ -1129,13 +1129,18 @@ export function TerritoryHud({
                 <div className="victory-actions">
                   <button
                     type="button"
+                    className="primary"
                     onClick={() => setReviewingGameOver(true)}
                   >
                     Review world
                   </button>
                   {!multiplayerSession && (
                     <>
-                      <button type="button" onClick={backToWorldSetup}>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={backToWorldSetup}
+                      >
                         Different world
                       </button>
                       <button
