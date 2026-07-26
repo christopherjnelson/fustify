@@ -14,6 +14,7 @@
     "bundle:analyze": "tsc -b && vite build --mode bundle-analysis",
     "bundle:check": "pnpm bundle:analyze && node --experimental-strip-types scripts/checkBundle.ts",
     "test": "vitest run",
+    "test:deployment": "vitest run --config vitest.deployment.config.ts",
     "test:watch": "vitest",
     "test:integration:dev-proxy": "vitest run --config vitest.integration.config.ts",
     "test:coverage": "vitest run --coverage src/core",

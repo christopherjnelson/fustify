@@ -15,6 +15,7 @@
   "include": [
     "vite.config.ts",
     "vite.api.config.ts",
+    "vitest.deployment.config.ts",
     "vitest.integration.config.ts",
     "eslint.config.js",
     "scripts/buildRelease.ts",

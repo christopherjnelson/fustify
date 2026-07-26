@@ -1,67 +1,209 @@
-# Fustify droplet release
+# Fustify droplet deployment
 
-The release contains three artifacts built from the same commit:
+## Supported architecture
 
-- `web/`: the Vite production frontend
-- `api/server.mjs`: the localhost-only Node 24 HTTP API
-- `api/initializer-worker.mjs`: the worker-thread authoritative initializer
+Fustify runs from immutable combined releases on the Ubuntu 24.04 droplet:
 
-The API authenticates the caller with Supabase Auth, authorizes the canonical
-room host, loads canonical settings and profiles with the server-only service
-role, and commits through the existing `authority_initialize_room_match` RPC.
-Normal gameplay remains on the `multiplayer-game` Edge Function.
+- Repository: `/srv/fustify/repository`
+- Releases: `/srv/fustify/releases/<timestamp>-<commit>`
+- Active symlink: `/srv/fustify/current`
+- Frontend: `/srv/fustify/current/web`
+- Node API: `/srv/fustify/current/api/server.mjs`
+- User service: `fustify-api.service`, running as `chris`
+- Caddy frontend root: `/srv/fustify/current/web`
+- Caddy API upstream: `127.0.0.1:8787`
 
-## One-time setup
+Each release contains `web/`, `api/`, and private root `release.json`
+metadata. A non-sensitive copy of the same metadata is intentionally available
+at `/release.json` for commit verification. `web/health.json` retains the former
+static health metadata contract. The Node `/api/health` endpoint is the runtime
+health authority.
 
-These steps are intentionally not automated beyond installing reviewed files.
-They assume the droplet already has Caddy, `/usr/local/bin/node` version 24, pnpm, an
-existing non-root deploy user, and a clean Fustify checkout.
+The API only initializes multiplayer matches. Ordinary multiplayer gameplay
+continues to use Supabase. This workflow does not run migrations or deploy Edge
+Functions.
 
-1. Replace the existing Fustify Caddy site block with the reviewed
-   `deployment/fustify.caddy` template. If sites are split into snippets, the
-   main Caddyfile can import it with:
+## One-time installation
 
-   ```caddyfile
-   import /etc/caddy/sites/*.caddy
-   ```
+Prerequisites are Caddy, Git, pnpm, `/usr/local/bin/node` version 24, the
+existing non-root `chris` user, and a checkout at
+`/srv/fustify/repository`. Run these commands as `chris`, not root:
 
-   Do not add a second block for the same hostname. Validate and reload the
-   resulting Caddy configuration:
+```sh
+cd /srv/fustify/repository
+./deployment/setup-droplet.sh
+```
 
-   ```sh
-   sudo caddy validate --config /etc/caddy/Caddyfile
-   sudo systemctl reload caddy
-   ```
+The setup script creates the release directories, installs the user unit,
+enables user lingering, and installs `/usr/local/bin/fustify-deploy`. It uses
+`sudo` only for operations that require root ownership or system login
+configuration. Git, pnpm, builds, release activation, and
+`systemctl --user` always run as `chris`.
 
-2. Run the systemd/release-directory setup from the checkout:
+The Caddyfile must contain this one reviewed import:
 
-   ```sh
-   sudo ./deployment/setup-droplet.sh fustify
-   ```
+```caddyfile
+import /etc/caddy/sites/*.caddy
+```
 
-3. Replace every placeholder in the server-only environment file:
+Then install the managed site fragment:
 
-   ```text
-   /home/fustify/.config/fustify/fustify-api.env
-   ```
+```sh
+cd /srv/fustify/repository
+./deployment/install-caddy.sh
+```
 
-   Keep it mode `0600`. Required names are `SUPABASE_URL`,
-   `SUPABASE_PUBLISHABLE_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
-   `FUSTIFY_API_PORT` is optional and defaults to `8787`; if changed, update
-   Caddy and the deployment health URL together.
+The Caddy installer changes only `/etc/caddy/sites/fustify.caddy`. It backs up
+the prior fragment, validates the complete Caddy configuration, and reloads
+only after validation. A validation or reload failure restores the backup and
+attempts to reactivate it. The installer refuses to edit an unrelated
+Caddyfile when the managed import is absent.
 
-4. Return to the non-root deploy user and create the first release:
+## Private configuration
 
-   ```sh
-   pnpm deploy:droplet
-   ```
+Keep both files mode `0600`; never commit them:
 
-No Supabase migration or Edge Function deployment is part of this droplet
-command. Subsequent frontend/API deployments use only `pnpm deploy:droplet`
-after the desired commit is checked out.
+`/home/chris/.config/fustify/fustify-api.env`
 
-The command installs the locked repository dependencies, builds all three
-artifacts, stages an immutable directory under `/srv/fustify/releases`, swaps
-`/srv/fustify/current` atomically, restarts the user service, and checks
-`GET /api/health`. A failed restart or health check restores the previous
-symlink and service. Releases are retained for manual audit and pruning.
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- Optional: `FUSTIFY_API_PORT` (default `8787`)
+
+`/srv/fustify/repository/.env.production.local`
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+After valid server values are present, rerunning `setup-droplet.sh` derives a
+missing or invalid frontend file from the corresponding public server values
+inside a restrictive-umask subshell. It never overwrites an already valid
+frontend file.
+
+Administrative deployment notifications use the existing changelog variable:
+
+`/home/chris/.config/fustify/deploy.env`
+
+- Optional: `DISCORD_CHANGELOG_WEBHOOK_URL`
+
+The variable may instead be exported in the operator environment. Its value is
+never printed. Notification failure is reported but does not roll back a
+healthy deployment.
+
+## Normal deployment
+
+```sh
+fustify-deploy
+```
+
+The command takes a nonblocking lock, requires user `chris`, enters the
+configured repository, refuses dirty tracked files or branch divergence,
+fetches `origin/main`, and fast-forwards only. It then validates both private
+environment files and runs:
+
+1. `pnpm install --frozen-lockfile`
+2. `pnpm format:check`
+3. `pnpm lint`
+4. `pnpm exec vitest run --testTimeout=15000`
+5. `pnpm test:deployment`
+6. `pnpm test:integration:dev-proxy`
+7. `pnpm build:release`
+8. `pnpm bundle:check`
+
+Only checks that actually ran are listed in the success notification. The
+command stages web and API artifacts together, applies explicit Caddy-readable
+frontend permissions, atomically switches `current`, restarts the user
+service, and retries local API health silently for a bounded interval. It then
+checks the public API, `/`, `/multiplayer`, `/admin`, sensitive-path blocking,
+and the full commit in `/release.json`.
+
+A same-commit rebuild is normal: update the private environment file and run
+`fustify-deploy` again. A unique release is built even when Git does not move,
+which is required for Vite environment changes.
+
+`pnpm deploy:droplet` remains a repository-level activation entry point for
+controlled diagnostics and test parity. It does not replace the locked,
+Git-updating operator command.
+
+## Rollback and retention
+
+Activation or local/public verification failure atomically restores the
+previous release, restarts the API, and verifies the restored local API,
+public routes, and commit metadata. The failure notification names the failed
+stage and whether rollback verification succeeded. If rollback verification
+fails, the deploy command prints an explicit emergency diagnostic.
+
+Retention runs only after successful local and public verification. The
+legacy default is five newest release directories
+(`FUSTIFY_RELEASE_RETENTION=5`). The active and immediate rollback releases are
+always protected even if that temporarily keeps more than five. Every deletion
+candidate must be a canonical direct child of `/srv/fustify/releases` with a
+validated release name.
+
+For a manual rollback, run as `chris` and replace `CANDIDATE` with an existing
+combined release:
+
+```sh
+candidate="$(realpath -e /srv/fustify/releases/CANDIDATE)"
+case "${candidate}" in
+  /srv/fustify/releases/*) ;;
+  *) echo "Unsafe rollback path" >&2; exit 1 ;;
+esac
+test -f "${candidate}/web/index.html"
+test -f "${candidate}/api/server.mjs"
+next="/srv/fustify/.current-manual-$$"
+ln -s "${candidate}" "${next}"
+mv -Tf "${next}" /srv/fustify/current
+systemctl --user restart fustify-api.service
+curl --fail --silent http://127.0.0.1:8787/api/health
+curl --fail --silent https://dev.fustify.com/api/health
+curl --fail --silent https://dev.fustify.com/release.json
+```
+
+Confirm the last response contains the selected release's full commit.
+
+## Operations and recovery
+
+```sh
+systemctl --user status fustify-api.service --no-pager
+journalctl --user -u fustify-api.service -n 100 --no-pager
+curl --fail --silent http://127.0.0.1:8787/api/health
+curl --fail --silent https://dev.fustify.com/api/health
+```
+
+To rotate environment values, edit the applicable private file, restore mode
+`0600`, and run `fustify-deploy`. Frontend values require a rebuild; server
+values take effect when the service restarts.
+
+If the frontend returns `403`, do not change environment-file permissions.
+Repair only the validated active release:
+
+```sh
+umask 022
+active="$(readlink -f /srv/fustify/current)"
+case "${active}" in
+  /srv/fustify/releases/*) ;;
+  *) echo "Unsafe active release" >&2; exit 1 ;;
+esac
+chmod a+rx "${active}"
+find "${active}/web" -type d -exec chmod 0755 {} +
+find "${active}/web" -type f -exec chmod 0644 {} +
+```
+
+If port `8787` is unavailable, inspect the listener and service before
+restarting:
+
+```sh
+ss -ltnp 'sport = :8787'
+systemctl --user status fustify-api.service --no-pager
+journalctl --user -u fustify-api.service -n 100 --no-pager
+```
+
+Stop or reconfigure only the identified conflicting process. Do not run a
+second API instance.
+
+The static-only legacy `/usr/local/bin/fustify-deploy` implementation is
+obsolete and must be replaced by `setup-droplet.sh`. The home-directory
+`test.sh` was a one-time July 26 recovery wrapper and is not a canonical
+deployment mechanism. Direct static artifact copies, the old `web` symlink
+repair, and `sudo systemctl` for `fustify-api.service` are also obsolete.
