@@ -61,7 +61,6 @@ import { generateRoomPreviewPlanet, withFreshRoomSeed } from './roomWorld';
 import { TurnNotificationController } from '../components/TurnNotificationController';
 import {
   GameSetupShell,
-  SetupActionBar,
   SetupSummary,
   SetupWorldPanel,
 } from '../components/setup/GameSetup';
@@ -810,13 +809,41 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
               {error}
             </p>
           )}
-          <SetupActionBar
-            primary={
-              host && waiting ? (
+          <footer className="multiplayer-lobby-actions multiplayer-card">
+            <div className="multiplayer-lobby-action-status">
+              {host && waiting && claimedHumanSeats < 2 && (
+                <p className="multiplayer-start-helper">
+                  At least 2 players must claim seats before starting.
+                </p>
+              )}
+              {host && waiting && state.room.assignment_mode !== 'random' && (
+                <p className="multiplayer-start-helper">
+                  Multiplayer player draft is not supported. Choose random
+                  assignment.
+                </p>
+              )}
+            </div>
+            <div className="multiplayer-lobby-action-buttons">
+              <button
+                type="button"
+                className={host ? 'danger' : 'secondary'}
+                disabled={busy !== null}
+                onClick={() => {
+                  setExitError(null);
+                  setExitIntent({
+                    destination: '/multiplayer',
+                    external: false,
+                  });
+                }}
+              >
+                {host ? 'Close Room and Leave' : 'Leave Room'}
+              </button>
+              {host && waiting && (
                 <>
                   {lobby.canPublish && (
                     <button
                       type="button"
+                      className="secondary multiplayer-lobby-publish"
                       disabled={busy !== null}
                       onClick={() => {
                         setPublicationError(null);
@@ -828,7 +855,6 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                   )}
                   <button
                     type="button"
-                    className={!published ? 'secondary' : undefined}
                     disabled={busy !== null || !canStart}
                     onClick={() =>
                       void act('start', async () => {
@@ -841,42 +867,9 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                     {busy === 'start' ? 'Starting…' : 'Start Match'}
                   </button>
                 </>
-              ) : undefined
-            }
-            status={
-              <>
-                {host && waiting && claimedHumanSeats < 2 && (
-                  <p className="multiplayer-start-helper">
-                    At least 2 players must claim seats before starting.
-                  </p>
-                )}
-                {host && waiting && state.room.assignment_mode !== 'random' && (
-                  <p className="multiplayer-start-helper">
-                    Multiplayer player draft is not supported. Choose random
-                    assignment.
-                  </p>
-                )}
-              </>
-            }
-            secondary={
-              <>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy !== null}
-                  onClick={() => {
-                    setExitError(null);
-                    setExitIntent({
-                      destination: '/multiplayer',
-                      external: false,
-                    });
-                  }}
-                >
-                  {host ? 'Close Room and Leave' : 'Leave Room'}
-                </button>
-              </>
-            }
-          />
+              )}
+            </div>
+          </footer>
           {exitIntent && waiting && (
             <WaitingRoomExitDialog
               host={host}
