@@ -15,6 +15,7 @@ import {
   type PublicRoomJoin,
   type Room,
 } from './multiplayerApi';
+import { PublicRoomSettingsSummary } from './PublicRoomSettingsSummary';
 
 export type CreateGameInput = {
   name: string;
@@ -307,7 +308,7 @@ function SeatRow({ room }: { room: PublicRoom }) {
   return (
     <div
       className="public-game-seats"
-      aria-label={`${room.current_players} of ${room.maximum_players} players`}
+      aria-label={`Occupancy: ${room.current_players} of ${room.maximum_players} players`}
     >
       {Array.from({ length: room.maximum_players }, (_, index) => {
         const player = room.players[index];
@@ -333,7 +334,7 @@ function SeatRow({ room }: { room: PublicRoom }) {
         );
       })}
       <span className="public-game-player-count">
-        {room.current_players} / {room.maximum_players}
+        Occupancy: {room.current_players} / {room.maximum_players}
       </span>
     </div>
   );
@@ -366,25 +367,17 @@ function PublicGameCard({
           </span>
         </div>
         <p>Hosted by {room.host_display_name}</p>
-        <dl className="public-game-configuration">
-          <div>
-            <dt>Seed</dt>
-            <dd>{room.room_seed}</dd>
-          </div>
-          <div>
-            <dt>World</dt>
-            <dd>
-              {room.territory_count} territories · {room.continent_count}{' '}
-              continents
-            </dd>
-          </div>
-          <div>
-            <dt>Assignment</dt>
-            <dd>
-              {room.assignment_mode === 'random' ? 'Random' : 'Player draft'}
-            </dd>
-          </div>
-        </dl>
+        <PublicRoomSettingsSummary
+          includeRoomName={false}
+          settings={{
+            name: room.room_name,
+            seed: room.room_seed,
+            playerCapacity: room.maximum_players,
+            territoryCount: room.territory_count,
+            continentCount: room.continent_count,
+            assignmentMode: room.assignment_mode,
+          }}
+        />
         <SeatRow room={room} />
         <button
           type="button"

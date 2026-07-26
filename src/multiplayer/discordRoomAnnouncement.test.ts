@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { DEFAULT_GENERATOR_VERSION } from '../core/generation/constants';
 import {
   buildDiscordPayload,
   handleAnnouncementRequest,
@@ -22,6 +23,7 @@ const room: AnnouncementRoom = {
   continentCount: 5,
   assignmentMode: 'random',
   maxSeats: 4,
+  generatorVersion: DEFAULT_GENERATOR_VERSION,
 };
 
 const config: AnnouncementConfig = {
@@ -111,6 +113,7 @@ function dependencies(
   return {
     store,
     fetch: fetchImplementation,
+    createPreview: vi.fn(async () => new Uint8Array([137, 80, 78, 71])),
     env: {
       invocationSecret:
         environment && 'invocationSecret' in environment
@@ -239,24 +242,52 @@ describe('public room Discord announcement delivery', () => {
     });
     const [url, init] = outbound.mock.calls[0];
     expect(String(url)).toBe(`${discordWebhook}?wait=true`);
-    const payload = JSON.parse(String(init?.body)) as {
+    expect(init?.headers).toBeUndefined();
+    expect(init?.body).toBeInstanceOf(FormData);
+    const form = init?.body as FormData;
+    const payload = JSON.parse(String(form.get('payload_json'))) as {
       allowed_mentions: { parse: unknown[] };
       embeds: Array<{
         url: string;
         fields: Array<{ name: string; value: string }>;
+        image: { url: string };
       }>;
     };
+    const preview = form.get('files[0]');
+    expect(preview).toBeInstanceOf(File);
+    expect(preview).toMatchObject({
+      name: 'fustify-world.png',
+      type: 'image/png',
+    });
     expect(payload.allowed_mentions).toEqual({ parse: [] });
     expect(payload.embeds[0].url).toBe(
       `https://dev.fustify.com/multiplayer/room/${roomId}`,
     );
+    expect(payload.embeds[0].image).toEqual({
+      url: 'attachment://fustify-world.png',
+    });
     expect(payload.embeds[0].fields).toEqual(
       expect.arrayContaining([
+        {
+          name: 'Room name',
+          value: 'Atlas \\*Prime\\* @everyone',
+          inline: false,
+        },
         { name: 'Player capacity', value: '4 players', inline: true },
         { name: 'Territories', value: '42', inline: true },
         { name: 'Continents', value: '5', inline: true },
         { name: 'Assignment', value: 'Random', inline: true },
         { name: 'Seed', value: 'quiet\\_\\[orbit\\]', inline: false },
+        {
+          name: 'Occupancy at publication',
+          value: '1 of 4 players',
+          inline: true,
+        },
+        {
+          name: 'Direct join',
+          value: `https://dev.fustify.com/multiplayer/room/${roomId}`,
+          inline: false,
+        },
       ]),
     );
     expect(JSON.stringify(payload)).not.toContain('join_code');
@@ -339,6 +370,10 @@ describe('Discord room payload formatting', () => {
     expect(payload.embeds[0].fields).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          name: 'Room name',
+          value: 'Atlas \\*Prime\\* @everyone',
+        }),
+        expect.objectContaining({
           name: 'Player capacity',
           value: '4 players',
         }),
@@ -346,6 +381,10 @@ describe('Discord room payload formatting', () => {
         expect.objectContaining({ name: 'Continents', value: '5' }),
         expect.objectContaining({ name: 'Assignment', value: 'Random' }),
         expect.objectContaining({ name: 'Seed', value: 'quiet\\_\\[orbit\\]' }),
+        expect.objectContaining({
+          name: 'Direct join',
+          value: `https://dev.fustify.com/multiplayer/room/${roomId}`,
+        }),
       ]),
     );
   });

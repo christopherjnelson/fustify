@@ -7359,15 +7359,24 @@ html.multiplayer-match-route .branded-app-content {
 
 .public-game-configuration {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0 0 16px;
-  gap: 7px;
+  gap: 10px 14px;
+}
+
+.published-room-configuration {
+  margin-top: 12px;
+}
+
+.public-game-configuration
+  > :is([data-public-setting='name'], [data-public-setting='seed']) {
+  grid-column: 1 / -1;
 }
 
 .public-game-configuration > div {
   display: grid;
   min-width: 0;
-  grid-template-columns: 78px minmax(0, 1fr);
-  gap: 10px;
+  gap: 2px;
 }
 
 .public-game-configuration dt,
@@ -7386,6 +7395,17 @@ html.multiplayer-match-route .branded-app-content {
   overflow-wrap: anywhere;
   color: var(--brand-text);
   font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .public-game-configuration {
+    grid-template-columns: 1fr;
+  }
+
+  .public-game-configuration
+    > :is([data-public-setting='name'], [data-public-setting='seed']) {
+    grid-column: auto;
+  }
 }
 
 .public-game-seats {

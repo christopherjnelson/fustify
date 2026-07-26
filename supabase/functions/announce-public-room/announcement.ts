@@ -1,3 +1,9 @@
+import {
+  stablePublicRoomSettingFields,
+  type StablePublicRoomSettings,
+} from '../../../src/multiplayer/publicRoomSettings.ts';
+import { ANNOUNCEMENT_PREVIEW_FILENAME } from './preview.ts';
+
 const MAX_ERROR_LENGTH = 200;
 const DISCORD_TIMEOUT_MS = 8_000;
 
@@ -17,6 +23,7 @@ export type AnnouncementRoom = {
   continentCount: number;
   assignmentMode: string;
   maxSeats: number;
+  generatorVersion: number;
 };
 
 export type AnnouncementSeat = {
@@ -52,6 +59,7 @@ export interface AnnouncementStore {
 export type AnnouncementDependencies = {
   store: AnnouncementStore;
   fetch: typeof fetch;
+  createPreview: (room: AnnouncementRoom) => Promise<Uint8Array>;
   env: {
     invocationSecret: string | undefined;
     discordWebhook: string | undefined;
@@ -70,6 +78,7 @@ export type DiscordPayload = {
     color: number;
     footer?: { text: string };
     fields?: Array<{ name: string; value: string; inline: boolean }>;
+    image?: { url: string };
   }>;
 };
 
@@ -141,10 +150,6 @@ function substitute(
   );
 }
 
-function assignmentLabel(value: string): string {
-  return value === 'random' ? 'Random' : 'Player draft';
-}
-
 function hasControlCharacter(value: string): boolean {
   return Array.from(value).some((character) => {
     const codePoint = character.codePointAt(0);
@@ -175,7 +180,9 @@ function hasValidLockedSettings(room: AnnouncementRoom): boolean {
     room.assignmentMode === 'random' &&
     Number.isInteger(room.maxSeats) &&
     room.maxSeats >= 2 &&
-    room.maxSeats <= 5
+    room.maxSeats <= 5 &&
+    Number.isInteger(room.generatorVersion) &&
+    (room.generatorVersion === 3 || room.generatorVersion === 4)
   );
 }
 
@@ -241,7 +248,17 @@ export function buildDiscordPayload(
     origin,
   ).toString();
   const openSeats = Math.max(0, room.maxSeats - memberCount);
-  const assignment = assignmentLabel(room.assignmentMode);
+  const settings: StablePublicRoomSettings = {
+    name: room.name,
+    seed: room.seed,
+    playerCapacity: room.maxSeats,
+    territoryCount: room.territoryCount,
+    continentCount: room.continentCount,
+    assignmentMode: room.assignmentMode,
+  };
+  const settingFields = stablePublicRoomSettingFields(settings);
+  const assignment =
+    settingFields.find(({ key }) => key === 'assignmentMode')?.value ?? '';
   const configurationSummary = `${room.territoryCount} territories · ${room.continentCount} continents · ${assignment}`;
   const placeholders = {
     room_name: markdownEscape(room.name),
@@ -254,37 +271,16 @@ export function buildDiscordPayload(
     assignment_mode: markdownEscape(assignment),
     configuration_summary: markdownEscape(configurationSummary),
   };
-  const fields: Array<{ name: string; value: string; inline: boolean }> = [
-    {
-      name: 'Player capacity',
-      value: `${room.maxSeats} players`,
-      inline: true,
-    },
-    {
-      name: 'Territories',
-      value: String(room.territoryCount),
-      inline: true,
-    },
-    {
-      name: 'Continents',
-      value: String(room.continentCount),
-      inline: true,
-    },
-    {
-      name: 'Assignment',
-      value: markdownEscape(assignment),
-      inline: true,
-    },
-    {
-      name: 'Seed',
-      value: markdownEscape(room.seed),
-      inline: false,
-    },
-  ];
+  const fields: Array<{ name: string; value: string; inline: boolean }> =
+    settingFields.map((field) => ({
+      name: field.label,
+      value: markdownEscape(field.value),
+      inline: field.key !== 'name' && field.key !== 'seed',
+    }));
   if (config.includeOpenSeats) {
     fields.push({
-      name: 'Open seats at publication',
-      value: `${openSeats} of ${room.maxSeats}`,
+      name: 'Occupancy at publication',
+      value: `${memberCount} of ${room.maxSeats} players`,
       inline: true,
     });
   }
@@ -295,6 +291,11 @@ export function buildDiscordPayload(
       inline: false,
     });
   }
+  fields.push({
+    name: 'Direct join',
+    value: joinUrl,
+    inline: false,
+  });
   const payload: DiscordPayload = {
     username: config.webhookUsername,
     ...(config.avatarUrl ? { avatar_url: config.avatarUrl } : {}),
@@ -307,6 +308,7 @@ export function buildDiscordPayload(
         color: config.embedColor,
         ...(config.footerText ? { footer: { text: config.footerText } } : {}),
         ...(fields.length ? { fields } : {}),
+        image: { url: `attachment://${ANNOUNCEMENT_PREVIEW_FILENAME}` },
       },
     ],
   };
@@ -403,6 +405,22 @@ export async function handleAnnouncementRequest(
     }
 
     const { payload } = buildDiscordPayload(room, memberCount, config);
+    const preview = await dependencies.createPreview(room);
+    const form = new FormData();
+    form.set('payload_json', JSON.stringify(payload));
+    form.set(
+      'files[0]',
+      new Blob(
+        [
+          preview.buffer.slice(
+            preview.byteOffset,
+            preview.byteOffset + preview.byteLength,
+          ) as ArrayBuffer,
+        ],
+        { type: 'image/png' },
+      ),
+      ANNOUNCEMENT_PREVIEW_FILENAME,
+    );
     const webhookUrl = new URL(dependencies.env.discordWebhook);
     webhookUrl.searchParams.set('wait', 'true');
     const controller = new AbortController();
@@ -414,8 +432,7 @@ export async function handleAnnouncementRequest(
     try {
       discordResponse = await dependencies.fetch(webhookUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: form,
         signal: controller.signal,
       });
     } catch (error) {

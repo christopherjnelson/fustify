@@ -82,6 +82,7 @@ import {
   type MultiplayerBrowserServices,
 } from './MultiplayerBrowser';
 import { replaceRoomThumbnail, roomThumbnailPublicUrl } from './worldThumbnail';
+import { PublicRoomSettingsSummary } from './PublicRoomSettingsSummary';
 import {
   closedRoomLandingNotice,
   installWaitingRoomNavigationGuard,
@@ -670,131 +671,145 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
             });
           }}
           controls={
-            <>
-              <label className="create-game-field multiplayer-room-name-setting">
-                <span>Game name</span>
-                <input
-                  value={settings.name}
-                  maxLength={60}
-                  disabled={!settingsEditable || busy !== null}
-                  onChange={(event) => {
-                    settingsDirty.current = true;
-                    setSettings({ ...settings, name: event.target.value });
-                  }}
-                />
-              </label>
-              <div className="multiplayer-seed-setting">
-                <label>
-                  Seed
+            published ? (
+              <PublicRoomSettingsSummary
+                className="published-room-configuration"
+                settings={{
+                  name: state.room.name,
+                  seed: state.room.seed,
+                  playerCapacity: state.room.max_seats,
+                  territoryCount: state.room.territory_count,
+                  continentCount: state.room.continent_count,
+                  assignmentMode: state.room.assignment_mode,
+                }}
+              />
+            ) : (
+              <>
+                <label className="create-game-field multiplayer-room-name-setting">
+                  <span>Game name</span>
                   <input
-                    value={settings.seed}
-                    maxLength={64}
+                    value={settings.name}
+                    maxLength={60}
                     disabled={!settingsEditable || busy !== null}
                     onChange={(event) => {
                       settingsDirty.current = true;
-                      setSettings({ ...settings, seed: event.target.value });
+                      setSettings({ ...settings, name: event.target.value });
                     }}
                   />
                 </label>
+                <div className="multiplayer-seed-setting">
+                  <label>
+                    Seed
+                    <input
+                      value={settings.seed}
+                      maxLength={64}
+                      disabled={!settingsEditable || busy !== null}
+                      onChange={(event) => {
+                        settingsDirty.current = true;
+                        setSettings({ ...settings, seed: event.target.value });
+                      }}
+                    />
+                  </label>
+                  {settingsEditable && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={busy !== null}
+                      aria-busy={busy === 'generate-world'}
+                      onClick={() => {
+                        if (busyRef.current !== null) return;
+                        const generatedSettings = withFreshRoomSeed(settings);
+                        settingsDirty.current = true;
+                        setSettings(generatedSettings);
+                        void act('generate-world', async () => {
+                          await saveWorldSettings(generatedSettings);
+                          settingsDirty.current = false;
+                        });
+                      }}
+                    >
+                      {busy === 'generate-world'
+                        ? 'Generating…'
+                        : 'Generate World'}
+                    </button>
+                  )}
+                </div>
+                <div className="multiplayer-setting-grid">
+                  <label>
+                    Territories
+                    <input
+                      type="number"
+                      min={12}
+                      max={48}
+                      value={settings.territory_count}
+                      disabled={!settingsEditable || busy !== null}
+                      onChange={(event) => {
+                        settingsDirty.current = true;
+                        setSettings({
+                          ...settings,
+                          territory_count: Number(event.target.value),
+                        });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Continents
+                    <input
+                      type="number"
+                      min={2}
+                      max={5}
+                      value={settings.continent_count}
+                      disabled={!settingsEditable || busy !== null}
+                      onChange={(event) => {
+                        settingsDirty.current = true;
+                        setSettings({
+                          ...settings,
+                          continent_count: Number(event.target.value),
+                        });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Seats
+                    <input
+                      type="number"
+                      min={2}
+                      max={5}
+                      value={settings.max_seats}
+                      disabled={!settingsEditable || busy !== null}
+                      onChange={(event) => {
+                        settingsDirty.current = true;
+                        setSettings({
+                          ...settings,
+                          max_seats: Number(event.target.value),
+                        });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Assignment
+                    <select
+                      value={settings.assignment_mode}
+                      disabled={!settingsEditable || busy !== null}
+                      onChange={(event) => {
+                        settingsDirty.current = true;
+                        setSettings({
+                          ...settings,
+                          assignment_mode: event.target.value,
+                        });
+                      }}
+                    >
+                      <option value="random">Random</option>
+                    </select>
+                    <small>Random assignment only in multiplayer.</small>
+                  </label>
+                </div>
                 {settingsEditable && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy !== null}
-                    aria-busy={busy === 'generate-world'}
-                    onClick={() => {
-                      if (busyRef.current !== null) return;
-                      const generatedSettings = withFreshRoomSeed(settings);
-                      settingsDirty.current = true;
-                      setSettings(generatedSettings);
-                      void act('generate-world', async () => {
-                        await saveWorldSettings(generatedSettings);
-                        settingsDirty.current = false;
-                      });
-                    }}
-                  >
-                    {busy === 'generate-world'
-                      ? 'Generating…'
-                      : 'Generate World'}
+                  <button type="submit" disabled={busy !== null}>
+                    {busy === 'settings' ? 'Saving…' : 'Save settings'}
                   </button>
                 )}
-              </div>
-              <div className="multiplayer-setting-grid">
-                <label>
-                  Territories
-                  <input
-                    type="number"
-                    min={12}
-                    max={48}
-                    value={settings.territory_count}
-                    disabled={!settingsEditable || busy !== null}
-                    onChange={(event) => {
-                      settingsDirty.current = true;
-                      setSettings({
-                        ...settings,
-                        territory_count: Number(event.target.value),
-                      });
-                    }}
-                  />
-                </label>
-                <label>
-                  Continents
-                  <input
-                    type="number"
-                    min={2}
-                    max={5}
-                    value={settings.continent_count}
-                    disabled={!settingsEditable || busy !== null}
-                    onChange={(event) => {
-                      settingsDirty.current = true;
-                      setSettings({
-                        ...settings,
-                        continent_count: Number(event.target.value),
-                      });
-                    }}
-                  />
-                </label>
-                <label>
-                  Seats
-                  <input
-                    type="number"
-                    min={2}
-                    max={5}
-                    value={settings.max_seats}
-                    disabled={!settingsEditable || busy !== null}
-                    onChange={(event) => {
-                      settingsDirty.current = true;
-                      setSettings({
-                        ...settings,
-                        max_seats: Number(event.target.value),
-                      });
-                    }}
-                  />
-                </label>
-                <label>
-                  Assignment
-                  <select
-                    value={settings.assignment_mode}
-                    disabled={!settingsEditable || busy !== null}
-                    onChange={(event) => {
-                      settingsDirty.current = true;
-                      setSettings({
-                        ...settings,
-                        assignment_mode: event.target.value,
-                      });
-                    }}
-                  >
-                    <option value="random">Random</option>
-                  </select>
-                  <small>Random assignment only in multiplayer.</small>
-                </label>
-              </div>
-              {settingsEditable && (
-                <button type="submit" disabled={busy !== null}>
-                  {busy === 'settings' ? 'Saving…' : 'Save settings'}
-                </button>
-              )}
-            </>
+              </>
+            )
           }
           preview={<RoomWorldPreview room={state.room} />}
         />

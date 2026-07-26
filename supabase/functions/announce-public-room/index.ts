@@ -7,6 +7,7 @@ import {
   type AnnouncementSeat,
   type AnnouncementStore,
 } from './announcement.ts';
+import { buildAnnouncementPreview } from './preview.ts';
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
@@ -35,7 +36,7 @@ function announcementStore(client: SupabaseClient): AnnouncementStore {
       const { data, error } = await client
         .from('rooms')
         .select(
-          'id, name, visibility, status, seed, territory_count, continent_count, assignment_mode, max_seats',
+          'id, name, visibility, status, seed, territory_count, continent_count, assignment_mode, max_seats, generator_version',
         )
         .eq('id', id)
         .maybeSingle();
@@ -51,6 +52,7 @@ function announcementStore(client: SupabaseClient): AnnouncementStore {
             continentCount: data.continent_count,
             assignmentMode: data.assignment_mode,
             maxSeats: data.max_seats,
+            generatorVersion: data.generator_version,
           } satisfies AnnouncementRoom)
         : null;
     },
@@ -144,6 +146,14 @@ Deno.serve((request) => {
   return handleAnnouncementRequest(request, {
     store: announcementStore(client),
     fetch,
+    createPreview: (room) =>
+      buildAnnouncementPreview({
+        seed: room.seed,
+        territoryCount: room.territoryCount,
+        continentCount: room.continentCount,
+        playerCapacity: room.maxSeats,
+        generatorVersion: room.generatorVersion,
+      }),
     env: {
       invocationSecret: Deno.env.get(
         'DISCORD_ROOM_ANNOUNCEMENT_INVOCATION_SECRET',
