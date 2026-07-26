@@ -884,6 +884,8 @@ test('ending attack is separated and requires deliberate accessible confirmation
   await end.click();
   const dialog = page.getByRole('dialog', { name: 'End attacking now?' });
   await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  await expect(dialog.locator('h2')).toHaveText('End attacking now?');
   await expect(
     dialog.getByRole('button', { name: 'End attack phase' }),
   ).toBeFocused();
@@ -893,6 +895,8 @@ test('ending attack is separated and requires deliberate accessible confirmation
   expect((await stateSnapshot(page)).phase).toBe('attack');
   await end.click();
   await dialog.getByRole('button', { name: 'Continue attacking' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(end).toBeFocused();
   expect((await stateSnapshot(page)).phase).toBe('attack');
   await end.click();
   await page.keyboard.press('Enter');

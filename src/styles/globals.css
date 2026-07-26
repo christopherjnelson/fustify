@@ -3432,27 +3432,39 @@ select:focus-visible {
   min-height: 42px;
 }
 
+.hud.confirmation-open > :not(.phase-confirmation) {
+  opacity: 0.18;
+  pointer-events: none;
+}
+
 .phase-confirmation {
   position: absolute;
   z-index: 20;
-  inset: 12px;
+  inset: 14px;
   display: grid;
   align-content: center;
-  padding: 22px;
-  border: 1px solid rgba(247, 182, 95, 0.42);
-  border-radius: 14px;
-  background: rgba(5, 12, 20, 0.97);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  padding: 20px;
+  border: 1px solid
+    color-mix(in srgb, var(--brand-warning) 44%, var(--brand-border));
+  border-radius: 12px;
+  background: var(--brand-panel-raised);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.62),
+    0 0 0 1px rgba(5, 10, 18, 0.72);
 }
 
-.phase-confirmation h2,
-.phase-confirmation p {
-  margin: 0 0 12px;
+.phase-confirmation h2 {
+  margin: 0 0 6px;
+  color: var(--brand-text-strong);
+  font-family: var(--brand-display-font);
+  font-size: 1rem;
 }
 
 .phase-confirmation p {
-  color: #a8bac9;
+  margin: 0 0 16px;
+  color: var(--brand-steel);
   font-size: 0.72rem;
+  line-height: 1.5;
 }
 
 .confirmation-actions {
@@ -3462,18 +3474,24 @@ select:focus-visible {
 
 .confirmation-actions button {
   min-height: 44px;
-  color: #eef7ff;
-  border: 1px solid rgba(134, 204, 238, 0.32);
+  margin: 0;
+  padding: 9px 12px;
   border-radius: 8px;
-  background: var(--brand-accent);
   cursor: pointer;
+  font-size: 0.72rem;
   font-weight: 700;
 }
 
-.confirmation-actions button:first-child {
-  color: #ffd8cf;
-  border-color: rgba(244, 115, 91, 0.42);
-  background: rgba(123, 42, 36, 0.72);
+.confirmation-actions .secondary-action {
+  color: var(--brand-text) !important;
+  border: 1px solid var(--brand-border);
+  background: var(--brand-slate) !important;
+}
+
+.confirmation-actions .warning-action {
+  color: var(--brand-background);
+  border: 1px solid var(--brand-warning);
+  background: var(--brand-warning);
 }
 
 .phase-heading {

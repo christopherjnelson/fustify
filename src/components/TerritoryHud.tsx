@@ -546,7 +546,7 @@ export function TerritoryHud({
     <>
       <div className="left-hud-rail">
         <aside
-          className="hud"
+          className={`hud${confirmingEndAttack ? ' confirmation-open' : ''}`}
           aria-label={
             multiplayerSession
               ? 'Multiplayer match controls'
@@ -798,17 +798,8 @@ export function TerritoryHud({
               <p>Legal attacks remain. You cannot return to this phase.</p>
               <div className="confirmation-actions">
                 <button
-                  ref={endAttackConfirmRef}
                   type="button"
-                  onClick={() => {
-                    setConfirmingEndAttack(false);
-                    dispatch({ type: 'END_ATTACK_PHASE' });
-                  }}
-                >
-                  End attack phase
-                </button>
-                <button
-                  type="button"
+                  className="secondary-action"
                   onClick={() => {
                     setConfirmingEndAttack(false);
                     window.requestAnimationFrame(() =>
@@ -817,6 +808,17 @@ export function TerritoryHud({
                   }}
                 >
                   Continue attacking
+                </button>
+                <button
+                  ref={endAttackConfirmRef}
+                  type="button"
+                  className="warning-action"
+                  onClick={() => {
+                    setConfirmingEndAttack(false);
+                    dispatch({ type: 'END_ATTACK_PHASE' });
+                  }}
+                >
+                  End attack phase
                 </button>
               </div>
             </section>
