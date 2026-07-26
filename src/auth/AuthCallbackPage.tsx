@@ -8,6 +8,7 @@ import {
   authFlowError,
   completeAuthCallback,
   completeGuestUpgrade,
+  completeInvitationPassword,
   readDiscordAuthIntent,
   type AuthCallbackResult,
 } from './authFlow';
@@ -21,6 +22,7 @@ function removeCallbackSecrets(href: string) {
     'error_description',
     'token',
     'token_hash',
+    'type',
     'intent',
   ]) {
     url.searchParams.delete(key);
@@ -44,21 +46,25 @@ export function AuthCallbackPage() {
           'Account configuration is unavailable.',
         ),
   );
-  const returnPath = discordIntent?.returnPath ?? '/';
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
+  const [invitationComplete, setInvitationComplete] = useState(false);
   const started = useRef(false);
+  const returnPath =
+    result?.kind === 'invitation'
+      ? result.returnPath
+      : (discordIntent?.returnPath ?? '/');
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    if (!client) return;
     const href = window.location.href;
+    removeCallbackSecrets(href);
+    if (!client) return;
     void completeAuthCallback(client, href)
       .then((callbackResult) => {
-        removeCallbackSecrets(href);
         if (callbackResult.kind === 'confirmed') {
           window.location.replace(callbackResult.returnPath);
           return;
@@ -71,7 +77,6 @@ export function AuthCallbackPage() {
         setResult(callbackResult);
       })
       .catch((callbackError) => {
-        removeCallbackSecrets(href);
         setError(authFlowError(callbackError));
       });
   }, [client]);
@@ -81,7 +86,8 @@ export function AuthCallbackPage() {
     if (
       !client ||
       !result ||
-      result.kind !== 'guest-upgrade-completion' ||
+      (result.kind !== 'guest-upgrade-completion' &&
+        result.kind !== 'invitation') ||
       busy
     ) {
       return;
@@ -89,15 +95,28 @@ export function AuthCallbackPage() {
     setBusy(true);
     setError(null);
     try {
-      await completeGuestUpgrade(client, {
-        expectedUserId: result.intent.expectedUserId,
-        displayName,
+      if (result.kind === 'guest-upgrade-completion') {
+        await completeGuestUpgrade(client, {
+          expectedUserId: result.intent.expectedUserId,
+          displayName,
+          password,
+          confirmPassword: confirmation,
+        });
+        setPassword('');
+        setConfirmation('');
+        window.location.replace(result.intent.returnPath);
+        return;
+      }
+      if (result.kind !== 'invitation') return;
+      await completeInvitationPassword(client, {
+        expectedUserId: result.user.id,
         password,
-        confirmPassword: confirmation,
+        confirmation,
       });
       setPassword('');
       setConfirmation('');
-      window.location.replace(result.intent.returnPath);
+      setInvitationComplete(true);
+      setBusy(false);
     } catch (completionError) {
       setPassword('');
       setConfirmation('');
@@ -110,7 +129,14 @@ export function AuthCallbackPage() {
     <main className="auth-route-shell">
       <section className="auth-route-card" aria-live="polite">
         <span className="eyebrow">Fustify account</span>
-        {result?.kind === 'guest-upgrade-completion' ? (
+        {invitationComplete ? (
+          <>
+            <h1>Invitation accepted</h1>
+            <p>
+              Your password is set and your Fustify account is ready to use.
+            </p>
+          </>
+        ) : result?.kind === 'guest-upgrade-completion' ? (
           <>
             <h1>Finish creating your account</h1>
             <p>
@@ -156,13 +182,48 @@ export function AuthCallbackPage() {
               </button>
             </form>
           </>
+        ) : result?.kind === 'invitation' ? (
+          <>
+            <h1>Finish accepting your invitation</h1>
+            <p>Choose an initial password for your Fustify account.</p>
+            <form
+              className="auth-form"
+              onSubmit={(event) => void finish(event)}
+            >
+              <label className="auth-field">
+                <span>Password</span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+              <label className="auth-field">
+                <span>Confirm password</span>
+                <input
+                  type="password"
+                  value={confirmation}
+                  onChange={(event) => setConfirmation(event.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+              <button type="submit" disabled={busy}>
+                {busy ? 'Finishing…' : 'Set password'}
+              </button>
+            </form>
+          </>
         ) : (
           <>
             <h1>
               {error
                 ? discordIntent
                   ? 'Discord connection problem'
-                  : 'Email confirmation problem'
+                  : error.code === 'expired_email_link'
+                    ? 'Email link expired'
+                    : 'Email confirmation problem'
                 : 'Confirming account'}
             </h1>
             {!error && <p>Verifying this account callback…</p>}

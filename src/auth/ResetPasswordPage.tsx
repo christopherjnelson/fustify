@@ -4,14 +4,24 @@ import {
   readMultiplayerConfiguration,
 } from '../multiplayer/supabaseClient';
 import {
+  AuthFlowError,
   authFlowError,
   completePasswordRecovery,
   establishRecoverySession,
 } from './authFlow';
+import { validatedReturnPath } from './returnPath';
 
-function removeRecoveryCode(href: string) {
+function removeRecoverySecrets(href: string) {
   const url = new URL(href);
-  for (const key of ['code', 'token', 'token_hash']) {
+  for (const key of [
+    'code',
+    'token',
+    'token_hash',
+    'type',
+    'error',
+    'error_code',
+    'error_description',
+  ]) {
     url.searchParams.delete(key);
   }
   window.history.replaceState(null, '', `${url.pathname}${url.search}`);
@@ -26,26 +36,35 @@ export function ResetPasswordPage() {
   const [ready, setReady] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
-  const [error, setError] = useState<string | null>(
-    client ? null : 'Account configuration is unavailable.',
+  const [error, setError] = useState<AuthFlowError | null>(
+    client
+      ? null
+      : new AuthFlowError(
+          'request_failed',
+          'Account configuration is unavailable.',
+        ),
   );
   const [busy, setBusy] = useState(false);
   const [complete, setComplete] = useState(false);
   const started = useRef(false);
+  const [returnPath] = useState(() =>
+    validatedReturnPath(
+      new URL(window.location.href).searchParams.get('returnPath'),
+    ),
+  );
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    if (!client) return;
     const href = window.location.href;
+    removeRecoverySecrets(href);
+    if (!client) return;
     void establishRecoverySession(client, href)
       .then(() => {
-        removeRecoveryCode(href);
         setReady(true);
       })
       .catch((recoveryError) => {
-        removeRecoveryCode(href);
-        setError(authFlowError(recoveryError).message);
+        setError(authFlowError(recoveryError));
       });
   }, [client]);
 
@@ -63,7 +82,7 @@ export function ResetPasswordPage() {
     } catch (recoveryError) {
       setPassword('');
       setConfirmation('');
-      setError(authFlowError(recoveryError).message);
+      setError(authFlowError(recoveryError));
       setBusy(false);
     }
   };
@@ -72,7 +91,13 @@ export function ResetPasswordPage() {
     <main className="auth-route-shell">
       <section className="auth-route-card" aria-live="polite">
         <span className="eyebrow">Fustify account</span>
-        <h1>{complete ? 'Password updated' : 'Choose a new password'}</h1>
+        <h1>
+          {complete
+            ? 'Password updated'
+            : error?.code === 'expired_email_link'
+              ? 'Password-reset link expired'
+              : 'Choose a new password'}
+        </h1>
         {ready && (
           <form className="auth-form" onSubmit={(event) => void submit(event)}>
             <label className="auth-field">
@@ -106,10 +131,11 @@ export function ResetPasswordPage() {
         )}
         {error && (
           <p className="auth-error" role="alert">
-            {error}
+            {error.message}
           </p>
         )}
-        <a href="/">Return to account</a>
+        {error && <a href="/?account=recovery">Request another reset email</a>}
+        <a href={complete ? returnPath : '/'}>Return to account</a>
       </section>
     </main>
   );

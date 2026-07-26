@@ -1,4 +1,4 @@
-import type { SupabaseClient, User } from '@supabase/supabase-js';
+import type { EmailOtpType, SupabaseClient, User } from '@supabase/supabase-js';
 import { z } from 'zod';
 import type { Database } from '../multiplayer/database.types';
 import {
@@ -94,6 +94,8 @@ export class AuthFlowError extends Error {
       | 'profile_unavailable'
       | 'original_browser_required'
       | 'recovery_session_required'
+      | 'invalid_email_link'
+      | 'expired_email_link'
       | 'request_failed',
     message: string,
   ) {
@@ -124,6 +126,15 @@ function errorText(error: unknown): string {
     return error.message;
   }
   return '';
+}
+
+function errorCode(error: unknown): string {
+  return typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string'
+    ? error.code
+    : '';
 }
 
 function isEmailConflict(error: unknown): boolean {
@@ -257,13 +268,32 @@ export async function registerWithEmail(
     confirmPassword: string;
     returnPath: string;
   },
-): Promise<void> {
+): Promise<{ confirmationRequired: boolean; email: string }> {
   const validated = validateRegistration(input);
-  const { error } = await client.auth.signUp({
+  const { data, error } = await client.auth.signUp({
     email: validated.email,
     password: validated.password,
     options: {
       data: { display_name: validated.displayName },
+      emailRedirectTo: callbackUrl('/auth/callback', input.returnPath),
+    },
+  });
+  if (error) throw authFlowError(error);
+  return {
+    confirmationRequired: !data.session && !data.user?.email_confirmed_at,
+    email: validated.email,
+  };
+}
+
+export async function resendSignupVerification(
+  client: SupabaseClient<Database>,
+  input: { email: string; returnPath: string },
+): Promise<void> {
+  const email = validateEmail(input.email);
+  const { error } = await client.auth.resend({
+    type: 'signup',
+    email,
+    options: {
       emailRedirectTo: callbackUrl('/auth/callback', input.returnPath),
     },
   });
@@ -501,7 +531,114 @@ export type AuthCallbackResult =
       intent: DiscordAuthIntent;
       profile: UserProfile;
     }
+  | {
+      kind: 'invitation';
+      user: User;
+      returnPath: string;
+    }
   | { kind: 'confirmed'; user: User; returnPath: string };
+
+export type SupportedTokenHashType = Extract<
+  EmailOtpType,
+  'signup' | 'recovery' | 'invite'
+>;
+const SUPPORTED_TOKEN_HASH_TYPES = [
+  'signup',
+  'recovery',
+  'invite',
+] as const satisfies readonly SupportedTokenHashType[];
+
+function supportedTokenHashType(value: string): SupportedTokenHashType | null {
+  return SUPPORTED_TOKEN_HASH_TYPES.find((type) => type === value) ?? null;
+}
+
+function callbackHashParameters(url: URL): URLSearchParams {
+  return new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : '');
+}
+
+function callbackParameter(url: URL, key: string): string | null {
+  return (
+    url.searchParams.get(key) ?? callbackHashParameters(url).get(key) ?? null
+  );
+}
+
+function hasTokenHashInput(url: URL): boolean {
+  return url.searchParams.has('token_hash') || url.searchParams.has('type');
+}
+
+function assertSingleCallbackMechanism(url: URL): void {
+  if (url.searchParams.has('code') && hasTokenHashInput(url)) {
+    throw new AuthFlowError(
+      'invalid_email_link',
+      'This email link contains conflicting callback parameters.',
+    );
+  }
+}
+
+function callbackLinkError(
+  error: unknown,
+  label: 'email confirmation' | 'password reset' | 'invitation',
+): AuthFlowError {
+  if (errorCode(error) === 'otp_expired') {
+    return new AuthFlowError(
+      'expired_email_link',
+      `This ${label} link has expired. Request a new link and try again.`,
+    );
+  }
+  return new AuthFlowError(
+    'invalid_email_link',
+    `This ${label} link is invalid or has already been used.`,
+  );
+}
+
+function callbackUrlError(
+  url: URL,
+  label: 'email confirmation' | 'password reset' | 'invitation',
+): AuthFlowError | null {
+  const error = callbackParameter(url, 'error');
+  const description = callbackParameter(url, 'error_description');
+  if (!error && !description) return null;
+  return callbackLinkError(
+    { code: callbackParameter(url, 'error_code') ?? error ?? '' },
+    label,
+  );
+}
+
+async function verifyTokenHash(
+  client: SupabaseClient<Database>,
+  url: URL,
+  allowedTypes: readonly SupportedTokenHashType[],
+): Promise<{ type: SupportedTokenHashType; user: User } | null> {
+  const tokenHashes = url.searchParams.getAll('token_hash');
+  const rawTypes = url.searchParams.getAll('type');
+  if (tokenHashes.length === 0 && rawTypes.length === 0) return null;
+  if (
+    tokenHashes.length !== 1 ||
+    rawTypes.length !== 1 ||
+    tokenHashes[0].length === 0
+  ) {
+    throw callbackLinkError({}, 'email confirmation');
+  }
+  const type = supportedTokenHashType(rawTypes[0]);
+  if (!type || !allowedTypes.includes(type)) {
+    throw new AuthFlowError(
+      'invalid_email_link',
+      'This email link is not supported on this page.',
+    );
+  }
+  const label =
+    type === 'recovery'
+      ? 'password reset'
+      : type === 'invite'
+        ? 'invitation'
+        : 'email confirmation';
+  const { data, error } = await client.auth.verifyOtp({
+    token_hash: tokenHashes[0],
+    type,
+  });
+  if (error || !data.user) throw callbackLinkError(error, label);
+  return { type, user: data.user };
+}
 
 function callbackFailure(message: string): AuthFlowError {
   return new AuthFlowError('callback_failed', message);
@@ -606,20 +743,23 @@ export async function completeAuthCallback(
   href: string,
 ): Promise<AuthCallbackResult> {
   const url = new URL(href);
-  const discordIntent = readDiscordAuthIntent();
+  const storedDiscordIntent = readDiscordAuthIntent();
+  const urlError = callbackUrlError(url, 'email confirmation');
+  if (urlError) {
+    if (storedDiscordIntent) {
+      clearDiscordAuthIntent();
+      throw callbackDiscordError(url, storedDiscordIntent);
+    }
+    throw urlError;
+  }
+  assertSingleCallbackMechanism(url);
+  const tokenVerification = await verifyTokenHash(client, url, [
+    'signup',
+    'invite',
+  ]);
+  const discordIntent = tokenVerification ? null : storedDiscordIntent;
   const isGuestUpgradeCallback =
     url.searchParams.get('intent') === 'guest-email-upgrade';
-  const callbackError =
-    url.searchParams.get('error_description') ?? url.searchParams.get('error');
-  if (callbackError) {
-    if (discordIntent) {
-      clearDiscordAuthIntent();
-      throw callbackDiscordError(url, discordIntent);
-    }
-    throw callbackFailure(
-      'The email link could not be confirmed. Request a new link and try again.',
-    );
-  }
 
   const code = url.searchParams.get('code');
   if (code) {
@@ -666,7 +806,7 @@ export async function completeAuthCallback(
     }
     throw requestError;
   }
-  const intent = readGuestUpgradeIntent();
+  const intent = tokenVerification ? null : readGuestUpgradeIntent();
   if (verified.error || !verified.data.user) {
     if (discordIntent) {
       clearDiscordAuthIntent();
@@ -684,6 +824,17 @@ export async function completeAuthCallback(
   }
 
   const user = verified.data.user;
+  if (tokenVerification) {
+    clearDiscordAuthIntent();
+    clearGuestUpgradeIntent();
+  }
+  if (tokenVerification?.type === 'invite') {
+    return {
+      kind: 'invitation',
+      user,
+      returnPath: validatedReturnPath(url.searchParams.get('returnPath')),
+    };
+  }
   if (discordIntent) {
     if (
       'expectedUserId' in discordIntent &&
@@ -879,19 +1030,42 @@ export async function establishRecoverySession(
   href: string,
 ): Promise<User> {
   const url = new URL(href);
+  const urlError = callbackUrlError(url, 'password reset');
+  if (urlError) {
+    clearRecoveryState();
+    throw urlError;
+  }
+  let tokenVerification: Awaited<ReturnType<typeof verifyTokenHash>>;
+  try {
+    assertSingleCallbackMechanism(url);
+    tokenVerification = await verifyTokenHash(client, url, ['recovery']);
+  } catch (error) {
+    clearRecoveryState();
+    throw error;
+  }
+  if (tokenVerification) {
+    window.sessionStorage.setItem(RECOVERY_SESSION_KEY, 'ready');
+  }
   const code = url.searchParams.get('code');
-  if (code) {
-    const { data, error } = await client.auth.exchangeCodeForSession(code);
+  if (code && !tokenVerification) {
+    clearRecoveryState();
+    let exchange: Awaited<
+      ReturnType<typeof client.auth.exchangeCodeForSession>
+    >;
+    try {
+      exchange = await client.auth.exchangeCodeForSession(code);
+    } catch (error) {
+      throw callbackLinkError(error, 'password reset');
+    }
+    const { data, error } = exchange;
     if (error) {
-      throw new AuthFlowError(
-        'recovery_session_required',
-        'This password-reset link is invalid or expired.',
-      );
+      throw callbackLinkError(error, 'password reset');
     }
     const redirectType = (
       data as (typeof data & { redirectType?: string | null }) | null
     )?.redirectType;
     if (redirectType !== 'recovery') {
+      clearRecoveryState();
       throw new AuthFlowError(
         'recovery_session_required',
         'This link is not a password-reset link.',
@@ -933,6 +1107,45 @@ export async function completePasswordRecovery(
   });
   if (error) throw authFlowError(error);
   clearRecoveryState();
+}
+
+export async function completeInvitationPassword(
+  client: SupabaseClient<Database>,
+  input: {
+    expectedUserId: string;
+    password: string;
+    confirmation: string;
+  },
+): Promise<User> {
+  const password = validatePasswordPair(input.password, input.confirmation);
+  const before = await client.auth.getUser();
+  if (
+    before.error ||
+    !before.data.user ||
+    before.data.user.id !== input.expectedUserId ||
+    before.data.user.is_anonymous !== false
+  ) {
+    throw new AuthFlowError(
+      'recovery_session_required',
+      'The invitation session is unavailable or expired.',
+    );
+  }
+  const { error } = await client.auth.updateUser({ password });
+  if (error) throw authFlowError(error);
+  const prepared = await ensureRegisteredSessionReady(client, {
+    forceRefresh: true,
+    expectedUserId: input.expectedUserId,
+  });
+  if (
+    prepared.status !== 'registered-ready' ||
+    prepared.user.id !== input.expectedUserId
+  ) {
+    throw new AuthFlowError(
+      'session_refresh_failed',
+      'Your password was set, but the account session could not be refreshed. Please sign in.',
+    );
+  }
+  return prepared.user;
 }
 
 export async function signOutRegisteredAccount(

@@ -18,6 +18,7 @@ import {
   linkDiscordIdentity,
   registerWithEmail,
   requestPasswordRecovery,
+  resendSignupVerification,
   signInWithEmail,
   signInWithDiscord,
   signOutRegisteredAccount,
@@ -150,6 +151,14 @@ export function AuthDialog({
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [status, setStatus] = useState<FormStatus>({ kind: 'idle' });
+  const [pendingSignupEmail, setPendingSignupEmail] = useState<string | null>(
+    null,
+  );
+  const [resendStatus, setResendStatus] = useState<FormStatus>({
+    kind: 'idle',
+  });
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const resendPending = useRef(false);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -200,25 +209,40 @@ export function AuthDialog({
     };
   }, []);
 
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(
+      () => setResendCooldown((seconds) => Math.max(0, seconds - 1)),
+      1_000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (status.kind === 'busy') return;
     setStatus({ kind: 'busy' });
     try {
       if (view === 'register') {
-        await registerWithEmail(client, {
+        const registration = await registerWithEmail(client, {
           displayName,
           email,
           password,
           confirmPassword,
           returnPath,
         });
+        setPendingSignupEmail(
+          registration.confirmationRequired ? registration.email : null,
+        );
+        setResendStatus({ kind: 'idle' });
+        setResendCooldown(registration.confirmationRequired ? 60 : 0);
         setPassword('');
         setConfirmPassword('');
         setStatus({
           kind: 'success',
-          message:
-            'Check your email for a verification link to finish creating your account.',
+          message: registration.confirmationRequired
+            ? 'Check your email for a verification link to finish creating your account.'
+            : 'Your account is ready.',
         });
         return;
       }
@@ -280,6 +304,35 @@ export function AuthDialog({
       setPassword('');
       setConfirmPassword('');
       setStatus({ kind: 'error', message: safe.message, code: safe.code });
+    }
+  };
+
+  const resendVerification = async () => {
+    if (!pendingSignupEmail || resendPending.current || resendCooldown > 0) {
+      return;
+    }
+    resendPending.current = true;
+    setResendStatus({ kind: 'busy' });
+    try {
+      await resendSignupVerification(client, {
+        email: pendingSignupEmail,
+        returnPath,
+      });
+      setResendCooldown(60);
+      setResendStatus({
+        kind: 'success',
+        message:
+          'If that address has a pending signup, a new verification email is on its way.',
+      });
+    } catch (error) {
+      const safe = authFlowError(error);
+      setResendStatus({
+        kind: 'error',
+        message: safe.message,
+        code: safe.code,
+      });
+    } finally {
+      resendPending.current = false;
     }
   };
 
@@ -436,20 +489,43 @@ export function AuthDialog({
                   autoComplete="new-password"
                 />
               )}
-              <button type="submit" disabled={status.kind === 'busy'}>
+              <button
+                type="submit"
+                disabled={
+                  status.kind === 'busy' ||
+                  (view === 'register' && status.kind === 'success')
+                }
+              >
                 {status.kind === 'busy'
                   ? 'Working…'
-                  : view === 'register'
-                    ? 'Create account'
-                    : view === 'guest-upgrade'
-                      ? 'Send verification email'
-                      : view === 'forgot-password'
-                        ? 'Send reset email'
-                        : view === 'edit-profile'
-                          ? 'Save profile'
-                          : 'Sign in'}
+                  : view === 'register' && status.kind === 'success'
+                    ? 'Verification sent'
+                    : view === 'register'
+                      ? 'Create account'
+                      : view === 'guest-upgrade'
+                        ? 'Send verification email'
+                        : view === 'forgot-password'
+                          ? 'Send reset email'
+                          : view === 'edit-profile'
+                            ? 'Save profile'
+                            : 'Sign in'}
               </button>
             </form>
+            {view === 'register' && pendingSignupEmail && (
+              <div className="account-actions">
+                <button
+                  type="button"
+                  disabled={resendStatus.kind === 'busy' || resendCooldown > 0}
+                  onClick={() => void resendVerification()}
+                >
+                  {resendStatus.kind === 'busy'
+                    ? 'Resending…'
+                    : resendCooldown > 0
+                      ? `Resend available in ${resendCooldown}s`
+                      : 'Resend verification'}
+                </button>
+              </div>
+            )}
             {(view === 'sign-in' ||
               view === 'register' ||
               view === 'guest-upgrade') && (
@@ -502,6 +578,16 @@ export function AuthDialog({
               )}
           </div>
         )}
+        {resendStatus.kind === 'success' && (
+          <p className="auth-success" role="status">
+            {resendStatus.message}
+          </p>
+        )}
+        {resendStatus.kind === 'error' && (
+          <p className="auth-error" role="alert">
+            {resendStatus.message}
+          </p>
+        )}
 
         <nav className="auth-dialog-nav" aria-label="Account options">
           {view === 'sign-in' && (
@@ -548,10 +634,20 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
       return;
     }
     const params = new URLSearchParams(window.location.search);
-    if (params.get('account') !== 'create') return;
+    const requestedAccountAction = params.get('account');
+    if (
+      requestedAccountAction !== 'create' &&
+      requestedAccountAction !== 'recovery'
+    ) {
+      return;
+    }
     const timer = window.setTimeout(() => {
       setDialog(
-        account.status === 'legacy-anonymous' ? 'guest-upgrade' : 'register',
+        requestedAccountAction === 'recovery'
+          ? 'forgot-password'
+          : account.status === 'legacy-anonymous'
+            ? 'guest-upgrade'
+            : 'register',
       );
     }, 0);
     params.delete('account');

@@ -5,12 +5,14 @@ import {
   AuthFlowError,
   completeAuthCallback,
   completeGuestUpgrade,
+  completeInvitationPassword,
   completePasswordRecovery,
   establishRecoverySession,
   initiateGuestEmailUpgrade,
   readGuestUpgradeIntent,
   registerWithEmail,
   requestPasswordRecovery,
+  resendSignupVerification,
   signInWithEmail,
 } from './authFlow';
 
@@ -130,6 +132,50 @@ describe('email/password authentication flows', () => {
       'http://localhost:5173/auth/reset-password?returnPath=%2Flocal',
       'https://dev.fustify.com/auth/reset-password?returnPath=%2Flocal',
     ]);
+  });
+
+  it('resends signup verification through the canonical confirmation callback', async () => {
+    const resend = vi.fn(async () => ({ data: {}, error: null }));
+    const client = asClient({ auth: { resend } });
+
+    await resendSignupVerification(client, {
+      email: ' player@example.com ',
+      returnPath: '/multiplayer',
+    });
+
+    expect(resend).toHaveBeenCalledTimes(1);
+    expect(resend).toHaveBeenCalledWith({
+      type: 'signup',
+      email: 'player@example.com',
+      options: {
+        emailRedirectTo:
+          'https://play.fustify.test/auth/callback?returnPath=%2Fmultiplayer',
+      },
+    });
+  });
+
+  it('sanitizes resend rate-limit feedback', async () => {
+    const client = asClient({
+      auth: {
+        resend: vi.fn(async () => ({
+          data: {},
+          error: {
+            status: 429,
+            message: 'private SMTP and account detail',
+          },
+        })),
+      },
+    });
+
+    await expect(
+      resendSignupVerification(client, {
+        email: 'player@example.com',
+        returnPath: '/',
+      }),
+    ).rejects.toMatchObject({
+      code: 'request_failed',
+      message: 'Too many requests. Please wait a little while and try again.',
+    });
   });
 
   it('logs in, verifies the user, and fetches the profile', async () => {
@@ -367,6 +413,135 @@ describe('email/password authentication flows', () => {
     });
   });
 
+  it('verifies a signup token hash without PKCE storage and preserves a safe return path', async () => {
+    const user = { id: userId, is_anonymous: false };
+    const verifyOtp = vi.fn(async () => ({
+      data: { user, session: { user } },
+      error: null,
+    }));
+    const exchangeCodeForSession = vi.fn();
+    const client = asClient({
+      auth: {
+        verifyOtp,
+        exchangeCodeForSession,
+        getUser: vi.fn(async () => ({ data: { user }, error: null })),
+      },
+    });
+
+    await expect(
+      completeAuthCallback(
+        client,
+        'https://play.fustify.test/auth/callback?token_hash=secret-hash&type=signup&returnPath=%2Fmultiplayer',
+      ),
+    ).resolves.toEqual({
+      kind: 'confirmed',
+      user,
+      returnPath: '/multiplayer',
+    });
+    expect(verifyOtp).toHaveBeenCalledTimes(1);
+    expect(verifyOtp).toHaveBeenCalledWith({
+      token_hash: 'secret-hash',
+      type: 'signup',
+    });
+    expect(exchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps invitation verification distinct from ordinary signup confirmation', async () => {
+    const user = { id: userId, is_anonymous: false };
+    const client = asClient({
+      auth: {
+        verifyOtp: vi.fn(async () => ({
+          data: { user, session: { user } },
+          error: null,
+        })),
+        getUser: vi.fn(async () => ({ data: { user }, error: null })),
+      },
+    });
+
+    await expect(
+      completeAuthCallback(
+        client,
+        'https://play.fustify.test/auth/callback?token_hash=invite-hash&type=invite&returnPath=https%3A%2F%2Fevil.test',
+      ),
+    ).resolves.toEqual({
+      kind: 'invitation',
+      user,
+      returnPath: '/',
+    });
+  });
+
+  it.each([
+    [
+      'missing type',
+      'https://play.fustify.test/auth/callback?token_hash=secret-hash',
+    ],
+    [
+      'missing token hash',
+      'https://play.fustify.test/auth/callback?type=signup',
+    ],
+    [
+      'unsupported type',
+      'https://play.fustify.test/auth/callback?token_hash=secret-hash&type=magiclink',
+    ],
+    [
+      'recovery on the confirmation route',
+      'https://play.fustify.test/auth/callback?token_hash=secret-hash&type=recovery',
+    ],
+    [
+      'conflicting code and token hash',
+      'https://play.fustify.test/auth/callback?code=secret-code&token_hash=secret-hash&type=signup',
+    ],
+  ])(
+    'rejects a %s token-hash callback before verification',
+    async (_, href) => {
+      const verifyOtp = vi.fn();
+      const client = asClient({ auth: { verifyOtp } });
+
+      await expect(completeAuthCallback(client, href)).rejects.toMatchObject({
+        code: 'invalid_email_link',
+      });
+      expect(verifyOtp).not.toHaveBeenCalled();
+    },
+  );
+
+  it('distinguishes an expired token hash without exposing provider details', async () => {
+    const client = asClient({
+      auth: {
+        verifyOtp: vi.fn(async () => ({
+          data: { user: null, session: null },
+          error: {
+            code: 'otp_expired',
+            message: 'private token and provider detail',
+          },
+        })),
+      },
+    });
+
+    await expect(
+      completeAuthCallback(
+        client,
+        'https://play.fustify.test/auth/callback?token_hash=secret-hash&type=signup',
+      ),
+    ).rejects.toMatchObject({
+      code: 'expired_email_link',
+      message: expect.not.stringContaining('private'),
+    });
+  });
+
+  it('sanitizes callback errors returned in a URL fragment', async () => {
+    const client = asClient({ auth: {} });
+
+    await expect(
+      completeAuthCallback(
+        client,
+        'https://play.fustify.test/auth/callback#error=access_denied&error_code=otp_expired&error_description=private-token-detail',
+      ),
+    ).rejects.toMatchObject({
+      code: 'expired_email_link',
+      message: expect.not.stringContaining('private-token-detail'),
+    });
+  });
+
   it('sets the password before updating the registered profile', async () => {
     const calls: string[] = [];
     const client = asClient({
@@ -495,6 +670,93 @@ describe('email/password authentication flows', () => {
     );
     await completePasswordRecovery(client, 'correct horse', 'correct horse');
     expect(updateUser).toHaveBeenCalledWith({ password: 'correct horse' });
+  });
+
+  it('establishes recovery from a token hash and updates the password', async () => {
+    const user = { id: userId, is_anonymous: false };
+    const verifyOtp = vi.fn(async () => ({
+      data: { user, session: { user } },
+      error: null,
+    }));
+    const updateUser = vi.fn(async () => ({ error: null }));
+    const client = asClient({
+      auth: {
+        verifyOtp,
+        getUser: vi.fn(async () => ({ data: { user }, error: null })),
+        updateUser,
+      },
+    });
+
+    await establishRecoverySession(
+      client,
+      'https://play.fustify.test/auth/reset-password?token_hash=recovery-hash&type=recovery',
+    );
+    await completePasswordRecovery(client, 'correct horse', 'correct horse');
+
+    expect(verifyOtp).toHaveBeenCalledWith({
+      token_hash: 'recovery-hash',
+      type: 'recovery',
+    });
+    expect(updateUser).toHaveBeenCalledWith({ password: 'correct horse' });
+  });
+
+  it.each([
+    [
+      'missing callback parameters',
+      'https://play.fustify.test/auth/reset-password',
+    ],
+    [
+      'unsupported token type',
+      'https://play.fustify.test/auth/reset-password?token_hash=secret-hash&type=invite',
+    ],
+  ])('rejects recovery with %s', async (_, href) => {
+    const verifyOtp = vi.fn();
+    const client = asClient({ auth: { verifyOtp } });
+
+    await expect(establishRecoverySession(client, href)).rejects.toBeInstanceOf(
+      AuthFlowError,
+    );
+    expect(verifyOtp).not.toHaveBeenCalled();
+  });
+
+  it('sets an invited user password and refreshes the registered session', async () => {
+    const user = { id: userId, is_anonymous: false };
+    const updateUser = vi.fn(async () => ({ data: { user }, error: null }));
+    const refreshSession = vi.fn(async () => ({
+      data: {
+        session: { access_token: 'refreshed-token', user },
+        user,
+      },
+      error: null,
+    }));
+    const client = asClient({
+      auth: {
+        getSession: vi.fn(async () => ({
+          data: {
+            session: { access_token: 'invitation-token', user },
+          },
+          error: null,
+        })),
+        getUser: vi.fn(async () => ({ data: { user }, error: null })),
+        getClaims: vi.fn(async () => ({
+          data: { claims: { sub: userId, is_anonymous: false } },
+          error: null,
+        })),
+        refreshSession,
+        updateUser,
+      },
+    });
+
+    await expect(
+      completeInvitationPassword(client, {
+        expectedUserId: userId,
+        password: 'correct horse',
+        confirmation: 'correct horse',
+      }),
+    ).resolves.toEqual(user);
+    expect(updateUser).toHaveBeenCalledTimes(1);
+    expect(updateUser).toHaveBeenCalledWith({ password: 'correct horse' });
+    expect(refreshSession).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a valid non-recovery callback on the reset route', async () => {

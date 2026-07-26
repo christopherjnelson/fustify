@@ -198,6 +198,10 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
           calls.push({ method: 'signUp', payload });
           return { data: { user: null, session: null }, error: null };
         },
+        resend: async (payload: unknown) => {
+          calls.push({ method: 'resend', payload });
+          return { data: { user: null, session: null }, error: null };
+        },
         signInWithPassword: async (payload: unknown) => {
           calls.push({ method: 'signInWithPassword', payload });
           user = {
@@ -287,6 +291,36 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
               session: { user },
               redirectType: fixtureName === 'recovery' ? 'recovery' : 'signup',
             },
+            error: null,
+          };
+        },
+        verifyOtp: async (payload: {
+          token_hash: string;
+          type: 'signup' | 'recovery' | 'invite';
+        }) => {
+          calls.push({ method: 'verifyOtp', payload });
+          window.sessionStorage.setItem(
+            'fustify-auth-test-verify-count',
+            String(
+              Number(
+                window.sessionStorage.getItem(
+                  'fustify-auth-test-verify-count',
+                ) ?? '0',
+              ) + 1,
+            ),
+          );
+          user = {
+            id: userId,
+            is_anonymous: false,
+            email: 'player@example.test',
+            email_confirmed_at: '2026-07-24T08:00:00.000Z',
+            user_metadata: {},
+            identities: [{ provider: 'email' }],
+          };
+          tokenIsAnonymous = false;
+          window.sessionStorage.setItem('fustify-auth-test-registered', '1');
+          return {
+            data: { user, session: { user } },
             error: null,
           };
         },
@@ -393,7 +427,8 @@ async function called(page: Page, method: string) {
     const current = state.calls.filter((call) => call.method === expected);
     if (
       (expected !== 'exchangeCodeForSession' &&
-        expected !== 'refreshSession') ||
+        expected !== 'refreshSession' &&
+        expected !== 'verifyOtp') ||
       current.length > 0
     ) {
       return current;
@@ -402,7 +437,9 @@ async function called(page: Page, method: string) {
       window.sessionStorage.getItem(
         expected === 'exchangeCodeForSession'
           ? 'fustify-auth-test-exchange-count'
-          : 'fustify-auth-test-refresh-count',
+          : expected === 'refreshSession'
+            ? 'fustify-auth-test-refresh-count'
+            : 'fustify-auth-test-verify-count',
       ) ?? '0',
     );
     return Array.from({ length: persisted }, () => ({ method: expected }));
@@ -536,6 +573,48 @@ test('signed-out home registration, login, and recovery stay in the Auth layer',
   await forgot.getByRole('button', { name: 'Send reset email' }).click();
   await expect(forgot.getByText(/If that account exists/i)).toBeVisible();
   expect(await called(page, 'resetPasswordForEmail')).toHaveLength(1);
+});
+
+test('signup resend is single-request and enforces the visible cooldown', async ({
+  page,
+}, testInfo) => {
+  await page.clock.install();
+  await installAuthFixture(page, 'signed-out');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Account' }).click();
+  await page
+    .getByRole('dialog', { name: 'Sign in' })
+    .getByRole('button', { name: 'Create account' })
+    .click();
+  const register = page.getByRole('dialog', { name: 'Create account' });
+  await register.getByLabel('Display name').fill('Player One');
+  await register.getByLabel('Email').fill('player@example.test');
+  await register.getByLabel('Password', { exact: true }).fill('correct horse');
+  await register.getByLabel('Confirm password').fill('correct horse');
+  await register.getByRole('button', { name: 'Create account' }).click();
+
+  await expect(
+    register.getByRole('button', { name: 'Resend available in 60s' }),
+  ).toBeDisabled();
+  await capture(page, testInfo.project.name, 'account-signup-resend-cooldown');
+  expect(await called(page, 'signUp')).toHaveLength(1);
+  expect(await called(page, 'resend')).toHaveLength(0);
+
+  for (let second = 0; second < 60; second += 1) {
+    await page.clock.fastForward(1_000);
+  }
+  const resend = register.getByRole('button', { name: 'Resend verification' });
+  await expect(resend).toBeEnabled();
+  await resend.click();
+
+  await expect(
+    register.getByText(/If that address has a pending signup/i),
+  ).toBeVisible();
+  await expect(
+    register.getByRole('button', { name: 'Resend available in 60s' }),
+  ).toBeDisabled();
+  expect(await called(page, 'signUp')).toHaveLength(1);
+  expect(await called(page, 'resend')).toHaveLength(1);
 });
 
 test('guest controls preserve generated identity and require deliberate switching', async ({
@@ -1137,6 +1216,93 @@ test('email confirmation exchanges its PKCE code once and follows a safe return 
     page.getByRole('heading', { name: 'Choose your world' }),
   ).toBeVisible();
   expect(await called(page, 'exchangeCodeForSession')).toHaveLength(1);
+});
+
+test('token-hash signup confirmation verifies once, removes secrets, and follows a safe return path', async ({
+  page,
+}) => {
+  const consoleMessages: string[] = [];
+  page.on('console', (message) => consoleMessages.push(message.text()));
+  await installAuthFixture(page, 'callback');
+  await page.goto(
+    '/auth/callback?token_hash=signup-secret&type=signup&returnPath=%2Flocal%3Fseed%3Dconfirmed',
+  );
+
+  await expect(page).toHaveURL(/\/local\?seed=confirmed$/);
+  await expect(page).not.toHaveURL(/signup-secret|token_hash/);
+  expect(await called(page, 'verifyOtp')).toHaveLength(1);
+  expect(await called(page, 'exchangeCodeForSession')).toHaveLength(0);
+  expect(consoleMessages.join('\n')).not.toContain('signup-secret');
+});
+
+test('token-hash recovery reaches the password form and updates the password', async ({
+  page,
+}, testInfo) => {
+  await installAuthFixture(page, 'recovery');
+  await page.goto(
+    '/auth/reset-password?token_hash=recovery-secret&type=recovery&returnPath=%2Fmultiplayer',
+  );
+
+  await expect(
+    page.getByRole('heading', { name: 'Choose a new password' }),
+  ).toBeVisible();
+  await capture(page, testInfo.project.name, 'account-token-recovery-form');
+  await expect(page).not.toHaveURL(/recovery-secret|token_hash/);
+  expect(await called(page, 'verifyOtp')).toHaveLength(1);
+  await page.getByLabel('New password').fill('correct horse');
+  await page.getByLabel('Confirm password').fill('correct horse');
+  await page.getByRole('button', { name: 'Update password' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Password updated' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Return to account' }),
+  ).toHaveAttribute('href', '/multiplayer');
+  expect(await called(page, 'updateUser')).toHaveLength(1);
+});
+
+test('token-hash invitation reaches initial-password setup and refreshes once', async ({
+  page,
+}, testInfo) => {
+  await installAuthFixture(page, 'callback');
+  await page.goto(
+    '/auth/callback?token_hash=invite-secret&type=invite&returnPath=%2Fmultiplayer',
+  );
+
+  await expect(
+    page.getByRole('heading', { name: 'Finish accepting your invitation' }),
+  ).toBeVisible();
+  await capture(
+    page,
+    testInfo.project.name,
+    'account-invitation-password-form',
+  );
+  await expect(page).not.toHaveURL(/invite-secret|token_hash/);
+  expect(await called(page, 'verifyOtp')).toHaveLength(1);
+  await page.getByLabel('Password', { exact: true }).fill('correct horse');
+  await page.getByLabel('Confirm password').fill('correct horse');
+  await page.getByRole('button', { name: 'Set password' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Invitation accepted' }),
+  ).toBeVisible();
+  expect(await called(page, 'updateUser')).toHaveLength(1);
+  expect(await called(page, 'refreshSession')).toHaveLength(1);
+});
+
+test('unsupported token-hash callbacks are sanitized without verification', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'callback');
+  await page.goto(
+    '/auth/callback?token_hash=unsupported-secret&type=magiclink',
+  );
+
+  await expect(
+    page.getByRole('heading', { name: 'Email confirmation problem' }),
+  ).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText(/not supported/i);
+  await expect(page).not.toHaveURL(/unsupported-secret|token_hash|magiclink/);
+  expect(await called(page, 'verifyOtp')).toHaveLength(0);
 });
 
 test('guest upgrade callback without original browser context stops safely', async ({
