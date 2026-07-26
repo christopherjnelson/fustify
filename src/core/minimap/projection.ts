@@ -1,7 +1,7 @@
-import { getPlanetSurfaceSphere } from '../geometry/planetSurface';
-import { dot, normalize } from '../geometry/sphericalMath';
-import type { PlanetDefinition } from '../types/planet';
-import type { Vector3Tuple } from '../types/territory';
+import { getPlanetSurfaceSphere } from '../geometry/planetSurface.ts';
+import { dot, normalize } from '../geometry/sphericalMath.ts';
+import type { PlanetDefinition } from '../types/planet.ts';
+import type { Vector3Tuple } from '../types/territory.ts';
 
 export const MINIMAP_WIDTH = 360;
 export const MINIMAP_HEIGHT = 180;
