@@ -22,8 +22,8 @@ if [[ -z "${deploy_home}" ]]; then
   echo "The deploy user must already exist: ${deploy_user}" >&2
   exit 1
 fi
-if [[ "$(/usr/bin/node --version)" != v24.* ]]; then
-  echo "Node 24 must already be installed at /usr/bin/node." >&2
+if [[ "$(/usr/local/bin/node --version)" != v24.* ]]; then
+  echo "Node 24 must already be installed at /usr/local/bin/node." >&2
   exit 1
 fi
 

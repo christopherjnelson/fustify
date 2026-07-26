@@ -14,7 +14,7 @@ Normal gameplay remains on the `multiplayer-game` Edge Function.
 ## One-time setup
 
 These steps are intentionally not automated beyond installing reviewed files.
-They assume the droplet already has Caddy, `/usr/bin/node` version 24, pnpm, an
+They assume the droplet already has Caddy, `/usr/local/bin/node` version 24, pnpm, an
 existing non-root deploy user, and a clean Fustify checkout.
 
 1. Replace the existing Fustify Caddy site block with the reviewed
