@@ -1,0 +1,27 @@
+[Unit]
+Description=Fustify match initialization API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/fustify/current
+EnvironmentFile=%h/.config/fustify/fustify-api.env
+ExecStart=/usr/bin/node /srv/fustify/current/api/server.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=1536M
+
+[Install]
+WantedBy=default.target

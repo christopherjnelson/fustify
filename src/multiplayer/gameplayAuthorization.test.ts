@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it, vi } from 'vitest';
-import { authorizeGameplayRequest } from '../../supabase/functions/multiplayer-game/requestAuthorization';
+import { authorizeGameplayRequest } from './requestAuthorization';
 
 describe('authoritative gameplay request authorization', () => {
   it('rejects missing authorization without invoking Auth', async () => {

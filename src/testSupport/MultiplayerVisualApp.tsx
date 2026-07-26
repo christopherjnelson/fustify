@@ -8,19 +8,23 @@ import type { ActivityReactionController } from '../multiplayer/matchEventReacti
 import { useGameStore } from '../state/useGameStore';
 import { applyScenario } from './visualScenarios';
 import { BrandedAppShell } from '../brand/BrandedAppShell';
+import { MatchLaunchOverlay } from '../multiplayer/MatchLaunchOverlay';
 
 const parameters = new URLSearchParams(window.location.search);
+const launchFixture = parameters.get('scenario') === 'multiplayer-match-launch';
 const postMatchFixture = parameters.get('scenario') === 'multiplayer-game-over';
 const activityReactionFixture =
   parameters.get('scenario') === 'multiplayer-activity-reactions';
 const guestReactionFixture = parameters.get('reaction-account') === 'guest';
 
 applyScenario(
-  postMatchFixture
-    ? 'multiplayer-game-over'
-    : activityReactionFixture
-      ? 'multiplayer-activity-reactions'
-      : 'multiplayer-reinforcement-active',
+  launchFixture
+    ? 'multiplayer-match-launch'
+    : postMatchFixture
+      ? 'multiplayer-game-over'
+      : activityReactionFixture
+        ? 'multiplayer-activity-reactions'
+        : 'multiplayer-reinforcement-active',
 );
 
 const activityEvents = useGameStore.getState().match?.events ?? [];
@@ -77,6 +81,7 @@ function navigate(path: string) {
 
 export function MultiplayerVisualApp() {
   const host = parameters.get('role') !== 'nonhost';
+  const planet = useGameStore((state) => state.planet);
   return (
     <BrandedAppShell
       accountControl={
@@ -98,28 +103,32 @@ export function MultiplayerVisualApp() {
         </aside>
       }
     >
-      <MultiplayerGameScene
-        matchId="visual-match"
-        revision={0}
-        activityReactions={activityReactions}
-        renderPostMatchActions={
-          postMatchFixture
-            ? (reviewing, onReviewingChange) => (
-                <PostMatchActions
-                  reviewing={reviewing}
-                  isHost={host}
-                  settings={settings}
-                  createRoom={async () =>
-                    ({ id: 'visual-replacement-room' }) as Room
-                  }
-                  generateSeed={() => 'visual-fresh-world-271'}
-                  onReviewingChange={onReviewingChange}
-                  navigate={navigate}
-                />
-              )
-            : undefined
-        }
-      />
+      {launchFixture ? (
+        <MatchLaunchOverlay planet={planet} roomName="Visual Atlas" />
+      ) : (
+        <MultiplayerGameScene
+          matchId="visual-match"
+          revision={0}
+          activityReactions={activityReactions}
+          renderPostMatchActions={
+            postMatchFixture
+              ? (reviewing, onReviewingChange) => (
+                  <PostMatchActions
+                    reviewing={reviewing}
+                    isHost={host}
+                    settings={settings}
+                    createRoom={async () =>
+                      ({ id: 'visual-replacement-room' }) as Room
+                    }
+                    generateSeed={() => 'visual-fresh-world-271'}
+                    onReviewingChange={onReviewingChange}
+                    navigate={navigate}
+                  />
+                )
+              : undefined
+          }
+        />
+      )}
     </BrandedAppShell>
   );
 }

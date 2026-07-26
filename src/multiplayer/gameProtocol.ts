@@ -8,12 +8,7 @@ export interface GameplayCommandRequest {
   action: GameAction;
 }
 
-export interface StartMatchRequest {
-  operation: 'start';
-  roomId: string;
-}
-
-export type MultiplayerGameRequest = GameplayCommandRequest | StartMatchRequest;
+export type MultiplayerGameRequest = GameplayCommandRequest;
 
 export interface AuthoritativeCommandResult {
   acceptedRevision: number;

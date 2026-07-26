@@ -505,11 +505,37 @@ export async function startMatch(
   client: SupabaseClient<Database>,
   roomId: string,
 ): Promise<MultiplayerMatch> {
-  const { data, error } = await client.functions.invoke('multiplayer-game', {
-    body: { operation: 'start', roomId },
-  });
-  if (error) throw await functionError(error);
-  const match = (data as { match?: MultiplayerMatch } | null)?.match;
+  const { data: sessionData, error: sessionError } =
+    await client.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (sessionError || !accessToken) {
+    throw multiplayerError('not_authenticated');
+  }
+  let response: Response;
+  try {
+    response = await fetch('/api/multiplayer/start', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ roomId }),
+    });
+  } catch (error) {
+    throw multiplayerError(error);
+  }
+  type StartMatchResponse = {
+    match?: MultiplayerMatch;
+    code?: string;
+  };
+  let data: StartMatchResponse;
+  try {
+    data = (await response.json()) as StartMatchResponse;
+  } catch {
+    throw multiplayerError('multiplayer_request_failed');
+  }
+  if (!response.ok) throw multiplayerError(data.code ?? response);
+  const match = data.match;
   if (!match) throw multiplayerError('invalid_authoritative_state');
   return match;
 }

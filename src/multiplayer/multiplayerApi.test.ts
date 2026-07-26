@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Database } from './database.types';
 import {
   createRoom,
@@ -10,9 +10,15 @@ import {
   publicRoomUrl,
   publishRoom,
   roomNameSchema,
+  startMatch,
+  submitGameplayCommand,
   updateRoomSettings,
   type Room,
 } from './multiplayerApi';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('multiplayer room creation', () => {
   it('persists one freshly generated readable seed during room creation', async () => {
@@ -322,5 +328,100 @@ describe('multiplayer errors', () => {
     expect(
       multiplayerError(new Error('published_room_settings_locked')).message,
     ).toBe('Public lobby settings are permanently locked.');
+  });
+});
+
+describe('multiplayer match launch transport', () => {
+  it('starts through the same-origin Node API with only the caller bearer token and room ID', async () => {
+    const getSession = vi.fn(async () => ({
+      data: { session: { access_token: 'registered-access-token' } },
+      error: null,
+    }));
+    const match = {
+      id: '40000000-0000-4000-8000-000000000004',
+      room_id: '10000000-0000-4000-8000-000000000001',
+    };
+    const fetchRequest = vi.fn(async () =>
+      Response.json({ match }, { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchRequest);
+    const client = {
+      auth: { getSession },
+      functions: { invoke: vi.fn() },
+    } as unknown as SupabaseClient<Database>;
+
+    await expect(startMatch(client, match.room_id)).resolves.toMatchObject(
+      match,
+    );
+    expect(fetchRequest).toHaveBeenCalledWith('/api/multiplayer/start', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer registered-access-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ roomId: match.room_id }),
+    });
+    expect(client.functions.invoke).not.toHaveBeenCalled();
+  });
+
+  it('maps API failures and missing sessions into existing polished errors', async () => {
+    const fetchRequest = vi.fn(async () =>
+      Response.json({ code: 'host_only' }, { status: 403 }),
+    );
+    vi.stubGlobal('fetch', fetchRequest);
+    const client = {
+      auth: {
+        getSession: vi.fn(async () => ({
+          data: { session: { access_token: 'registered-access-token' } },
+          error: null,
+        })),
+      },
+    } as unknown as SupabaseClient<Database>;
+
+    await expect(
+      startMatch(client, '10000000-0000-4000-8000-000000000001'),
+    ).rejects.toThrow('Only the room host can do that.');
+
+    const signedOut = {
+      auth: {
+        getSession: vi.fn(async () => ({
+          data: { session: null },
+          error: null,
+        })),
+      },
+    } as unknown as SupabaseClient<Database>;
+    await expect(
+      startMatch(signedOut, '10000000-0000-4000-8000-000000000001'),
+    ).rejects.toThrow('Your account session expired.');
+    expect(fetchRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps normal gameplay commands on the multiplayer-game function', async () => {
+    const invoke = vi.fn(async () => ({
+      data: {
+        acceptedRevision: 3,
+        stateFingerprint: 'a'.repeat(64),
+        duplicate: false,
+      },
+      error: null,
+    }));
+    const client = {
+      functions: { invoke },
+    } as unknown as SupabaseClient<Database>;
+
+    await expect(
+      submitGameplayCommand(client, 'match-id', 2, 'command-key', {
+        type: 'END_ATTACK_PHASE',
+      }),
+    ).resolves.toMatchObject({ acceptedRevision: 3, duplicate: false });
+    expect(invoke).toHaveBeenCalledWith('multiplayer-game', {
+      body: {
+        operation: 'command',
+        matchId: 'match-id',
+        expectedRevision: 2,
+        idempotencyKey: 'command-key',
+        action: { type: 'END_ATTACK_PHASE' },
+      },
+    });
   });
 });

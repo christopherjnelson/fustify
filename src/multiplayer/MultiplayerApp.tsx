@@ -83,6 +83,7 @@ import {
 } from './MultiplayerBrowser';
 import { replaceRoomThumbnail, roomThumbnailPublicUrl } from './worldThumbnail';
 import { PublicRoomSettingsSummary } from './PublicRoomSettingsSummary';
+import { MatchLaunchOverlay } from './MatchLaunchOverlay';
 import {
   closedRoomLandingNotice,
   installWaitingRoomNavigationGuard,
@@ -255,25 +256,7 @@ function ConnectionBadge({ status }: { status: string }) {
   );
 }
 
-function RoomWorldPreview({ room }: { room: Room }) {
-  const {
-    seed,
-    territory_count,
-    continent_count,
-    max_seats,
-    generator_version,
-  } = room;
-  const planet = useMemo(
-    () =>
-      generateRoomPreviewPlanet({
-        seed,
-        territory_count,
-        continent_count,
-        max_seats,
-        generator_version,
-      }),
-    [seed, territory_count, continent_count, max_seats, generator_version],
-  );
+function RoomWorldPreview({ planet }: { planet: PlanetDefinition }) {
   return (
     <ReadonlyMinimap
       planet={planet}
@@ -561,6 +544,34 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     await updateRoomSettings(client, room);
   };
 
+  const previewSeed = state?.room.seed;
+  const previewTerritoryCount = state?.room.territory_count;
+  const previewContinentCount = state?.room.continent_count;
+  const previewMaxSeats = state?.room.max_seats;
+  const previewGeneratorVersion = state?.room.generator_version;
+  const previewPlanet = useMemo(
+    () =>
+      previewSeed &&
+      previewTerritoryCount &&
+      previewContinentCount &&
+      previewMaxSeats
+        ? generateRoomPreviewPlanet({
+            seed: previewSeed,
+            territory_count: previewTerritoryCount,
+            continent_count: previewContinentCount,
+            max_seats: previewMaxSeats,
+            generator_version: previewGeneratorVersion,
+          })
+        : null,
+    [
+      previewSeed,
+      previewTerritoryCount,
+      previewContinentCount,
+      previewMaxSeats,
+      previewGeneratorVersion,
+    ],
+  );
+
   if (!state || !settings) {
     const entryStatus = directRoomEntryStatus(entryFailure);
     return (
@@ -586,6 +597,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   ).length;
   const canStart =
     claimedHumanSeats >= 2 && state.room.assignment_mode === 'random';
+  if (!previewPlanet) throw new Error('Room world preview is unavailable.');
 
   return (
     <GameSetupShell
@@ -706,7 +718,10 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                       disabled={!settingsEditable || busy !== null}
                       onChange={(event) => {
                         settingsDirty.current = true;
-                        setSettings({ ...settings, seed: event.target.value });
+                        setSettings({
+                          ...settings,
+                          seed: event.target.value,
+                        });
                       }}
                     />
                   </label>
@@ -811,11 +826,17 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
               </>
             )
           }
-          preview={<RoomWorldPreview room={state.room} />}
+          preview={<RoomWorldPreview planet={previewPlanet} />}
         />
       }
       actions={
         <>
+          {busy === 'start' && (
+            <MatchLaunchOverlay
+              planet={previewPlanet}
+              roomName={state.room.name}
+            />
+          )}
           {error && (
             <p
               role="alert"

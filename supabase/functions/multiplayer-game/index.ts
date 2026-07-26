@@ -3,16 +3,12 @@ import { gameReducer } from '../../../src/core/game/gameReducer.ts';
 import type { MatchState } from '../../../src/core/game/types.ts';
 import type { PlanetDefinition } from '../../../src/core/types/planet.ts';
 import {
-  createAuthoritativeMatch,
-  type ClaimedSeat,
-} from '../../../src/multiplayer/authoritativeEngine.ts';
-import {
   isMatchState,
   parseGameAction,
   sha256Fingerprint,
   stableStringify,
 } from '../../../src/multiplayer/gameProtocol.ts';
-import { authorizeGameplayRequest } from './requestAuthorization.ts';
+import { authorizeGameplayRequest } from '../../../src/multiplayer/requestAuthorization.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -104,79 +100,6 @@ Deno.serve(async (request) => {
 
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    if (body.operation === 'start') {
-      if (typeof body.roomId !== 'string') throw new Error('invalid_request');
-      const { data: room, error: roomError } = await admin
-        .from('rooms')
-        .select('*')
-        .eq('id', body.roomId)
-        .single();
-      if (roomError || !room) throw new Error('room_access_denied');
-      if (room.host_user_id !== actorUserId) throw new Error('host_only');
-
-      const { data: existing } = await admin
-        .from('matches')
-        .select('*')
-        .eq('room_id', body.roomId)
-        .maybeSingle();
-      if (existing?.state_snapshot) return response(200, { match: existing });
-      if (existing) throw new Error('legacy_match_incomplete');
-
-      const { data: seats, error: seatsError } = await admin
-        .from('room_seats')
-        .select('seat_index, occupant_user_id, controller_type')
-        .eq('room_id', body.roomId)
-        .not('occupant_user_id', 'is', null)
-        .order('seat_index');
-      if (seatsError) throw new Error('room_access_denied');
-      const occupantUserIds = (seats ?? []).map(
-        (seat) => seat.occupant_user_id!,
-      );
-      const { data: profiles, error: profilesError } = await admin
-        .from('profiles')
-        .select('user_id, display_name')
-        .in('user_id', occupantUserIds);
-      if (profilesError) throw new Error('profile_unavailable');
-      const names = new Map(
-        (profiles ?? []).map((profile) => [
-          profile.user_id,
-          profile.display_name,
-        ]),
-      );
-      const claimedSeats = (seats ?? []).map((seat): ClaimedSeat => {
-        const displayName = names.get(seat.occupant_user_id!);
-        if (!displayName) throw new Error('profile_unavailable');
-        return {
-          seatIndex: seat.seat_index,
-          userId: seat.occupant_user_id!,
-          displayName,
-          controllerType: 'human',
-        };
-      });
-      const matchId = crypto.randomUUID();
-      const initialized = await createAuthoritativeMatch(
-        matchId,
-        room,
-        claimedSeats,
-      );
-      const { data, error } = await admin.rpc(
-        'authority_initialize_room_match',
-        {
-          p_room_id: body.roomId,
-          p_match_id: matchId,
-          p_actor_user_id: actorUserId,
-          p_setup_snapshot: initialized.setupSnapshot,
-          p_seat_order_snapshot: initialized.seatOrderSnapshot,
-          p_generator_metadata: initialized.generatorMetadata,
-          p_planet_snapshot: initialized.planet,
-          p_state_snapshot: initialized.state,
-          p_state_fingerprint: initialized.stateFingerprint,
-        },
-      );
-      if (error) throw error;
-      return response(200, { match: data });
-    }
-
     if (body.operation !== 'command') throw new Error('invalid_request');
     if (
       typeof body.matchId !== 'string' ||

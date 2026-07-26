@@ -50,6 +50,14 @@ pnpm install
 pnpm dev
 ```
 
+`pnpm dev` starts both Vite on port 5173 and the localhost-only Node API. Vite
+proxies `/api/*` to the API using `FUSTIFY_API_PORT` (default `8787`). For
+multiplayer match start, copy `.env.example` to `.env.local` and set
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and the server-only
+`SUPABASE_SERVICE_ROLE_KEY`. Never add a `VITE_` prefix to the service-role
+key. Without it, local play and `GET /api/health` still work, while match start
+fails closed with a configuration error.
+
 Quality checks:
 
 ```bash
@@ -71,6 +79,7 @@ pnpm test:e2e:multiplayer
 pnpm test:visual:multiplayer
 pnpm test:multiplayer:concurrency
 pnpm test:multiplayer:authority
+pnpm test:integration:dev-proxy
 ```
 
 The report-enabled commands incrementally write ignored, validated schema-v1

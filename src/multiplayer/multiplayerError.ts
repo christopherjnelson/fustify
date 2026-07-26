@@ -56,6 +56,8 @@ export const MULTIPLAYER_ERRORS: Record<string, string> = {
   room_access_denied: 'This private room is unavailable to this player.',
   room_active: 'This room has already started.',
   room_not_waiting: 'This action is available only while the room is waiting.',
+  server_configuration_error:
+    'Match initialization is not configured on this server.',
   seat_conflict: 'Another player claimed that seat first.',
   seat_required: 'Claimed seat membership is required to play this match.',
   settings_conflict:

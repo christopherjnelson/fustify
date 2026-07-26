@@ -45,6 +45,7 @@ export type VisualScenario =
   | 'handoff'
   | 'reinforcement'
   | 'multiplayer-authority'
+  | 'multiplayer-match-launch'
   | 'multiplayer-reinforcement-active'
   | 'multiplayer-activity-reactions'
   | 'multiplayer-game-over'
