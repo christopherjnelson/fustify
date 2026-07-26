@@ -42,6 +42,7 @@
     "supabase:types": "SUPABASE_TELEMETRY_DISABLED=1 supabase gen types --project-id qwmsybhpjnfjiyxcspwj --schema public > src/multiplayer/database.types.ts",
     "test:multiplayer:concurrency": "node --env-file-if-exists=.env.local --import tsx scripts/testMultiplayerConcurrency.ts",
     "test:multiplayer:authority": "node --env-file-if-exists=.env.local --import tsx scripts/testAuthoritativeMultiplayer.ts",
+    "test:profile:authoritative-init": "node --import tsx scripts/profileEdgeFunctions.ts",
     "test:profile:remote": "node --env-file-if-exists=.env.local --import tsx scripts/testProfileFoundation.ts",
     "test:auth:local": "node --import tsx scripts/testEmailPasswordAuth.ts"
   },

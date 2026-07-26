@@ -104,6 +104,18 @@ export interface StartingComponentTarget {
   maximum: number;
 }
 
+interface StartingAnalysisContext {
+  adjacency: Map<string, string[]>;
+  angularDistances: number[][];
+  seaEndpoints: Set<string>;
+  gatewayIds: Set<string>;
+  orderedPlayers: LocalPlayerConfig[];
+  playerNames: Map<string, string>;
+  territoryIds: Set<string>;
+  territoryIndexById: Map<string, number>;
+  territoryLandmasses: Map<string, string>;
+}
+
 /** Category weights used to derive the visible overall score. */
 export const STARTING_BALANCE_WEIGHTS: Record<
   keyof StartingBalanceBreakdown,
@@ -169,25 +181,16 @@ function componentSizes(
 }
 
 function meanPairwiseAngularSpread(
-  planet: PlanetDefinition,
+  context: StartingAnalysisContext,
   ids: string[],
 ): number {
-  const centers = planet.territories
-    .filter((item) => ids.includes(item.id))
-    .map((item) => item.center);
-  if (centers.length < 2) return 0;
+  if (ids.length < 2) return 0;
+  const indices = ids.map((id) => context.territoryIndexById.get(id)!);
   let total = 0;
   let pairs = 0;
-  for (let a = 0; a < centers.length; a += 1) {
-    for (let b = a + 1; b < centers.length; b += 1) {
-      const left = centers[a]!;
-      const right = centers[b]!;
-      const leftLength = Math.hypot(...left);
-      const rightLength = Math.hypot(...right);
-      const cosine =
-        (left[0] * right[0] + left[1] * right[1] + left[2] * right[2]) /
-        (leftLength * rightLength);
-      total += Math.acos(Math.max(-1, Math.min(1, cosine))) / Math.PI;
+  for (let a = 0; a < indices.length; a += 1) {
+    for (let b = a + 1; b < indices.length; b += 1) {
+      total += context.angularDistances[indices[a]!]![indices[b]!]!;
       pairs += 1;
     }
   }
@@ -198,91 +201,144 @@ function parityScore(values: number[], tolerance: number): number {
   return clampScore(100 - Math.max(0, range(values) - tolerance) * 50);
 }
 
-export function analyzeStartingPosition(
+function createStartingAnalysisContext(
   planet: PlanetDefinition,
   players: LocalPlayerConfig[],
+): StartingAnalysisContext {
+  const territoryIndexById = new Map(
+    planet.territories.map((territory, index) => [territory.id, index]),
+  );
+  const angularDistances: number[][] = [];
+  for (const left of planet.territories) {
+    const distances: number[] = [];
+    const leftLength = Math.hypot(...left.center);
+    for (const right of planet.territories) {
+      const rightLength = Math.hypot(...right.center);
+      const cosine =
+        (left.center[0] * right.center[0] +
+          left.center[1] * right.center[1] +
+          left.center[2] * right.center[2]) /
+        (leftLength * rightLength);
+      distances.push(Math.acos(Math.max(-1, Math.min(1, cosine))) / Math.PI);
+    }
+    angularDistances.push(distances);
+  }
+  return {
+    adjacency: new Map(
+      planet.territories.map((item) => [item.id, item.adjacentTerritoryIds]),
+    ),
+    angularDistances,
+    seaEndpoints: new Set(
+      planet.connections
+        .filter((item) => item.type === 'sea-route')
+        .flatMap((item) => [item.fromTerritoryId, item.toTerritoryId]),
+    ),
+    gatewayIds: new Set(
+      planet.analysis.gatewayTerritoryIds.length
+        ? planet.analysis.gatewayTerritoryIds
+        : planet.analysis.articulationTerritoryIds,
+    ),
+    orderedPlayers: players.slice().sort((a, b) => a.seatIndex - b.seatIndex),
+    playerNames: new Map(players.map((player) => [player.id, player.name])),
+    territoryIds: new Set(planet.territories.map((item) => item.id)),
+    territoryIndexById,
+    territoryLandmasses: new Map(
+      planet.territories.map((item) => [item.id, item.landmassId]),
+    ),
+  };
+}
+
+function analyzeStartingPositionWithContext(
+  planet: PlanetDefinition,
+  context: StartingAnalysisContext,
   territories: Record<string, StartingTerritoryState>,
   validationMode: StartingPositionValidationMode = 'random',
+  includeWarnings = true,
 ): StartingBalanceAnalysis {
-  const adjacency = new Map(
-    planet.territories.map((item) => [item.id, item.adjacentTerritoryIds]),
+  const ownedTerritoryIds = new Map(
+    context.orderedPlayers.map((player) => [player.id, [] as string[]]),
   );
-  const seaEndpoints = new Set(
-    planet.connections
-      .filter((item) => item.type === 'sea-route')
-      .flatMap((item) => [item.fromTerritoryId, item.toTerritoryId]),
-  );
-  const gatewayIds = new Set(
-    planet.analysis.gatewayTerritoryIds.length
-      ? planet.analysis.gatewayTerritoryIds
-      : planet.analysis.articulationTerritoryIds,
-  );
-  const orderedPlayers = players
-    .slice()
-    .sort((a, b) => a.seatIndex - b.seatIndex);
-  const metrics = orderedPlayers.map((player): PlayerStartingBalance => {
-    const ids = planet.territories
-      .filter((item) => territories[item.id]?.ownerId === player.id)
-      .map((item) => item.id);
-    const idSet = new Set(ids);
-    const components = componentSizes(ids, adjacency);
-    const friendlyEdges = ids.reduce(
-      (sum, id) =>
-        sum +
-        (adjacency.get(id) ?? []).filter((neighbor) => idSet.has(neighbor))
+  for (const territory of planet.territories) {
+    const ownerId = territories[territory.id]?.ownerId;
+    ownedTerritoryIds.get(ownerId)?.push(territory.id);
+  }
+  const mixableMajoritiesByPlayer = new Map<string, number>();
+  const metrics = context.orderedPlayers.map(
+    (player): PlayerStartingBalance => {
+      const ids = ownedTerritoryIds.get(player.id)!;
+      const idSet = new Set(ids);
+      const components = componentSizes(ids, context.adjacency);
+      const friendlyEdges = ids.reduce(
+        (sum, id) =>
+          sum +
+          (context.adjacency.get(id) ?? []).filter((neighbor) =>
+            idSet.has(neighbor),
+          ).length,
+        0,
+      );
+      const allEdges = ids.reduce(
+        (sum, id) => sum + (context.adjacency.get(id)?.length ?? 0),
+        0,
+      );
+      const shares = planet.continents.map((continent) => {
+        const owned = continent.territoryIds.filter((id) =>
+          idSet.has(id),
+        ).length;
+        return {
+          continent,
+          owned,
+          share: owned / Math.max(1, continent.territoryIds.length),
+        };
+      });
+      mixableMajoritiesByPlayer.set(
+        player.id,
+        shares.filter(
+          (item) => item.continent.territoryIds.length >= 2 && item.share > 0.5,
+        ).length,
+      );
+      return {
+        playerId: player.id,
+        territoryCount: ids.length,
+        armyCount: ids.reduce(
+          (sum, id) => sum + (territories[id]?.armyCount ?? 0),
+          0,
+        ),
+        connectedComponentCount: components.length,
+        largestComponentSize: components[0] ?? 0,
+        largestComponentRatio: (components[0] ?? 0) / Math.max(1, ids.length),
+        sameOwnerAdjacencyRatio: friendlyEdges / Math.max(1, allEdges),
+        geographicSpread: meanPairwiseAngularSpread(context, ids),
+        borderTerritoryCount: ids.filter((id) =>
+          (context.adjacency.get(id) ?? []).some(
+            (neighbor) => !idSet.has(neighbor),
+          ),
+        ).length,
+        gatewayTerritoryCount: ids.filter((id) => context.gatewayIds.has(id))
           .length,
-      0,
-    );
-    const allEdges = ids.reduce(
-      (sum, id) => sum + (adjacency.get(id)?.length ?? 0),
-      0,
-    );
-    const shares = planet.continents.map((continent) => ({
-      continent,
-      owned: continent.territoryIds.filter((id) => idSet.has(id)).length,
-      share:
-        continent.territoryIds.filter((id) => idSet.has(id)).length /
-        Math.max(1, continent.territoryIds.length),
-    }));
-    return {
-      playerId: player.id,
-      territoryCount: ids.length,
-      armyCount: ids.reduce(
-        (sum, id) => sum + (territories[id]?.armyCount ?? 0),
-        0,
-      ),
-      connectedComponentCount: components.length,
-      largestComponentSize: components[0] ?? 0,
-      largestComponentRatio: (components[0] ?? 0) / Math.max(1, ids.length),
-      sameOwnerAdjacencyRatio: friendlyEdges / Math.max(1, allEdges),
-      geographicSpread: meanPairwiseAngularSpread(planet, ids),
-      borderTerritoryCount: ids.filter((id) =>
-        (adjacency.get(id) ?? []).some((neighbor) => !idSet.has(neighbor)),
-      ).length,
-      gatewayTerritoryCount: ids.filter((id) => gatewayIds.has(id)).length,
-      seaRouteEndpointCount: ids.filter((id) => seaEndpoints.has(id)).length,
-      fullyOwnedContinentCount: shares.filter((item) => item.share === 1)
-        .length,
-      maximumContinentShare: Math.max(0, ...shares.map((item) => item.share)),
-      majorityContinentCount: shares.filter((item) => item.share > 0.5).length,
-      nearCompleteContinentCount: shares.filter(
-        (item) =>
-          item.owned > 0 &&
-          item.owned === item.continent.territoryIds.length - 1,
-      ).length,
-      potentialStartingBonus: shares.reduce(
-        (sum, item) => sum + item.continent.bonus * item.share,
-        0,
-      ),
-      averageDegree: allEdges / Math.max(1, ids.length),
-      landmassCount: new Set(
-        planet.territories
-          .filter((item) => idSet.has(item.id))
-          .map((item) => item.landmassId),
-      ).size,
-      isolatedTerritoryCount: components.filter((size) => size === 1).length,
-    };
-  });
+        seaRouteEndpointCount: ids.filter((id) => context.seaEndpoints.has(id))
+          .length,
+        fullyOwnedContinentCount: shares.filter((item) => item.share === 1)
+          .length,
+        maximumContinentShare: Math.max(0, ...shares.map((item) => item.share)),
+        majorityContinentCount: shares.filter((item) => item.share > 0.5)
+          .length,
+        nearCompleteContinentCount: shares.filter(
+          (item) =>
+            item.owned > 0 &&
+            item.owned === item.continent.territoryIds.length - 1,
+        ).length,
+        potentialStartingBonus: shares.reduce(
+          (sum, item) => sum + item.continent.bonus * item.share,
+          0,
+        ),
+        averageDegree: allEdges / Math.max(1, ids.length),
+        landmassCount: new Set(
+          ids.map((id) => context.territoryLandmasses.get(id)),
+        ).size,
+        isolatedTerritoryCount: components.filter((size) => size === 1).length,
+      };
+    },
+  );
 
   const territorySpread = range(metrics.map((item) => item.territoryCount));
   const armySpread = range(metrics.map((item) => item.armyCount));
@@ -361,17 +417,14 @@ export function analyzeStartingPosition(
   );
   const hardFailureReasons: string[] = [];
   const warnings: string[] = [];
-  const names = new Map(
-    orderedPlayers.map((player) => [player.id, player.name]),
-  );
+  const names = context.playerNames;
   if (
     Object.keys(territories).length !== planet.territories.length ||
     planet.territories.some((item) => !territories[item.id])
   )
     hardFailureReasons.push('Not every territory has a starting owner.');
-  const territoryIds = new Set(planet.territories.map((item) => item.id));
   const unknownTerritoryId = Object.keys(territories).find(
-    (id) => !territoryIds.has(id),
+    (id) => !context.territoryIds.has(id),
   );
   if (unknownTerritoryId)
     hardFailureReasons.push(
@@ -409,13 +462,8 @@ export function analyzeStartingPosition(
       hardFailureReasons.push(
         `${name} has no practical access to the strategic graph.`,
       );
-    const mixableMajorities = planet.continents.filter((continent) => {
-      if (continent.territoryIds.length < 2) return false;
-      const owned = continent.territoryIds.filter(
-        (id) => territories[id]?.ownerId === metric.playerId,
-      ).length;
-      return owned / continent.territoryIds.length > 0.5;
-    }).length;
+    const mixableMajorities =
+      mixableMajoritiesByPlayer.get(metric.playerId) ?? 0;
     if (validationMode === 'random' && mixableMajorities >= 3)
       hardFailureReasons.push(
         `${name} controls an excessive share of multiple continents.`,
@@ -456,9 +504,11 @@ export function analyzeStartingPosition(
     const ownerId = continentOwners.values().next().value as string;
     const ownerName = names.get(ownerId) ?? ownerId;
     if (continent.territoryIds.length < 2) {
-      warnings.push(
-        `${continent.name} contains only one territory, so mixed starting ownership there is impossible; ${ownerName} begins with it.`,
-      );
+      if (includeWarnings) {
+        warnings.push(
+          `${continent.name} contains only one territory, so mixed starting ownership there is impossible; ${ownerName} begins with it.`,
+        );
+      }
     } else if (validationMode === 'random') {
       hardFailureReasons.push(
         `${ownerName} begins with all of ${continent.name}.`,
@@ -476,33 +526,35 @@ export function analyzeStartingPosition(
       'Every territory must begin with at least one army.',
     );
 
-  for (const metric of metrics) {
-    const name = names.get(metric.playerId) ?? metric.playerId;
-    if (metric.largestComponentRatio > 0.6)
-      warnings.push(
-        `${name} owns ${metric.largestComponentSize} of its ${metric.territoryCount} territories in one ownership region.`,
-      );
-    for (const continent of planet.continents) {
-      if (continent.territoryIds.length < 2) continue;
-      const owned = continent.territoryIds.filter(
-        (id) => territories[id]?.ownerId === metric.playerId,
-      ).length;
-      if (owned === continent.territoryIds.length - 1)
+  if (includeWarnings) {
+    for (const metric of metrics) {
+      const name = names.get(metric.playerId) ?? metric.playerId;
+      if (metric.largestComponentRatio > 0.6)
         warnings.push(
-          `${name} begins one territory away from controlling ${continent.name}.`,
+          `${name} owns ${metric.largestComponentSize} of its ${metric.territoryCount} territories in one ownership region.`,
+        );
+      for (const continent of planet.continents) {
+        if (continent.territoryIds.length < 2) continue;
+        const owned = continent.territoryIds.filter(
+          (id) => territories[id]?.ownerId === metric.playerId,
+        ).length;
+        if (owned === continent.territoryIds.length - 1)
+          warnings.push(
+            `${name} begins one territory away from controlling ${continent.name}.`,
+          );
+      }
+      if (metric.seaRouteEndpointCount < Math.max(0, meanSea - 1.5))
+        warnings.push(
+          `${name} has ${metric.seaRouteEndpointCount} sea-route endpoint${metric.seaRouteEndpointCount === 1 ? '' : 's'}; the table average is ${meanSea.toFixed(1)}.`,
+        );
+      if (
+        metric.isolatedTerritoryCount >
+        Math.max(1, Math.ceil(metric.territoryCount / 10))
+      )
+        warnings.push(
+          `${name} has ${metric.isolatedTerritoryCount} isolated territories.`,
         );
     }
-    if (metric.seaRouteEndpointCount < Math.max(0, meanSea - 1.5))
-      warnings.push(
-        `${name} has ${metric.seaRouteEndpointCount} sea-route endpoint${metric.seaRouteEndpointCount === 1 ? '' : 's'}; the table average is ${meanSea.toFixed(1)}.`,
-      );
-    if (
-      metric.isolatedTerritoryCount >
-      Math.max(1, Math.ceil(metric.territoryCount / 10))
-    )
-      warnings.push(
-        `${name} has ${metric.isolatedTerritoryCount} isolated territories.`,
-      );
   }
   return {
     overallScore,
@@ -520,6 +572,20 @@ export function analyzeStartingPosition(
     hardFailureReasons: [...new Set(hardFailureReasons)],
     players: metrics,
   };
+}
+
+export function analyzeStartingPosition(
+  planet: PlanetDefinition,
+  players: LocalPlayerConfig[],
+  territories: Record<string, StartingTerritoryState>,
+  validationMode: StartingPositionValidationMode = 'random',
+): StartingBalanceAnalysis {
+  return analyzeStartingPositionWithContext(
+    planet,
+    createStartingAnalysisContext(planet, players),
+    territories,
+    validationMode,
+  );
 }
 
 function distributedAssignments(
@@ -555,14 +621,11 @@ function improveAssignments(
   players: LocalPlayerConfig[],
   assignments: number[],
   seed: string,
+  context: StartingAnalysisContext,
 ): number[] {
   const random = createSeededRandom(`${seed}|local-improvement`);
-  let best = assignments.slice();
-  let bestAnalysis = analyzeStartingPosition(
-    planet,
-    players,
-    positionFromAssignments(planet, players, best),
-  );
+  const best = assignments.slice();
+  const territories = positionFromAssignments(planet, players, best);
   const merit = (analysis: StartingBalanceAnalysis) => {
     const isolated = analysis.players.reduce(
       (sum, item) => sum + item.isolatedTerritoryCount,
@@ -581,6 +644,15 @@ function improveAssignments(
       targetDistance * 5
     );
   };
+  let bestMerit = merit(
+    analyzeStartingPositionWithContext(
+      planet,
+      context,
+      territories,
+      'random',
+      false,
+    ),
+  );
   for (
     let step = 0;
     step < Math.max(240, planet.territoryCount * 10);
@@ -589,16 +661,29 @@ function improveAssignments(
     const left = random.integer(0, best.length - 1);
     const right = random.integer(0, best.length - 1);
     if (best[left] === best[right]) continue;
-    const proposal = best.slice();
-    [proposal[left], proposal[right]] = [proposal[right]!, proposal[left]!];
-    const analysis = analyzeStartingPosition(
+    [best[left], best[right]] = [best[right]!, best[left]!];
+    const leftTerritory = territories[planet.territories[left]!.id]!;
+    const rightTerritory = territories[planet.territories[right]!.id]!;
+    [leftTerritory.ownerId, rightTerritory.ownerId] = [
+      rightTerritory.ownerId,
+      leftTerritory.ownerId,
+    ];
+    const analysis = analyzeStartingPositionWithContext(
       planet,
-      players,
-      positionFromAssignments(planet, players, proposal),
+      context,
+      territories,
+      'random',
+      false,
     );
-    if (merit(analysis) > merit(bestAnalysis)) {
-      best = proposal;
-      bestAnalysis = analysis;
+    const proposalMerit = merit(analysis);
+    if (proposalMerit > bestMerit) {
+      bestMerit = proposalMerit;
+    } else {
+      [best[left], best[right]] = [best[right]!, best[left]!];
+      [leftTerritory.ownerId, rightTerritory.ownerId] = [
+        rightTerritory.ownerId,
+        leftTerritory.ownerId,
+      ];
     }
   }
   return best;
@@ -606,13 +691,11 @@ function improveAssignments(
 
 function createCandidate(
   planet: PlanetDefinition,
-  players: LocalPlayerConfig[],
   variant: number,
   candidateIndex: number,
+  context: StartingAnalysisContext,
 ): StartingPosition {
-  const orderedPlayers = players
-    .slice()
-    .sort((a, b) => a.seatIndex - b.seatIndex);
+  const orderedPlayers = context.orderedPlayers;
   const canonicalPlayerSlots = orderedPlayers
     .map((_, index) => `player-${String(index + 1).padStart(2, '0')}`)
     .join(',');
@@ -622,6 +705,7 @@ function createCandidate(
     orderedPlayers,
     distributedAssignments(planet, orderedPlayers.length, candidateSeed),
     candidateSeed,
+    context,
   );
   const territories = positionFromAssignments(
     planet,
@@ -646,7 +730,7 @@ function createCandidate(
     variant,
     candidateIndex,
     territories,
-    analysis: analyzeStartingPosition(planet, orderedPlayers, territories),
+    analysis: analyzeStartingPositionWithContext(planet, context, territories),
   };
 }
 
@@ -658,8 +742,9 @@ export function generateStartingPosition(
 ): StartingPosition {
   let best: StartingPosition | null = null;
   const failures = new Map<string, number>();
+  const context = createStartingAnalysisContext(planet, players);
   for (let index = 0; index < candidateCount; index += 1) {
-    const candidate = createCandidate(planet, players, variant, index);
+    const candidate = createCandidate(planet, variant, index, context);
     if (candidate.analysis.hardFailure) {
       candidate.analysis.hardFailureReasons.forEach((reason) =>
         failures.set(reason, (failures.get(reason) ?? 0) + 1),
