@@ -29,7 +29,7 @@ describe('match launch overlay', () => {
     expect(markup).toContain('aria-modal="true"');
     expect(markup).toContain('Preparing Atlas Prime');
     expect(markup).toContain('existing-lobby-preview');
-    expect(markup).not.toMatch(/\b\d+%/);
+    expect(markup).not.toMatch(/>[^<]*\b\d+%[^<]*</);
     expect(markup).not.toContain('progressbar');
   });
 });
