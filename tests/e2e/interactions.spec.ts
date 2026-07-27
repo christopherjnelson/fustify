@@ -746,6 +746,61 @@ test('territory navigator opens, focuses search, selects, focuses camera, and cl
   await expect(trigger).toBeFocused();
 });
 
+test('globe labels switch from continents to territories at close zoom', async ({
+  page,
+}) => {
+  await openScenario(page, 'reinforcement');
+  const state = await stateSnapshot(page);
+
+  const closeMode = await page.evaluate(
+    () =>
+      new Promise<{ mode: string; visibleLabelCount: number }>((resolve) => {
+        window.addEventListener(
+          'fustify:globe-label-mode',
+          (event) =>
+            resolve(
+              (
+                event as CustomEvent<{
+                  mode: string;
+                  visibleLabelCount: number;
+                }>
+              ).detail,
+            ),
+          { once: true },
+        );
+        window.__WORLDSEED_VISUAL__!.orientGlobe(0, 12, 3.8);
+      }),
+  );
+  expect(closeMode).toEqual({
+    mode: 'territories',
+    visibleLabelCount: state.planet.territories.length,
+  });
+
+  const distantMode = await page.evaluate(
+    () =>
+      new Promise<{ mode: string; visibleLabelCount: number }>((resolve) => {
+        window.addEventListener(
+          'fustify:globe-label-mode',
+          (event) =>
+            resolve(
+              (
+                event as CustomEvent<{
+                  mode: string;
+                  visibleLabelCount: number;
+                }>
+              ).detail,
+            ),
+          { once: true },
+        );
+        window.__WORLDSEED_VISUAL__!.orientGlobe(0, 12, 5.2);
+      }),
+  );
+  expect(distantMode).toEqual({
+    mode: 'continents',
+    visibleLabelCount: state.planet.continents.length,
+  });
+});
+
 test('keyboard shortcut opens and Escape closes the navigator', async ({
   page,
 }) => {
