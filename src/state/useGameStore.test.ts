@@ -43,6 +43,23 @@ describe('setup and match store integration', () => {
     ).toBe(true);
   });
 
+  it('replaces the current history entry when generating another world', async () => {
+    const replaceState = vi.fn();
+    const pushState = vi.fn();
+    vi.stubGlobal('window', {
+      location: {
+        pathname: '/local',
+        href: 'https://example.test/local?v=1&seed=first-world',
+      },
+      history: { pushState, replaceState },
+    });
+
+    await useGameStore.getState().generateWorld();
+
+    expect(replaceState).toHaveBeenCalledOnce();
+    expect(pushState).not.toHaveBeenCalled();
+  });
+
   it('generation clears ready ownership analysis and remains deterministic for an explicit seed', async () => {
     await beginRandomAssignment();
     useGameStore.getState().setSeedInput('explicit-preview-seed');

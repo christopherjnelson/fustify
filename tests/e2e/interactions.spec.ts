@@ -53,6 +53,23 @@ test('fresh local launch creates one readable URL-stable neutral world', async (
   ).toBeVisible();
 });
 
+test('generated worlds share one browser history entry', async ({ page }) => {
+  await page.goto('/');
+  await openScenario(page, 'world-setup');
+
+  const generatedSeeds = new Set<string>();
+  for (let count = 0; count < 4; count += 1) {
+    const previousSeed = await page.getByLabel('Planet seed').inputValue();
+    await page.getByRole('button', { name: 'Generate World' }).click();
+    await expect(page.getByLabel('Planet seed')).not.toHaveValue(previousSeed);
+    generatedSeeds.add(await page.getByLabel('Planet seed').inputValue());
+  }
+  expect(generatedSeeds.size).toBe(4);
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test('an explicit seed bypasses fresh-root randomization', async ({ page }) => {
   await page.goto('/?v=1&seed=amber-meridian&territories=18&continents=3');
   await expect(page.getByLabel('Planet seed')).toHaveValue('amber-meridian');

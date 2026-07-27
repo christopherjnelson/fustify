@@ -547,7 +547,8 @@ export const useGameStore = create<GameState>((set, get) => {
           ...get().setupDraft,
           seed: seedInput,
         });
-        if (typeof window !== 'undefined') writeSetupToLocation(setup);
+        if (typeof window !== 'undefined')
+          writeSetupToLocation(setup, 'replace');
         applyGeneratedSetup(
           setup,
           `New neutral world generated: ${setup.seed}.`,
