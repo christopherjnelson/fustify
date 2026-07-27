@@ -17,6 +17,19 @@ describe('generatePlanet', () => {
     expect(generatePlanet('repeatable')).toEqual(generatePlanet('repeatable'));
   });
 
+  it('uses unique fictional names instead of positional labels', () => {
+    const allNames = [
+      ...planet.continents.map((continent) => continent.name),
+      ...planet.territories.map((territory) => territory.name),
+    ];
+    expect(new Set(allNames.map((name) => name.toLowerCase())).size).toBe(
+      allNames.length,
+    );
+    expect(
+      planet.territories.every((territory) => !/\d/.test(territory.name)),
+    ).toBe(true);
+  });
+
   it('produces different centers for different seeds', () => {
     const first = generatePlanet('world-a').territories.map(
       (item) => item.center,

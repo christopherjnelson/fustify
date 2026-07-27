@@ -14,6 +14,14 @@ describe('multiplayer world fingerprint', () => {
     );
   });
 
+  it('treats generated names as cosmetic', () => {
+    const planet = generatePlanet('cosmetic-name-fingerprint');
+    const renamed = structuredClone(planet);
+    renamed.continents[0]!.name = 'Renamed Continent';
+    renamed.territories[0]!.name = 'Renamed Territory';
+    expect(worldFingerprint(renamed)).toBe(worldFingerprint(planet));
+  });
+
   it('changes when immutable setup changes', () => {
     expect(
       worldFingerprint(generatePlanet('shared-preview', { continentCount: 5 })),

@@ -60,32 +60,7 @@ import {
   type GeometryQualityAnalysis,
 } from './geometryQuality.ts';
 import type { IcosphereData } from '../geometry/icosphere.ts';
-
-const CONTINENT_NAMES = [
-  'Azure Reach',
-  'Ember Crown',
-  'Verdant Expanse',
-  'Golden March',
-  'Violet Rim',
-  'Teal Frontier',
-  'Rose Meridian',
-  'Moss Basin',
-] as const;
-
-const TERRITORY_PREFIXES = [
-  'Aster',
-  'Boreal',
-  'Cinder',
-  'Dawn',
-  'Echo',
-  'Frost',
-  'Gale',
-  'Haven',
-  'Ion',
-  'Jade',
-  'Kestrel',
-  'Lumen',
-] as const;
+import { generateGeographicNames } from './naming/generateGeographicNames.ts';
 
 function continentId(index: number): string {
   return `continent-${String(index + 1).padStart(2, '0')}`;
@@ -290,13 +265,17 @@ function generateNormalizedPlanet(
     territoryCount,
     selected.connections,
   );
+  const geographicNames = generateGeographicNames(
+    normalizedSeed,
+    continentCount,
+    selected.assignments,
+  );
   const territories: TerritoryDefinition[] =
     selected.layout.territoryCenters.map((center, index) => {
       const assignedContinent = selected.assignments[index]!;
-      const prefix = TERRITORY_PREFIXES[index % TERRITORY_PREFIXES.length];
       return {
         id: territoryId(index),
-        name: `${prefix} ${String(index + 1).padStart(2, '0')}`,
+        name: geographicNames.territoryNames[index]!,
         center,
         continentId: continentId(assignedContinent),
         displayColor: shadeColor(
@@ -338,9 +317,7 @@ function generateNormalizedPlanet(
     ].sort();
     return {
       id: continentId(index),
-      name:
-        CONTINENT_NAMES[index % CONTINENT_NAMES.length] ??
-        `Region ${index + 1}`,
+      name: geographicNames.continentNames[index]!,
       territoryIds: ids,
       bonus: calculateContinentBonus(
         ids.length,
@@ -533,14 +510,18 @@ export function generatePlanet(
   const detailRandom = createSeededRandom(
     `${normalizedSeed}|details|${CURRENT_GENERATOR_VERSION}`,
   );
+  const geographicNames = generateGeographicNames(
+    normalizedSeed,
+    continentCount,
+    assignments,
+  );
 
   const territories: TerritoryDefinition[] = layout.territoryCenters.map(
     (center, index) => {
       const assignedContinent = assignments[index]!;
-      const prefix = TERRITORY_PREFIXES[index % TERRITORY_PREFIXES.length];
       return {
         id: territoryId(index),
-        name: `${prefix} ${String(index + 1).padStart(2, '0')}`,
+        name: geographicNames.territoryNames[index]!,
         center,
         continentId: continentId(assignedContinent),
         displayColor: shadeColor(
@@ -585,9 +566,7 @@ export function generatePlanet(
     ].sort();
     return {
       id: continentId(index),
-      name:
-        CONTINENT_NAMES[index % CONTINENT_NAMES.length] ??
-        `Region ${index + 1}`,
+      name: geographicNames.continentNames[index]!,
       territoryIds: ids,
       bonus: calculateContinentBonus(
         ids.length,

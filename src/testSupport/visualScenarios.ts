@@ -529,9 +529,7 @@ export function applyScenario(scenario: VisualScenario) {
           overallScore: 36,
           rating: 'poor',
           hardFailure: true,
-          hardFailureReasons: [
-            'Crimson League begins with all of Golden March.',
-          ],
+          hardFailureReasons: ['Crimson League begins with all of Valoria.'],
         },
       },
     };

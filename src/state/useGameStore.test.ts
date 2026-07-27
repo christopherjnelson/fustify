@@ -629,6 +629,8 @@ describe('setup and match store integration', () => {
   it('blocks hard-invalid ready layouts with their specific reasons', async () => {
     const state = await beginRandomAssignment();
     if (state.matchSetup.setupPhase !== 'ready') return;
+    const continentName = state.planet.continents[0]!.name;
+    const failureReason = `Crimson League begins with all of ${continentName}.`;
     useGameStore.setState({
       applicationMode: 'pregame',
       matchSetup: {
@@ -638,18 +640,14 @@ describe('setup and match store integration', () => {
           analysis: {
             ...state.matchSetup.startingPosition.analysis,
             hardFailure: true,
-            hardFailureReasons: [
-              'Crimson League begins with all of Golden March.',
-            ],
+            hardFailureReasons: [failureReason],
           },
         },
       },
     });
     await useGameStore.getState().startMatch();
     expect(useGameStore.getState().applicationMode).toBe('pregame');
-    expect(useGameStore.getState().playerSetupErrors).toContain(
-      'Crimson League begins with all of Golden March.',
-    );
+    expect(useGameStore.getState().playerSetupErrors).toContain(failureReason);
   });
 
   it('requires confirmation only for Poor random layouts', async () => {

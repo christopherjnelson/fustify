@@ -211,17 +211,17 @@ for (const scenario of scenarios) {
       scenario.name === 'navigator'
         ? page.getByRole('dialog')
         : page.locator(scenario.region);
+    await page.screenshot({
+      path: reviewPath(testInfo, scenario.name),
+      fullPage: true,
+      animations: 'disabled',
+    });
     await expect(region).toHaveScreenshot(
       `${scenario.name}-ui.png`,
       scenario.name.startsWith('minimap-focus-')
         ? { maxDiffPixelRatio: 0 }
         : undefined,
     );
-    await page.screenshot({
-      path: reviewPath(testInfo, scenario.name),
-      fullPage: true,
-      animations: 'disabled',
-    });
   });
 }
 

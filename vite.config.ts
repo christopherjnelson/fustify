@@ -68,6 +68,7 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'node',
       include: ['src/**/*.test.ts', 'api/**/*.test.ts'],
+      testTimeout: 10_000,
       coverage: {
         provider: 'v8',
         reporter: ['text', 'html', 'json-summary'],

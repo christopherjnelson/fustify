@@ -35,6 +35,9 @@ Generation is deterministic for a seed, setup, and code version:
 9. Build the canonical `PlanetDefinition`, derive graph analysis, and validate
    it before the UI receives it. Apply the full published severe-quality
    criteria as a final safety gate.
+10. Assign each gameplay continent a deterministic phonetic family and dialect,
+    then generate its continent and territory display names through the
+    isolated `geographic-names|v1` stream.
 
 Validation requires unique territory and continent IDs; exact requested
 counts; one non-empty continent membership per territory; valid symmetrical
@@ -46,6 +49,33 @@ the same territory `continentId` values used by the globe.
 A structurally valid candidate that fails any severe diagnostic criterion
 throws before neutral preview. The error is exposed accessibly by the UI; no
 malformed or severe candidate is silently substituted.
+
+## Fictional geographic names
+
+Names are cosmetic deterministic output. Both supported geography profiles use
+the same naming module after continent membership is known, so naming consumes
+no terrain, partition, connection, color, or gameplay random stream. The
+multiplayer world fingerprint intentionally excludes names.
+
+The reviewed phonetic families are based on a checked-in snapshot of Natural
+Earth Admin 0 country names. Natural Earth publishes that source data in the
+public domain. Run `pnpm names:generate` after editing the snapshot to rebuild
+the normalized source-name keys used by the similarity filter.
+
+Each world shuffles the family catalog deterministically, gives every continent
+a distinct family, and generates all of that continent's territory names with
+the same dialect. Candidates must be unique within the world, 4–12 ASCII
+letters in title case, clear of the project denylist, and neither exact nor
+near edit-distance matches for source names. Failed candidates retry through a
+bounded deterministic stream.
+
+Repeat avoidance is statistical and keeps no browser or account history. Run
+`pnpm test:names` to evaluate 1,000 ten-game sequences at the standard
+42-territory, 5-continent setup; the audit permits repeats in fewer than 1% of
+those sequences. The ordinary unit suite retains a 10-sequence smoke window.
+A future algorithm or corpus change must increment
+`GEOGRAPHIC_NAMING_VERSION`; previously rebuilt worlds are not promised to
+retain cosmetic names across naming versions.
 
 ## Shape diagnostics
 

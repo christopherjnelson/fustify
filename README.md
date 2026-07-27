@@ -20,7 +20,7 @@ The current application provides:
 - Registered-account 2–5-player public or private rooms with a public game browser, immutable published settings, stored world previews, durable seats, direct public links, and private room codes
 - Trusted Node API match initialization plus authoritative reducer commands, ordered revisions/idempotency, deterministic server combat, Realtime recovery, reconnect, and shared victory
 - Persistent multiplayer Activity reactions and optional Discord announcements for newly published public rooms
-- A randomly named neutral world on fresh launch, before any player ownership exists
+- A randomly named neutral world with continent-cohesive fictional geography, before any player ownership exists
 - Subtle dotted canonical sea routes on the 3D globe while choosing a neutral world
 - Curated readable names that are also canonical deterministic world seeds
 - Random distributed assignment or a complete local round-robin territory draft
@@ -284,7 +284,14 @@ Missing parameters in an otherwise supported setup URL use defaults. Malformed c
 
 **Generate World** creates a new curated readable seed, updates the seed field and URL with `history.pushState`, rebuilds one neutral `PlanetDefinition`, updates the globe and minimap, and remains on world selection without calculating ownership or starting Turn 1. Type a custom seed and press Enter to apply that deterministic seed and the visible geography counts while staying in the same neutral preview. **Start Game** is the only opening action that accepts the displayed world and reveals player profiles and assignment. Browser back and forward navigation rebuilds the selected neutral world. Assignment results, player profiles, draft picks, saves, and active turns never enter the URL.
 
-Readable naming is independent of geography generation: a curated descriptor, curated landmark, and short numeric suffix become the canonical seed passed to the existing deterministic generator. Custom typed seeds remain supported. A future version could separate a display name from its canonical seed, but no second field or persistence concept exists today.
+Readable world-seed naming is independent of geography generation: a curated
+descriptor, curated landmark, and short numeric suffix become the canonical
+seed passed to the deterministic generator. Custom typed seeds remain
+supported. Territory and continent display names use a separate versioned
+seed stream and continent-specific phonetic families derived from a reviewed,
+public-domain place-name corpus. These display names remain cosmetic: they do
+not alter the canonical seed, topology, multiplayer fingerprint, or
+persistence shape.
 
 ## World setup, pregame, and match flow
 
@@ -400,7 +407,7 @@ The faceted icosphere also hints at the intended voxel/low-poly direction withou
 
 ### Deterministic generation
 
-Generation uses a small seeded PRNG (`xmur3` feeding `sfc32`) and never calls `Math.random()`. Named seed streams isolate terrain candidates, continent partitions, and cosmetic details. The seed, generator version, territory count, continent count, and requested land coverage fully determine the logical planet.
+Generation uses a small seeded PRNG (`xmur3` feeding `sfc32`) and never calls `Math.random()`. Named seed streams isolate terrain candidates, continent partitions, geographic names, and cosmetic details. The seed, generator version, territory count, continent count, and requested land coverage fully determine the logical planet.
 
 Generated definitions contain tuples, strings, numbers, `null`, and arrays only. Three.js objects remain entirely in the rendering layer.
 
