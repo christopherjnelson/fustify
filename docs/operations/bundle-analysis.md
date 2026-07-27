@@ -29,6 +29,7 @@ Budget definitions live in `src/build/bundleBudget.ts` and are unit tested in
 | Budget                                  |           Limit |
 | --------------------------------------- | --------------: |
 | `public-shell` initial JavaScript, gzip |   158,000 bytes |
+| `homepage-preview` loaded JS, gzip      |   470,000 bytes |
 | `auth-page` initial JavaScript, gzip    |   150,000 bytes |
 | `local-game` initial JavaScript, gzip   |   472,000 bytes |
 | `multiplayer-entry` initial JS, gzip    |   475,000 bytes |
@@ -39,6 +40,14 @@ The check uses Node's gzip implementation, whose byte count is slightly more
 conservative than Vite's displayed gzip estimate, and it depends on the Node
 version in use. CSS, fonts, images, source maps, and lazy chunks outside the
 selected route graph are not counted.
+
+`public-shell` remains the first-paint homepage graph and excludes the
+dynamically imported WebGL preview. `homepage-preview` measures the eventual
+homepage graph after opt-in, including the module worker that generates the
+42-territory, 5-continent world. Vite does not list module workers as normal
+manifest imports, so the checker explicitly discovers the emitted
+`homeWorld.worker-*` asset and includes it in both the preview budget and the
+largest-JavaScript check.
 
 ## Current baseline, route map, and rationale
 

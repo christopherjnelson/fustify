@@ -225,6 +225,31 @@ for (const scenario of scenarios) {
   });
 }
 
+test('visual review: homepage generated-globe preview', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/?visual-review=home');
+  const preview = page.locator('.home-world-preview');
+  if (testInfo.project.name === 'mobile-390') {
+    await preview.getByRole('button', { name: 'View Generated Globe' }).click();
+  }
+  await expect(preview.locator('.home-world-loaded')).toHaveAttribute(
+    'data-seed',
+    'visual-review-atlas',
+    { timeout: 15_000 },
+  );
+  await expect(preview.locator('.home-world-canvas')).toBeVisible();
+  await expect(preview).toHaveScreenshot('homepage-preview-ui.png', {
+    mask: [preview.locator('.home-world-canvas')],
+    maskColor: '#07101d',
+  });
+  await page.screenshot({
+    path: reviewPath(testInfo, 'homepage-preview'),
+    fullPage: true,
+    animations: 'disabled',
+  });
+});
+
 for (const fixture of ['populated', 'empty', 'create-dialog'] as const) {
   test(`visual review: multiplayer-browser-${fixture}`, async ({
     page,

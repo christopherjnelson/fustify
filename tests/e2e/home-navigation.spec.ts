@@ -116,20 +116,49 @@ test('home choices route through the account-required shell without loading game
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+  const preview = page.locator('.home-world-preview');
+  if (testInfo.project.name === 'mobile-390') {
+    await expect(
+      preview.getByRole('button', { name: 'View Generated Globe' }),
+    ).toBeVisible();
+    await expect(preview.locator('canvas')).toHaveCount(0);
+  } else {
+    await expect(preview.locator('canvas')).toBeVisible({ timeout: 15_000 });
+    await expect(preview.locator('.home-world-loaded')).toHaveAttribute(
+      'data-territories',
+      '42',
+    );
+    await expect(preview.locator('.home-world-loaded')).toHaveAttribute(
+      'data-continents',
+      '5',
+    );
+  }
   await capture(page, testInfo.project.name, 'homepage-signed-out');
-  expect(
-    await page.evaluate(() =>
-      performance
-        .getEntriesByType('resource')
-        .map((entry) => entry.name)
-        .filter(
-          (name) =>
-            name.includes('/app/App') ||
-            name.includes('MultiplayerApp') ||
-            name.includes('three'),
-        ),
-    ),
-  ).toEqual([]);
+  const loadedApplicationModules = await page.evaluate(() =>
+    performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .filter(
+        (name) =>
+          name.includes('/app/App') ||
+          name.includes('MultiplayerApp') ||
+          name.includes('useGameStore') ||
+          name.includes('gameReducer'),
+      ),
+  );
+  expect(loadedApplicationModules).toEqual([]);
+  if (testInfo.project.name === 'mobile-390') {
+    expect(
+      await page.evaluate(() =>
+        performance
+          .getEntriesByType('resource')
+          .map((entry) => entry.name)
+          .filter(
+            (name) => name.includes('three') || name.includes('generatePlanet'),
+          ),
+      ),
+    ).toEqual([]);
+  }
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(page.locator('[class*="hero-orbit"]')).toHaveCount(0);
@@ -138,6 +167,15 @@ test('home choices route through the account-required shell without loading game
   await expect(page.getByRole('link', { name: 'Fustify home' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Account' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(
+    page.getByRole('button', {
+      name:
+        testInfo.project.name === 'mobile-390'
+          ? 'View Generated Globe'
+          : 'Generate New World',
+    }),
+  ).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(
     page.getByRole('link', { name: 'Play Single Player' }),

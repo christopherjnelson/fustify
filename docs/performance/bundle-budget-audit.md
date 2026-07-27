@@ -1,5 +1,22 @@
 # Bundle budget audit
 
+## Deferred homepage-preview follow-up
+
+The homepage generated-globe preview adds a sixth measured graph without
+changing the meaning of the historical route audit below:
+
+- `public-shell` still measures first paint and must remain at or below
+  158,000 bytes gzip.
+- `homepage-preview` measures the shell after the dynamically imported renderer
+  and generation worker load, with a 470,000-byte gzip limit.
+- The preview reuses the same emitted Three.js/React Three Fiber surface and
+  overlay chunk as local and multiplayer gameplay. Its generation worker is
+  emitted separately and is explicitly included by the checker because Vite
+  does not expose workers as static manifest imports.
+- The implementation baseline measured 153,334 bytes gzip for `public-shell`
+  and 451,706 bytes gzip for `homepage-preview`, including the 40,581-byte gzip
+  worker.
+
 Audited commit: `73428e0a7d84140fb104918930bdb9118876e689`
 (`fix: simplify hero and contain account dialogs`), measured on branch
 `perf/bundle-budget-audit`.

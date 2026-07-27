@@ -9,7 +9,7 @@ authoritative multiplayer rooms for 2–5 human players.
 
 The current application provides:
 
-- A branded home page with separate local and online game entry points
+- A branded home page with separate local and online game entry points plus a progressively loaded generated-globe preview
 - Email/password and Discord accounts, profile names, password recovery, and safe return-to-game flows
 - A rotatable and zoomable 3D globe with desktop and touch-compatible orbit controls
 - A responsive equirectangular minimap derived from the same canonical globe geometry and ownership state, with focus-only territory navigation
@@ -49,7 +49,7 @@ The current application provides:
 
 | Route                         | Purpose                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------- |
-| `/`                           | Public home page and account controls                                      |
+| `/`                           | Public home page, generated-world preview, and account controls            |
 | `/local`                      | Local play against humans and/or deterministic heuristic bots              |
 | `/multiplayer`                | Registered-only public game browser and private-room creation/joining      |
 | `/multiplayer/room/:roomId`   | Multiplayer waiting room and seat selection                                |
@@ -142,14 +142,17 @@ ignored `.fustify/reports/bundle/` directory and never opens a browser. Run
 hash-independent budgets for the game route, admin route, largest JavaScript
 chunk, and forbidden test/Node module imports.
 
-The expected large application chunk is currently dominated by Three.js and
-React Three Fiber needed for the neutral globe on `/`; Vite's 500 kB warning is
-therefore understood and intentionally remains visible. `/admin` is a separate
-dynamic graph and does not load the globe. Source maps are not enabled in the
-current production configuration; if they are enabled later, report their size
-separately because map bytes are not shipped JavaScript. See the
-[bundle-analysis runbook](./docs/operations/bundle-analysis.md) for the measured
-baseline, budgets, route accounting, and investigation procedure.
+The expected large shared application chunk is currently dominated by Three.js
+and React Three Fiber. The public shell does not include it: the homepage globe
+loads progressively after first paint on desktop and only after an explicit
+action on mobile or data-saver connections. The same renderer code is reused by
+the game routes. Vite's 500 kB warning is therefore understood and
+intentionally remains visible. `/admin` is a separate dynamic graph and does
+not load the globe. Source maps are not enabled in the current production
+configuration; if they are enabled later, report their size separately because
+map bytes are not shipped JavaScript. See the [bundle-analysis
+runbook](./docs/operations/bundle-analysis.md) for the measured baseline,
+budgets, route accounting, and investigation procedure.
 
 ## Playwright visual inspection
 
