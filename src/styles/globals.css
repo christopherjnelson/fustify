@@ -1563,6 +1563,25 @@ html.game-route .protected-route-shell {
   box-shadow: 0 0 8px var(--setup-seat-color);
 }
 
+.setup-seat-color-marker.is-flashing {
+  animation: open-seat-marker-flash 1.4s ease-in-out infinite;
+}
+
+@keyframes open-seat-marker-flash {
+  0%,
+  100% {
+    opacity: 0.52;
+    box-shadow: 0 0 4px var(--setup-seat-color);
+  }
+
+  50% {
+    opacity: 1;
+    box-shadow:
+      0 0 10px var(--setup-seat-color),
+      0 0 16px color-mix(in srgb, var(--setup-seat-color) 72%, transparent);
+  }
+}
+
 .setup-seat-identity {
   grid-column: 3;
   min-width: 0;
@@ -8216,6 +8235,7 @@ html.multiplayer-match-route .branded-app-content {
   .match-dock,
   .turn-notification,
   .event-reaction-button,
+  .setup-seat-color-marker.is-flashing,
   .minimap-map[data-interactive='true'] .minimap-territories path,
   .public-game-skeleton .public-game-thumbnail,
   .public-game-skeleton i {

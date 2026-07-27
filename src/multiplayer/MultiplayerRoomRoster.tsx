@@ -55,6 +55,7 @@ export function MultiplayerRoomRoster({
             colorValue={seat.color.value}
             primaryLabel={seat.occupantName ?? 'Open'}
             secondaryStatus={claimed ? 'Claimed seat' : 'Available to claim'}
+            flashColorMarker={!claimed}
             badges={
               <>
                 {seat.isHost && <StatusBadge>Host</StatusBadge>}

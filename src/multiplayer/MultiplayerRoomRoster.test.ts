@@ -169,6 +169,9 @@ describe('multiplayer room roster presentation', () => {
     expect(markup).toContain('Available to claim');
     expect(markup).toContain('aria-label="Claim Seat 2"');
     expect(markup).toContain('aria-label="Release Seat 1"');
+    expect(markup.match(/setup-seat-color-marker is-flashing/g)).toHaveLength(
+      3,
+    );
     expect(unseatedMarkup).toContain('In room without a seat');
     expect(unseatedMarkup).toContain('Morgan');
     expect(unseatedMarkup).not.toContain('redwurm');

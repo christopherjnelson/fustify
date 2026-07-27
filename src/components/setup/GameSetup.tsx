@@ -111,6 +111,7 @@ export function SetupSeatRow({
   controls,
   primaryContent,
   colorContent,
+  flashColorMarker = false,
   testId,
 }: {
   seatNumber: number;
@@ -122,6 +123,7 @@ export function SetupSeatRow({
   controls?: ReactNode;
   primaryContent?: ReactNode;
   colorContent?: ReactNode;
+  flashColorMarker?: boolean;
   testId?: string;
 }) {
   return (
@@ -140,7 +142,10 @@ export function SetupSeatRow({
         className="setup-seat-color"
         aria-label={`${colorLabel} player color`}
       >
-        <span className="setup-seat-color-marker" aria-hidden="true" />
+        <span
+          className={`setup-seat-color-marker${flashColorMarker ? ' is-flashing' : ''}`}
+          aria-hidden="true"
+        />
         {colorContent ?? colorLabel}
       </span>
       {badges && <span className="setup-seat-badges">{badges}</span>}

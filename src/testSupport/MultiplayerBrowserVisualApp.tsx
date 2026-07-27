@@ -5,8 +5,11 @@ import {
   MultiplayerBrowser,
   type MultiplayerBrowserServices,
 } from '../multiplayer/MultiplayerBrowser';
+import { MultiplayerRoomRoster } from '../multiplayer/MultiplayerRoomRoster';
+import { buildMultiplayerRosterDisplay } from '../multiplayer/multiplayerRoomRosterViewModel';
 import type { PublicRoom, Room } from '../multiplayer/multiplayerApi';
 import { WaitingRoomExitDialog } from '../multiplayer/WaitingRoomExitDialog';
+import { GameSetupShell } from '../components/setup/GameSetup';
 
 const parameters = new URLSearchParams(window.location.search);
 const state = parameters.get('browser-state') ?? 'populated';
@@ -164,6 +167,39 @@ const services: MultiplayerBrowserServices = {
   navigate: (path) => fixtureEvents.navigations.push(path),
 };
 
+function SeatRosterVisualFixture() {
+  const [ownSeatIndex, setOwnSeatIndex] = useState<number | null>(null);
+  const members = [
+    {
+      user_id: profile.userId,
+      display_name: profile.displayName,
+      role: 'host' as const,
+    },
+  ];
+  const seats = Array.from({ length: 5 }, (_, seatIndex) => ({
+    seat_index: seatIndex,
+    occupant_user_id: seatIndex === ownSeatIndex ? profile.userId : null,
+    controller_type: 'human' as const,
+  }));
+
+  return (
+    <GameSetupShell
+      eyebrow="Multiplayer"
+      title="Multiplayer lobby"
+      roster={
+        <MultiplayerRoomRoster
+          roster={buildMultiplayerRosterDisplay(seats, members, profile.userId)}
+          busy={false}
+          waiting
+          ownSeatIndex={ownSeatIndex}
+          onClaim={setOwnSeatIndex}
+          onRelease={() => setOwnSeatIndex(null)}
+        />
+      }
+    />
+  );
+}
+
 export function MultiplayerBrowserVisualApp() {
   const parameters = new URLSearchParams(window.location.search);
   const exitDialog = parameters.get('exit-dialog');
@@ -193,11 +229,15 @@ export function MultiplayerBrowserVisualApp() {
         </aside>
       }
     >
-      <MultiplayerBrowser
-        profile={profile}
-        services={services}
-        notice={closureNotice}
-      />
+      {state === 'seat-roster' ? (
+        <SeatRosterVisualFixture />
+      ) : (
+        <MultiplayerBrowser
+          profile={profile}
+          services={services}
+          notice={closureNotice}
+        />
+      )}
       {dialogOpen && (
         <WaitingRoomExitDialog
           host={exitDialog === 'host'}

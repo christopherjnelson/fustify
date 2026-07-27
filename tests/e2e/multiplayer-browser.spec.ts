@@ -1,5 +1,35 @@
 import { expect, test } from '@playwright/test';
 
+test('open seat dots flash until claimed and respect reduced motion', async ({
+  page,
+}, testInfo) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/multiplayer?visual-review=1&browser-state=seat-roster');
+
+  const openMarkers = page.locator('.setup-seat-color-marker.is-flashing');
+  await expect(openMarkers).toHaveCount(5);
+  await expect(openMarkers.first()).toHaveCSS(
+    'animation-name',
+    'open-seat-marker-flash',
+  );
+
+  const seat1 = page.getByTestId('seat-0');
+  await seat1.getByRole('button', { name: 'Claim Seat 1' }).click();
+  await expect(seat1.locator('.setup-seat-color-marker')).toHaveCSS(
+    'animation-name',
+    'none',
+  );
+  await expect(openMarkers).toHaveCount(4);
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(openMarkers.first()).toHaveCSS('animation-name', 'none');
+
+  await page.screenshot({
+    path: `test-results/ui-review/${testInfo.project.name}/multiplayer-open-seat-pulse.png`,
+    fullPage: true,
+  });
+});
+
 test('waiting-room exit dialogs are specific, keyboard accessible, and mobile-safe', async ({
   page,
 }, testInfo) => {
