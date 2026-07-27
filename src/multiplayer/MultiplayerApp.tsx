@@ -59,6 +59,7 @@ import {
 } from './roomLobbyPresentation';
 import { generateRoomPreviewPlanet, withFreshRoomSeed } from './roomWorld';
 import { TurnNotificationController } from '../components/TurnNotificationController';
+import { ActionTrackingProvider } from '../components/ActionTracking';
 import {
   GameSetupShell,
   SetupSummary,
@@ -1052,25 +1053,27 @@ export function MultiplayerGameScene({
   }, [connection]);
 
   return (
-    <main
-      className="app-shell mode-playing multiplayer-game-shell"
-      data-testid="multiplayer-match"
-      data-match-id={matchId}
-      data-revision={revision}
-    >
-      <GlobeScene />
-      <Minimap />
-      <ControlLegend />
-      <TurnNotificationController />
-      <TerritoryHud
-        renderMultiplayerPostMatchActions={renderPostMatchActions}
-        activityReactions={activityReactions}
-      />
-      <div className="multiplayer-game-metadata" aria-hidden="true">
-        <span data-testid="match-id">{matchId}</span>
-        <span data-testid="match-revision">{revision}</span>
-      </div>
-    </main>
+    <ActionTrackingProvider>
+      <main
+        className="app-shell mode-playing multiplayer-game-shell"
+        data-testid="multiplayer-match"
+        data-match-id={matchId}
+        data-revision={revision}
+      >
+        <GlobeScene />
+        <Minimap />
+        <ControlLegend />
+        <TurnNotificationController />
+        <TerritoryHud
+          renderMultiplayerPostMatchActions={renderPostMatchActions}
+          activityReactions={activityReactions}
+        />
+        <div className="multiplayer-game-metadata" aria-hidden="true">
+          <span data-testid="match-id">{matchId}</span>
+          <span data-testid="match-revision">{revision}</span>
+        </div>
+      </main>
+    </ActionTrackingProvider>
   );
 }
 

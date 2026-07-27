@@ -1347,6 +1347,133 @@ test('Activity dock and saved resume controls are operable', async ({
   await expect(page.getByRole('dialog')).toContainText('Pass the device');
 });
 
+test('action beacons remain visible while Follow Action is opt-in and manually pausable', async ({
+  page,
+}) => {
+  await openScenario(page, 'action-follow');
+  const follow = page.getByRole('button', { name: 'Follow action' });
+  await expect(follow).toHaveAttribute('aria-pressed', 'false');
+
+  const initialSequence = (await stateSnapshot(page)).focusSequence;
+  const firstCue = await page.evaluate(() =>
+    window.__WORLDSEED_VISUAL__!.appendActionEventBatch(),
+  );
+  const minimapCue = page.getByTestId('minimap-action-cue');
+  await expect(minimapCue).toBeVisible();
+  await expect(minimapCue).toHaveAttribute(
+    'data-source-territory-id',
+    firstCue.sourceTerritoryId,
+  );
+  await expect(minimapCue).toHaveAttribute(
+    'data-target-territory-id',
+    firstCue.targetTerritoryId,
+  );
+  expect((await stateSnapshot(page)).focusSequence).toBe(initialSequence);
+
+  await follow.click();
+  const following = page.getByRole('button', { name: 'Following action' });
+  await expect(following).toHaveAttribute('aria-pressed', 'true');
+  const beforeAutomaticFocus = (await stateSnapshot(page)).focusSequence;
+  await page.evaluate(() =>
+    window.__WORLDSEED_VISUAL__!.appendActionEventBatch(),
+  );
+  await expect
+    .poll(async () => (await stateSnapshot(page)).focusSequence)
+    .toBe(beforeAutomaticFocus + 1);
+
+  await page.locator('canvas').dispatchEvent('pointerdown');
+  const resume = page.getByRole('button', { name: 'Resume follow' });
+  await expect(resume).toHaveAttribute('aria-pressed', 'false');
+  await expect
+    .poll(async () => (await stateSnapshot(page)).focusTargetTerritoryId)
+    .toBeNull();
+
+  const pausedSequence = (await stateSnapshot(page)).focusSequence;
+  await page.evaluate(() =>
+    window.__WORLDSEED_VISUAL__!.appendActionEventBatch(),
+  );
+  await expect(minimapCue).toBeVisible();
+  expect((await stateSnapshot(page)).focusSequence).toBe(pausedSequence);
+
+  await resume.click();
+  expect((await stateSnapshot(page)).focusSequence).toBe(pausedSequence);
+  await page.evaluate(() =>
+    window.__WORLDSEED_VISUAL__!.appendActionEventBatch(),
+  );
+  await expect
+    .poll(async () => (await stateSnapshot(page)).focusSequence)
+    .toBe(pausedSequence + 1);
+
+  const beforeManualFocus = (await stateSnapshot(page)).focusSequence;
+  await page
+    .getByRole('region', { name: 'Activity', exact: true })
+    .getByRole('button', { name: /^Focus / })
+    .last()
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Resume follow' }),
+  ).toBeVisible();
+  expect((await stateSnapshot(page)).focusSequence).toBe(beforeManualFocus + 1);
+
+  await page.getByRole('button', { name: 'Collapse Activity' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Resume follow' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Open Activity' }),
+  ).toBeVisible();
+
+  await page.evaluate(() =>
+    window.__WORLDSEED_VISUAL__!.changeActionTrackingMatch(),
+  );
+  await expect(
+    page.getByRole('button', { name: 'Follow action' }),
+  ).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('reduced motion uses a static action beacon and immediate follow focus', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScenario(page, 'action-follow');
+  await page.getByRole('button', { name: 'Follow action' }).click();
+  const action = await page.evaluate(() =>
+    window.__WORLDSEED_VISUAL__!.appendActionEventBatch(),
+  );
+  const cuePath = page
+    .getByTestId('minimap-action-cue')
+    .locator('.action-cue-target');
+  await expect(cuePath).toBeVisible();
+  expect(
+    await cuePath.evaluate((path) => getComputedStyle(path).animationName),
+  ).toBe('none');
+  await expect
+    .poll(async () => (await stateSnapshot(page)).focusTargetTerritoryId)
+    .toBe(action.targetTerritoryId);
+  await expect
+    .poll(async () => {
+      const state = await stateSnapshot(page);
+      const target = state.planet.territories.find(
+        (territory) => territory.id === action.targetTerritoryId,
+      )!;
+      const length = Math.hypot(...target.center);
+      const longitude =
+        (Math.atan2(target.center[2] / length, target.center[0] / length) *
+          180) /
+        Math.PI;
+      const latitude = (Math.asin(target.center[1] / length) * 180) / Math.PI;
+      const longitudeDistance = Math.min(
+        Math.abs(state.globeFocus.longitude - longitude),
+        360 - Math.abs(state.globeFocus.longitude - longitude),
+      );
+      return Math.hypot(
+        longitudeDistance,
+        state.globeFocus.latitude - latitude,
+      );
+    })
+    .toBeLessThan(0.2);
+});
+
 test('game-over dialog provides review and remaining local choices', async ({
   page,
 }) => {

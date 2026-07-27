@@ -16,6 +16,7 @@ import {
   reconcileActivityFeed,
   type ActivityFeedTracking,
 } from './activityFeedState';
+import { FollowActionButton } from './ActionTracking';
 
 const ACTIVITY_OPEN_KEY = 'fustify.activity-dock.open';
 const BOTTOM_TOLERANCE = 12;
@@ -133,14 +134,17 @@ export function MatchDock({
               <span className="eyebrow">Match feed</span>
               <h2 id="activity-title">Activity</h2>
             </div>
-            <button
-              type="button"
-              className="activity-collapse"
-              aria-label="Collapse Activity"
-              onClick={collapse}
-            >
-              <span aria-hidden="true">⌄</span>
-            </button>
+            <div className="activity-header-actions">
+              <FollowActionButton compact />
+              <button
+                type="button"
+                className="activity-collapse"
+                aria-label="Collapse Activity"
+                onClick={collapse}
+              >
+                <span aria-hidden="true">⌄</span>
+              </button>
+            </div>
           </header>
           {unreadCount > 0 && (
             <button
@@ -162,20 +166,23 @@ export function MatchDock({
           />
         </section>
       ) : (
-        <button
-          ref={launcherRef}
-          type="button"
-          className="activity-launcher"
-          aria-label={
-            unreadCount > 0 ? `Activity, ${unreadCount} new` : 'Open Activity'
-          }
-          onClick={expand}
-        >
-          <span>Activity</span>
-          {unreadCount > 0 && (
-            <strong aria-hidden="true">· {unreadCount} new</strong>
-          )}
-        </button>
+        <div className="activity-launcher-row">
+          <button
+            ref={launcherRef}
+            type="button"
+            className="activity-launcher"
+            aria-label={
+              unreadCount > 0 ? `Activity, ${unreadCount} new` : 'Open Activity'
+            }
+            onClick={expand}
+          >
+            <span>Activity</span>
+            {unreadCount > 0 && (
+              <strong aria-hidden="true">· {unreadCount} new</strong>
+            )}
+          </button>
+          <FollowActionButton compact />
+        </div>
       )}
     </div>
   );

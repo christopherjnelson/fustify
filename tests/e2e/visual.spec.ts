@@ -135,6 +135,11 @@ const scenarios: Array<{
   { name: 'navigator', region: '.hud', heading: /Crimson League/i },
   { name: 'event-log', region: '.activity-panel', heading: /Activity/i },
   {
+    name: 'action-follow',
+    region: '.activity-panel',
+    heading: /Activity/i,
+  },
+  {
     name: 'saved-resume',
     region: '.setup-panel',
     heading: /Local session available/i,
@@ -175,6 +180,18 @@ for (const scenario of scenarios) {
       await page.locator('.event-log ol').evaluate((element) => {
         element.scrollTop = element.scrollHeight;
       });
+    }
+    if (scenario.name === 'action-follow') {
+      await page.getByRole('button', { name: 'Follow action' }).click();
+      await page.evaluate(() =>
+        window.__WORLDSEED_VISUAL__!.appendActionEventBatch(),
+      );
+      await expect(page.getByTestId('minimap-action-cue')).toBeVisible();
+      await page.waitForTimeout(700);
+      await expect(page.locator('.minimap-panel')).toHaveScreenshot(
+        'action-follow-minimap-ui.png',
+        { animations: 'disabled' },
+      );
     }
     if (scenario.name === 'player-elimination') {
       await page.locator('.event-log ol').evaluate((element) => {

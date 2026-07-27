@@ -9,6 +9,7 @@ import { playerColorValue } from '../core/setup/playerConfig';
 import { minimapTerritoryStyles } from '../presentation/territoryVisuals';
 import { useGameStore } from '../state/useGameStore';
 import { MinimapContinentLabels } from './MinimapContinentLabels';
+import { useActionTracking } from './actionTrackingContext';
 
 function format(value: number) {
   return Number(value.toFixed(3));
@@ -84,9 +85,7 @@ export function Minimap() {
   const matchSetup = useGameStore((state) => state.matchSetup);
   const match = useGameStore((state) => state.match);
   const focus = useGameStore((state) => state.globeFocus);
-  const requestTerritoryFocus = useGameStore(
-    (state) => state.requestTerritoryFocus,
-  );
+  const { cue, requestManualFocus } = useActionTracking();
   const geometry = useMemo(() => getProjectedWorldGeometry(planet), [planet]);
   const styles = useMemo(
     () => minimapTerritoryStyles(planet, matchSetup, match),
@@ -205,7 +204,7 @@ export function Minimap() {
                 ownerId={style.ownerId}
                 fragmentCount={territory.fragments.length}
                 active={style.active}
-                onActivate={requestTerritoryFocus}
+                onActivate={requestManualFocus}
               />
             ) : (
               <path
@@ -222,6 +221,27 @@ export function Minimap() {
             );
           })}
         </g>
+        {cue && (
+          <g
+            className={`minimap-action-cue cue-${cue.kind}`}
+            data-testid="minimap-action-cue"
+            data-cue-sequence={cue.sequence}
+            data-source-territory-id={cue.sourceTerritoryId ?? ''}
+            data-target-territory-id={cue.targetTerritoryId}
+          >
+            {cue.sourceTerritoryId &&
+              cue.sourceTerritoryId !== cue.targetTerritoryId && (
+                <path
+                  className="action-cue-source"
+                  d={territoryPaths.get(cue.sourceTerritoryId)}
+                />
+              )}
+            <path
+              className="action-cue-target"
+              d={territoryPaths.get(cue.targetTerritoryId)}
+            />
+          </g>
+        )}
         <g className="minimap-routes">
           {geometry.routes.map((route) => (
             <path

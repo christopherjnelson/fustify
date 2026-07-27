@@ -1295,7 +1295,7 @@ export const useGameStore = create<GameState>((set, get) => {
     setViewMode: (viewMode) => set({ viewMode }),
     requestTerritoryFocus: (territoryId) =>
       set((state) =>
-        state.applicationMode !== 'playing' ||
+        !['playing', 'game-over'].includes(state.applicationMode) ||
         !state.planet.territories.some(
           (territory) => territory.id === territoryId,
         )

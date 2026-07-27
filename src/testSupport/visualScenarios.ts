@@ -23,6 +23,7 @@ import {
 } from '../core/setup/territoryAssignment';
 import type { WorldSetup } from '../core/setup/worldSetup';
 import { useGameStore } from '../state/useGameStore';
+import { angularDistanceDegrees } from '../presentation/actionTracking';
 
 export type VisualScenario =
   | 'world-setup'
@@ -67,6 +68,7 @@ export type VisualScenario =
   | 'navigator'
   | 'event-log'
   | 'activity-dock'
+  | 'action-follow'
   | 'saved-resume'
   | 'minimap-seam'
   | 'minimap-focus-east'
@@ -652,7 +654,11 @@ export function applyScenario(scenario: VisualScenario) {
       })),
     };
   }
-  if (scenario === 'event-log' || scenario === 'activity-dock') {
+  if (
+    scenario === 'event-log' ||
+    scenario === 'activity-dock' ||
+    scenario === 'action-follow'
+  ) {
     applicationMode = 'playing';
     scenarioMatch = withLongActivityHistory(match, planet);
   }
@@ -747,6 +753,11 @@ declare global {
       save: () => void;
       prepareAttack: (type: 'land-border' | 'sea-route') => void;
       appendActivityEvents: (count?: number) => void;
+      appendActionEventBatch: () => {
+        sourceTerritoryId: string;
+        targetTerritoryId: string;
+      };
+      changeActionTrackingMatch: () => void;
       reconcileActivityEvents: () => void;
       orientGlobe: (
         longitude: number,
@@ -848,6 +859,89 @@ window.__WORLDSEED_VISUAL__ = {
       );
     }
     useGameStore.setState({ match: { ...match, events } });
+  },
+  appendActionEventBatch: () => {
+    const store = useGameStore.getState();
+    const match = store.match!;
+    const target = store.planet.territories
+      .filter(
+        (territory) =>
+          match.territories[territory.id]!.ownerId !== match.activePlayerId &&
+          territory.adjacentTerritoryIds.some(
+            (neighborId) =>
+              match.territories[neighborId]!.ownerId === match.activePlayerId,
+          ),
+      )
+      .sort((left, right) => {
+        const leftDistance = angularDistanceDegrees(
+          store.globeFocus,
+          vectorToGeographicPoint(left.center),
+        );
+        const rightDistance = angularDistanceDegrees(
+          store.globeFocus,
+          vectorToGeographicPoint(right.center),
+        );
+        return Math.abs(leftDistance - 80) - Math.abs(rightDistance - 80);
+      })[0]!;
+    const sourceTerritoryId =
+      target.adjacentTerritoryIds.find(
+        (territoryId) =>
+          match.territories[territoryId]!.ownerId === match.activePlayerId,
+      ) ??
+      store.planet.territories.find((territory) => territory.id !== target.id)!
+        .id;
+    const events = [...match.events];
+    const append = (
+      type: MatchState['events'][number]['type'],
+      fields: Partial<MatchState['events'][number]>,
+    ) => {
+      events.push(
+        makeEvent(
+          { ...match, events },
+          type,
+          'Action tracking fixture.',
+          fields,
+        ),
+      );
+    };
+    append('combat', {
+      playerId: match.activePlayerId,
+      actingPlayerId: match.activePlayerId,
+      defenderPlayerId: match.territories[target.id]!.ownerId,
+      territoryId: target.id,
+      sourceTerritoryId,
+      targetTerritoryId: target.id,
+      primaryTerritoryId: target.id,
+      attackerLosses: 0,
+      defenderLosses: 1,
+    });
+    append('territory-captured', {
+      playerId: match.activePlayerId,
+      actingPlayerId: match.activePlayerId,
+      previousOwnerId: match.territories[target.id]!.ownerId,
+      territoryId: target.id,
+      sourceTerritoryId,
+      targetTerritoryId: target.id,
+      primaryTerritoryId: target.id,
+    });
+    append('player-eliminated', {
+      playerId: Object.keys(match.players).find(
+        (playerId) => playerId !== match.activePlayerId,
+      ),
+      actingPlayerId: match.activePlayerId,
+      eliminatedPlayerId: Object.keys(match.players).find(
+        (playerId) => playerId !== match.activePlayerId,
+      ),
+    });
+    useGameStore.setState({ match: { ...match, events } });
+    return { sourceTerritoryId, targetTerritoryId: target.id };
+  },
+  changeActionTrackingMatch: () => {
+    const match = useGameStore.getState().match;
+    if (!match) return;
+    useGameStore.setState({
+      match: { ...match, matchId: `${match.matchId}-next` },
+    });
   },
   reconcileActivityEvents: () => {
     const store = useGameStore.getState();

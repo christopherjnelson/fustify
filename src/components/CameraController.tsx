@@ -8,6 +8,7 @@ import {
   cameraDirectionToGlobeFocus,
   PLANET_ROTATION,
 } from '../presentation/globeOrientation';
+import { useActionTracking } from './actionTrackingContext';
 
 const PLANET_ROTATION_EULER = new THREE.Euler(...PLANET_ROTATION);
 
@@ -17,6 +18,7 @@ export function CameraController() {
   const destination = useRef(new THREE.Vector3(0, 0, 1));
   const focusing = useRef(false);
   const camera = useThree((state) => state.camera);
+  const gl = useThree((state) => state.gl);
   const planet = useGameStore((state) => state.planet);
   const focusTargetTerritoryId = useGameStore(
     (state) => state.focusTargetTerritoryId,
@@ -26,6 +28,13 @@ export function CameraController() {
     (state) => state.cancelTerritoryFocus,
   );
   const setGlobeFocus = useGameStore((state) => state.setGlobeFocus);
+  const { pauseFollowing } = useActionTracking();
+  const interruptManualControl = useCallback(() => {
+    pauseFollowing();
+    focusing.current = false;
+    cancelTerritoryFocus();
+    if (controls.current) controls.current.enabled = !visualReview;
+  }, [cancelTerritoryFocus, pauseFollowing, visualReview]);
   const publishFocus = useCallback(() => {
     setGlobeFocus(
       cameraDirectionToGlobeFocus(
@@ -37,6 +46,19 @@ export function CameraController() {
   useEffect(() => {
     publishFocus();
   }, [publishFocus]);
+
+  useEffect(() => {
+    const canvas = gl.domElement;
+    canvas.addEventListener('pointerdown', interruptManualControl, true);
+    canvas.addEventListener('wheel', interruptManualControl, {
+      capture: true,
+      passive: true,
+    });
+    return () => {
+      canvas.removeEventListener('pointerdown', interruptManualControl, true);
+      canvas.removeEventListener('wheel', interruptManualControl, true);
+    };
+  }, [gl, interruptManualControl]);
 
   useEffect(() => {
     if (!visualReview || !import.meta.env.DEV) return;
@@ -138,7 +160,7 @@ export function CameraController() {
       maxDistance={8}
       rotateSpeed={0.55}
       zoomSpeed={0.75}
-      onStart={cancelTerritoryFocus}
+      onStart={interruptManualControl}
       onChange={publishFocus}
     />
   );

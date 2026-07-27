@@ -123,6 +123,14 @@ uses explicit desired-state set/remove semantics and validates that the event
 belongs to the specified match; legacy events without canonical IDs remain
 visible but are not reactable.
 
+The client also derives presentation-only action beacons from newly appended
+canonical event IDs. Reinforcement, combat/capture, capture movement, and
+fortification briefly outline their affected territories on the globe and
+minimap. Players may opt into Follow Action for future events; direct globe,
+minimap, navigator, or Activity focus input pauses it until explicitly resumed.
+Following never changes the canonical snapshot, revision, Activity ordering,
+selection, or camera zoom, and restored history is not replayed.
+
 ## UI, Realtime, and recovery
 
 Only the active seat gets enabled gameplay actions. A pending submission locks

@@ -10,6 +10,7 @@ import { useGameStore } from '../state/useGameStore';
 import { useBotTurnRunner } from './useBotTurnRunner';
 import { BRAND } from '../branding';
 import { TurnNotificationController } from '../components/TurnNotificationController';
+import { ActionTrackingProvider } from '../components/ActionTracking';
 
 export function App() {
   useBotTurnRunner();
@@ -20,18 +21,20 @@ export function App() {
     return () => window.removeEventListener('popstate', loadSetupFromUrl);
   }, [loadSetupFromUrl]);
   return (
-    <main
-      className={`app-shell mode-${mode}`}
-      aria-label={`${BRAND.productName} — ${BRAND.shortDescription}`}
-    >
-      <GlobeScene />
-      <Minimap />
-      <ControlLegend />
-      <TurnNotificationController />
-      {mode === 'world-setup' && <WorldSetupPanel />}
-      {mode === 'pregame' && <PregamePanel />}
-      {(mode === 'playing' || mode === 'game-over') && <TerritoryHud />}
-      {mode === 'handoff' && <HandoffScreen />}
-    </main>
+    <ActionTrackingProvider>
+      <main
+        className={`app-shell mode-${mode}`}
+        aria-label={`${BRAND.productName} — ${BRAND.shortDescription}`}
+      >
+        <GlobeScene />
+        <Minimap />
+        <ControlLegend />
+        <TurnNotificationController />
+        {mode === 'world-setup' && <WorldSetupPanel />}
+        {mode === 'pregame' && <PregamePanel />}
+        {(mode === 'playing' || mode === 'game-over') && <TerritoryHud />}
+        {mode === 'handoff' && <HandoffScreen />}
+      </main>
+    </ActionTrackingProvider>
   );
 }

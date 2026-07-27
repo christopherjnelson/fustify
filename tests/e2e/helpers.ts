@@ -39,6 +39,7 @@ export type Scenario =
   | 'navigator'
   | 'event-log'
   | 'activity-dock'
+  | 'action-follow'
   | 'saved-resume'
   | 'minimap-seam'
   | 'minimap-focus-east'

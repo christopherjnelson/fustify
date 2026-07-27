@@ -3739,6 +3739,13 @@ button:disabled {
   font-size: 0.86rem;
 }
 
+.activity-header-actions,
+.activity-launcher-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
 .activity-collapse {
   display: grid;
   width: 30px;
@@ -3750,6 +3757,50 @@ button:disabled {
   background: rgba(35, 58, 78, 0.46);
   cursor: pointer;
   font-size: 1rem;
+}
+
+.follow-action-button {
+  display: inline-flex;
+  min-height: 30px;
+  padding: 5px 9px;
+  align-items: center;
+  gap: 5px;
+  color: #a9cce4;
+  border: 1px solid rgba(124, 190, 229, 0.22);
+  border-radius: 8px;
+  background: rgba(38, 102, 143, 0.22);
+  cursor: pointer;
+  font-size: 0.61rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.follow-action-button[data-follow-state='following'] {
+  color: #dfff4f;
+  border-color: rgba(216, 255, 48, 0.4);
+  background: rgba(92, 117, 13, 0.34);
+}
+
+.follow-action-button[data-follow-state='paused'] {
+  color: #ffd291;
+  border-color: rgba(255, 182, 85, 0.36);
+  background: rgba(118, 70, 18, 0.32);
+}
+
+.follow-action-button > span {
+  font-size: 0.8rem;
+}
+
+.follow-action-button.compact {
+  min-height: 30px;
+}
+
+.activity-launcher-row {
+  pointer-events: none;
+}
+
+.activity-launcher-row > * {
+  pointer-events: auto;
 }
 
 .activity-launcher {
@@ -4406,8 +4457,48 @@ button[aria-busy='true']::before {
 
 .minimap-routes,
 .minimap-focus,
+.minimap-action-cue,
 .minimap-continent-labels {
   pointer-events: none;
+}
+
+.minimap-action-cue path {
+  fill: none;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+  animation: minimap-action-beacon 900ms ease-in-out 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.minimap-action-cue .action-cue-source {
+  stroke: #fff3a1;
+}
+
+.minimap-action-cue .action-cue-target {
+  stroke: #ff8c66;
+}
+
+.minimap-action-cue.cue-reinforcement .action-cue-target {
+  stroke: #c8f2ff;
+}
+
+@keyframes minimap-action-beacon {
+  0%,
+  100% {
+    stroke-width: 2.5;
+    filter: drop-shadow(0 0 1px currentColor);
+  }
+
+  50% {
+    stroke-width: 4.2;
+    filter: drop-shadow(0 0 4px currentColor);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .minimap-action-cue path {
+    animation: none;
+  }
 }
 
 .minimap-continent-labels text {
@@ -7210,6 +7301,7 @@ html.multiplayer-match-route .branded-app-content {
 
 .activity-collapse,
 .activity-launcher,
+.follow-action-button,
 .event-focus-button,
 .event-reaction-picker,
 .game-menu > div,

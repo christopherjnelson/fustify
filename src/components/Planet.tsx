@@ -23,6 +23,7 @@ import { GlobeLabels } from './GlobeLabels';
 import { GraphDebugOverlay } from './GraphDebugOverlay';
 import { SeaRouteOverlay } from './SeaRouteOverlay';
 import { TerritoryOverlay } from './TerritoryOverlay';
+import { ActionBeaconOverlay } from './ActionBeaconOverlay';
 
 interface PlanetProps {
   planet: PlanetDefinition;
@@ -329,13 +330,16 @@ export function Planet({ planet }: PlanetProps) {
       />
       <GlobeLabels planet={planet} />
       {gameplayActive && match && (
-        <ArmyMarkers
-          planet={planet}
-          match={match}
-          validSourceIds={legal.sources}
-          validTargetIds={legal.targets}
-          seaTargetIds={legal.seaTargets}
-        />
+        <>
+          <ArmyMarkers
+            planet={planet}
+            match={match}
+            validSourceIds={legal.sources}
+            validTargetIds={legal.targets}
+            seaTargetIds={legal.seaTargets}
+          />
+          <ActionBeaconOverlay planet={planet} />
+        </>
       )}
       <GraphDebugOverlay planet={planet} visible={debugView} />
       <mesh scale={1.045}>

@@ -42,6 +42,7 @@ import {
   isBotPlaybackControlVisible,
 } from '../browser/botPacingVisibility';
 import { BotPacingSelector } from './BotPacingSelector';
+import { useActionTracking } from './actionTrackingContext';
 
 const PHASE_LABELS = {
   reinforce: 'Reinforce',
@@ -377,9 +378,7 @@ export function TerritoryHud({
   const saveError = useGameStore((state) => state.saveError);
   const setViewMode = useGameStore((state) => state.setViewMode);
   const focusSelected = useGameStore((state) => state.focusSelectedTerritory);
-  const requestTerritoryFocus = useGameStore(
-    (state) => state.requestTerritoryFocus,
-  );
+  const { pauseFollowing, requestManualFocus } = useActionTracking();
   const [attackDice, setAttackDice] = useState(1);
   const [reinforcementAmount, setReinforcementAmount] = useState({
     turnKey: '',
@@ -944,7 +943,10 @@ export function TerritoryHud({
                 <button
                   type="button"
                   className="focus-button"
-                  onClick={focusSelected}
+                  onClick={() => {
+                    pauseFollowing();
+                    focusSelected();
+                  }}
                 >
                   Focus
                 </button>
@@ -1164,7 +1166,7 @@ export function TerritoryHud({
           events={match.events}
           planet={planet}
           players={configuredPlayers}
-          onFocusTerritory={requestTerritoryFocus}
+          onFocusTerritory={requestManualFocus}
           reactions={activityReactions}
         />
       </div>

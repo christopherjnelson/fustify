@@ -14,6 +14,7 @@ import {
 import { useGameStore } from '../state/useGameStore';
 import { CLOSE_DIALOG_SHORTCUT } from '../core/input/controlBindings';
 import { multiplayerInteractionCapabilities } from '../multiplayer/interactionCapabilities';
+import { useActionTracking } from './actionTrackingContext';
 
 const STATUS_LABELS = {
   'valid-source': 'Valid source',
@@ -43,6 +44,7 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
   const selectAndFocus = useGameStore((state) => state.selectAndFocusTerritory);
   const multiplayerSession = useGameStore((state) => state.multiplayerSession);
   const botPlaybackPaused = useGameStore((state) => state.botPlaybackPaused);
+  const { pauseFollowing } = useActionTracking();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
@@ -223,6 +225,7 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
                 <button
                   type="button"
                   onClick={() => {
+                    pauseFollowing();
                     selectAndFocus(item.id);
                     setSelectionAnnouncement(
                       `${item.name} selected. Globe focus requested.`,
