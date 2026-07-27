@@ -225,6 +225,26 @@ for (const scenario of scenarios) {
   });
 }
 
+test('visual review: close-zoom territory labels', async ({
+  page,
+}, testInfo) => {
+  await openScenario(page, 'reinforcement');
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        window.addEventListener('fustify:globe-label-mode', () => resolve(), {
+          once: true,
+        });
+        window.__WORLDSEED_VISUAL__!.orientGlobe(0, 12, 4.2);
+      }),
+  );
+  await page.screenshot({
+    path: reviewPath(testInfo, 'territory-labels-close-zoom'),
+    fullPage: true,
+    animations: 'disabled',
+  });
+});
+
 test('visual review: homepage generated-globe preview', async ({
   page,
 }, testInfo) => {

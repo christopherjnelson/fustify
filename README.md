@@ -36,6 +36,7 @@ The current application provides:
 - Versioned setup URLs that reproduce the seed, territory count, continent count, player count, and assignment strategy
 - A searchable, keyboard-operable territory navigator with owner, armies, continent, legal status, and sea-route cues
 - Ownership and continent player views, plus development/debug terrain presentation, that do not affect rules state
+- Zoom-dependent globe labels that switch from continent names to territory names, with territory names offset above army counts
 - Camera-facing marker hiding and silhouette fading so back-side markers do not detach from the globe
 - Non-playable visible oceans, emphasized coastlines, land borders, hover feedback, and persistent land selection
 - Geographic land-border connections plus a minimal sea-route tree and 0–3 deterministic redundancy routes
