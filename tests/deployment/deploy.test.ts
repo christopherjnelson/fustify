@@ -109,6 +109,9 @@ printf 'git %s\\n' "$*" >>"\${FAKE_COMMAND_LOG}"
 case "\${1:-} \${2:-}" in
   "rev-parse HEAD") printf '%s\\n' "\${FAKE_COMMIT}" ;;
   "log -1") printf '%s\\n' "Test deployment summary" ;;
+  "log --max-count=20")
+    printf '%s\\n' "- \`aaaaaaaaaaaa\` Newly deployed change"
+    ;;
   *) exit 0 ;;
 esac
 `,
@@ -170,7 +173,8 @@ fi
   await writeExecutable(
     join(fakeBin, 'notify'),
     `#!/usr/bin/env bash
-printf '%s|%s|%s|%s\\n' "\${1:-}" "\${2:-}" "\${3:-}" "\${4:-}" \
+printf '%s|%s|%s|%s|%s|%s\\n' \
+  "\${1:-}" "\${2:-}" "\${3:-}" "\${4:-}" "\${5:-}" "\${6:-}" \
   >>"\${FAKE_NOTIFICATION_LOG}"
 if [[ "\${FAKE_NOTIFY_FAILURE:-0}" == 1 && "\${1:-}" == success ]]; then
   exit 1
@@ -318,9 +322,15 @@ describe('combined droplet deployment', () => {
     expect(commands).toContain('pnpm test:integration:dev-proxy');
     expect(commands).toContain('pnpm build:release');
     expect(commands).toContain('pnpm bundle:check');
+    expect(commands).toContain(
+      `git log --max-count=20 --pretty=- \`%h\` %s ${previousCommit}..${deployedCommit}`,
+    );
     expect(await readFile(harness.notificationLog, 'utf8')).toContain(
       'success|',
     );
+    const notifications = await readFile(harness.notificationLog, 'utf8');
+    expect(notifications).toContain('changelog|');
+    expect(notifications).toContain('Newly deployed change');
   });
 
   it('strictly rejects a newly activated release with mismatched public metadata', async () => {
@@ -472,6 +482,105 @@ describe('combined droplet deployment', () => {
     await expect(lstat(harness.previousRelease)).resolves.toBeDefined();
     const releaseNames = await readdir(harness.releasesRoot);
     expect(releaseNames).toHaveLength(5);
+  });
+
+  it('honors FUSTIFY_KEEP_RELEASES for the retention count', async () => {
+    const harness = await createHarness();
+    for (let index = 1; index <= 4; index += 1) {
+      await writeCombinedRelease(
+        join(
+          harness.releasesRoot,
+          `2026070${index}T120000Z-${String(index).repeat(12)}`,
+        ),
+        String(index).repeat(40),
+      );
+    }
+
+    const result = runDeployment(harness, { FUSTIFY_KEEP_RELEASES: '2' });
+
+    expect(result.status, result.stderr).toBe(0);
+    const releaseNames = await readdir(harness.releasesRoot);
+    expect(releaseNames).toHaveLength(2);
+    await expect(lstat(harness.previousRelease)).resolves.toBeDefined();
+  });
+
+  it('unlocks and prunes only immutable stale releases', async () => {
+    const harness = await createHarness();
+    const protectedMode = (await lstat(harness.previousRelease)).mode & 0o777;
+    for (let index = 1; index <= 6; index += 1) {
+      const candidate = join(
+        harness.releasesRoot,
+        `2026070${index}T120000Z-${String(index).repeat(12)}`,
+      );
+      await writeCombinedRelease(candidate, String(index).repeat(40));
+      if (index === 1) {
+        await chmod(join(candidate, 'web/index.html'), 0o444);
+        await chmod(join(candidate, 'web'), 0o555);
+        await chmod(candidate, 0o555);
+      }
+    }
+
+    const result = runDeployment(harness);
+
+    expect(result.status, result.stderr).toBe(0);
+    await expect(
+      lstat(join(harness.releasesRoot, '20260701T120000Z-111111111111')),
+    ).rejects.toThrow();
+    expect((await lstat(harness.previousRelease)).mode & 0o777).toBe(
+      protectedMode,
+    );
+    const active = await readlink(harness.currentLink);
+    expect((await lstat(active)).mode & 0o777).toBe(0o755);
+  });
+
+  it('rejects a release-name symlink escape without rollback after verification', async () => {
+    const harness = await createHarness();
+    const outside = join(harness.root, 'outside');
+    await mkdir(outside);
+    await writeFile(join(outside, 'sentinel'), 'preserve\n');
+    await symlink(
+      outside,
+      join(harness.releasesRoot, '20260701T120000Z-111111111111'),
+    );
+
+    const result = runDeployment(harness);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('post-deployment release cleanup failed');
+    expect(result.stderr).toContain('deployed with cleanup failure');
+    expect(await readlink(harness.currentLink)).not.toBe(
+      harness.previousRelease,
+    );
+    expect(await readFile(join(outside, 'sentinel'), 'utf8')).toBe(
+      'preserve\n',
+    );
+    const notifications = await readFile(harness.notificationLog, 'utf8');
+    expect(notifications).toContain('changelog|');
+    expect(notifications).toContain(
+      'cleanup-failure|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|post-deployment cleanup|not required',
+    );
+    expect(notifications).not.toContain('|succeeded|');
+  });
+
+  it('does not send a changelog for a failed and rolled-back deployment', async () => {
+    const harness = await createHarness('health-failure');
+    const result = runDeployment(harness);
+
+    expect(result.status).not.toBe(0);
+    const notifications = await readFile(harness.notificationLog, 'utf8');
+    expect(notifications).toContain('failure|');
+    expect(notifications).not.toContain('changelog|');
+  });
+
+  it('does not manufacture a changelog for a same-commit deployment', async () => {
+    const harness = await createHarness();
+    await writeCombinedRelease(harness.previousRelease, deployedCommit);
+    const result = runDeployment(harness);
+
+    expect(result.status, result.stderr).toBe(0);
+    const notifications = await readFile(harness.notificationLog, 'utf8');
+    expect(notifications).not.toContain('changelog|');
+    expect(notifications).toContain('success|');
   });
 
   it('allows a same-commit redeploy and rebuilds the Vite artifacts', async () => {

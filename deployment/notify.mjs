@@ -23,8 +23,12 @@ function parseEnvironment(contents) {
 }
 
 const [event, commit, stage, rollback, checks, summary] = process.argv.slice(2);
-if (!['success', 'failure'].includes(event ?? '')) {
-  console.error('Notification event must be success or failure.');
+if (
+  !['success', 'failure', 'cleanup-failure', 'changelog'].includes(event ?? '')
+) {
+  console.error(
+    'Notification event must be success, failure, cleanup-failure, or changelog.',
+  );
   process.exit(1);
 }
 
@@ -51,31 +55,48 @@ try {
     process.exit(1);
   }
 }
+const webhookVariable =
+  event === 'changelog'
+    ? 'DISCORD_CHANGELOG_WEBHOOK_URL'
+    : 'DISCORD_ADMIN_WEBHOOK_URL';
 const webhookUrl =
-  process.env.DISCORD_CHANGELOG_WEBHOOK_URL ??
-  fileEnvironment.DISCORD_CHANGELOG_WEBHOOK_URL;
+  process.env[webhookVariable] ?? fileEnvironment[webhookVariable];
 if (!webhookUrl) {
   console.error(
-    'Discord deployment notification is not configured; set DISCORD_CHANGELOG_WEBHOOK_URL.',
+    `Discord notification is not configured; set ${webhookVariable}.`,
   );
   process.exit(1);
 }
 
 const shortCommit = (commit ?? 'unknown').slice(0, 12);
 const content =
-  event === 'success'
+  event === 'changelog'
     ? [
-        '## Fustify deployment succeeded',
-        summary || 'Fustify was updated.',
-        `Commit: \`${shortCommit}\``,
-        `Verified: ${checks || 'local and public deployment checks'}`,
+        '## Fustify release changelog',
+        `Deployed commit: \`${shortCommit}\``,
+        summary || 'No new commits.',
       ].join('\n')
-    : [
-        '## Fustify deployment failed',
-        `Commit: \`${shortCommit}\``,
-        `Failed stage: ${stage || 'unknown'}`,
-        `Rollback: ${rollback || 'not required'}`,
-      ].join('\n');
+    : event === 'success'
+      ? [
+          '## Fustify deployment succeeded',
+          summary || 'Fustify was updated.',
+          `Commit: \`${shortCommit}\``,
+          `Verified: ${checks || 'local and public deployment checks'}`,
+        ].join('\n')
+      : event === 'cleanup-failure'
+        ? [
+            '## Fustify deployed with cleanup failure',
+            `Commit: \`${shortCommit}\``,
+            summary ||
+              'The verified release is live, but post-deployment cleanup failed.',
+          ].join('\n')
+        : [
+            '## Fustify deployment failed',
+            `Commit: \`${shortCommit}\``,
+            `Failed stage: ${stage || 'unknown'}`,
+            `Rollback: ${rollback || 'not required'}`,
+          ].join('\n');
+const conciseContent = content.slice(0, 1900);
 
 let response;
 try {
@@ -84,7 +105,7 @@ try {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       username: 'Fustify Deployments',
-      content,
+      content: conciseContent,
       allowed_mentions: { parse: [] },
     }),
   });

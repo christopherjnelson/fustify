@@ -17,7 +17,7 @@ health_url="${FUSTIFY_API_HEALTH_URL:-http://127.0.0.1:8787/api/health}"
 service_name="${FUSTIFY_API_SERVICE:-fustify-api.service}"
 health_attempts="${FUSTIFY_HEALTH_ATTEMPTS:-20}"
 health_delay="${FUSTIFY_HEALTH_DELAY_SECONDS:-1}"
-retention="${FUSTIFY_RELEASE_RETENTION:-5}"
+retention="${FUSTIFY_KEEP_RELEASES:-${FUSTIFY_RELEASE_RETENTION:-5}}"
 notify_command="${FUSTIFY_NOTIFY_COMMAND:-}"
 checks_ran=""
 current_stage="initialization"
@@ -32,6 +32,7 @@ rollback_required=0
 failure_handled=0
 staging_created=0
 next_link_created=0
+cleanup_failure=0
 
 validate_integer_range() {
   local label="$1"
@@ -60,6 +61,11 @@ validate_release_directory() {
   fi
   if ! fustify_direct_child_path "${releases_root}" "${candidate}"; then
     fustify_error "Release is not a direct child of ${releases_root}: ${candidate}"
+    return 1
+  fi
+  if [[ -L "${candidate}" || ! -d "${candidate}" ||
+    "$(realpath -e "${candidate}")" != "${candidate}" ]]; then
+    fustify_error "Release candidate must be a real canonical directory: ${candidate}"
     return 1
   fi
 }
@@ -170,6 +176,58 @@ send_notification() {
   fi
 }
 
+send_changelog() {
+  local changelog="$1"
+  if [[ -z "${previous_commit}" || "${previous_commit}" == "${commit}" ||
+    -z "${changelog}" ]]; then
+    return 0
+  fi
+  if [[ -n "${notify_command}" ]]; then
+    "${notify_command}" changelog "${commit}" "" "" "" "${changelog}"
+  else
+    /usr/local/bin/node "${script_dir}/notify.mjs" changelog "${commit}" \
+      "" "" "" "${changelog}"
+  fi
+}
+
+prune_releases() {
+  local active_release
+  local candidate
+  local release_name
+  local retained=0
+  local -a release_candidates
+
+  mapfile -t release_candidates < <(
+    find -P "${releases_root}" -mindepth 1 -maxdepth 1 -printf '%f\n' |
+      sort -r
+  )
+  active_release="$(readlink -f "${current_link}")" || return 1
+  for release_name in "${release_candidates[@]}"; do
+    candidate="${releases_root}/${release_name}"
+    if [[ ! "${release_name}" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}(-[0-9]+)?$ ]]; then
+      continue
+    fi
+    validate_release_directory "${candidate}" || return 1
+    if ((retained < retention)) ||
+      [[ "${candidate}" == "${active_release}" || "${candidate}" == "${previous_release}" ]]; then
+      retained=$((retained + 1))
+      continue
+    fi
+
+    # Re-resolve every selected candidate immediately before changing it.
+    validate_release_directory "${candidate}" || return 1
+    active_release="$(readlink -f "${current_link}")" || return 1
+    if [[ "${candidate}" == "${active_release}" ||
+      "${candidate}" == "${previous_release}" ]]; then
+      fustify_error "Refusing to prune a protected release: ${candidate}"
+      return 1
+    fi
+    find -P "${candidate}" -type d -exec chmod u+rwx {} + || return 1
+    find -P "${candidate}" -type f -exec chmod u+rw {} + || return 1
+    rm -rf -- "${candidate}" || return 1
+  done
+}
+
 rollback() {
   local rollback_link
   if [[ -z "${previous_release}" ]]; then
@@ -263,7 +321,7 @@ if [[ "${current_link}" != "${release_root}/current" ]]; then
 fi
 validate_integer_range "FUSTIFY_HEALTH_ATTEMPTS" "${health_attempts}" 1 60
 validate_integer_range "FUSTIFY_HEALTH_DELAY_SECONDS" "${health_delay}" 0 10
-validate_integer_range "FUSTIFY_RELEASE_RETENTION" "${retention}" 2 100
+validate_integer_range "FUSTIFY_KEEP_RELEASES" "${retention}" 2 100
 if [[ ! "${public_origin}" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]]; then
   fail_deployment "FUSTIFY_PUBLIC_ORIGIN must be an HTTPS origin without a path."
 fi
@@ -397,32 +455,37 @@ verify_public_release "${commit}"
 checks_ran="${checks_ran}, public API/routes/sensitive paths/commit"
 rollback_required=0
 
-current_stage="release retention"
-mapfile -t release_candidates < <(
-  find -P "${releases_root}" -mindepth 1 -maxdepth 1 -type d \
-    -printf '%f\n' |
-    sort -r
-)
-retained=0
-active_release="$(readlink -f "${current_link}")"
-for release_name in "${release_candidates[@]}"; do
-  candidate="${releases_root}/${release_name}"
-  if [[ ! "${release_name}" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}(-[0-9]+)?$ ]]; then
-    continue
+current_stage="post-deployment release cleanup"
+if ! prune_releases; then
+  cleanup_failure=1
+  fustify_error "Deployment is live, but post-deployment release cleanup failed."
+fi
+
+changelog="$(
+  if [[ -n "${previous_commit}" && "${previous_commit}" != "${commit}" ]]; then
+    git log --max-count=20 --pretty='- `%h` %s' \
+      "${previous_commit}..${commit}"
   fi
-  validate_release_directory "${candidate}"
-  if ((retained < retention)) ||
-    [[ "${candidate}" == "${active_release}" || "${candidate}" == "${previous_release}" ]]; then
-    retained=$((retained + 1))
-    continue
-  fi
-  rm -rf -- "${candidate}"
-done
+)"
+if ! send_changelog "${changelog}"; then
+  fustify_error "Deployment is live, but the release changelog could not be sent."
+fi
 
 current_stage="success notification"
 deployment_summary="$(git log -1 --pretty=%s)"
-if ! send_notification success "${current_stage}" "not required" "${deployment_summary}"; then
-  fustify_error "Deployment is healthy, but the success notification could not be sent."
+if ((cleanup_failure)); then
+  if ! send_notification cleanup-failure "post-deployment cleanup" "not required" \
+    "Deployment is live, but release retention cleanup failed."; then
+    fustify_error "Cleanup-failure notification could not be sent."
+  fi
+else
+  if ! send_notification success "${current_stage}" "not required" "${deployment_summary}"; then
+    fustify_error "Deployment is healthy, but the success notification could not be sent."
+  fi
 fi
 
 printf 'Released Fustify %s to %s\n' "${commit}" "${release_path}"
+if ((cleanup_failure)); then
+  printf 'Fustify was deployed with cleanup failure.\n' >&2
+  exit 1
+fi

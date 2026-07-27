@@ -80,15 +80,20 @@ missing or invalid frontend file from the corresponding public server values
 inside a restrictive-umask subshell. It never overwrites an already valid
 frontend file.
 
-Administrative deployment notifications use the existing changelog variable:
+Deployment notifications use two deliberately separate Discord webhooks:
 
 `/home/chris/.config/fustify/deploy.env`
 
-- Optional: `DISCORD_CHANGELOG_WEBHOOK_URL`
+- Optional: `DISCORD_ADMIN_WEBHOOK_URL` for deployment success, failures,
+  rollback results, cleanup warnings, and other operational diagnostics.
+- Optional: `DISCORD_CHANGELOG_WEBHOOK_URL` for only the commits newly made
+  live, determined from the previously active release's recorded commit
+  through the newly activated and publicly verified commit.
 
-The variable may instead be exported in the operator environment. Its value is
-never printed. Notification failure is reported but does not roll back a
-healthy deployment.
+Either variable may instead be exported in the operator environment. Values
+are never printed. Missing or invalid configuration never redirects a message
+to the other webhook. Notification failure is reported but does not roll back
+a healthy deployment.
 
 ## Normal deployment
 
@@ -140,12 +145,28 @@ The failure notification names the failed stage and whether rollback
 verification succeeded. If any applicable rollback check fails, the deploy
 command prints an explicit emergency diagnostic.
 
-Retention runs only after successful local and public verification. The
-legacy default is five newest release directories
-(`FUSTIFY_RELEASE_RETENTION=5`). The active and immediate rollback releases are
-always protected even if that temporarily keeps more than five. Every deletion
-candidate must be a canonical direct child of `/srv/fustify/releases` with a
-validated release name.
+Retention runs only after successful local and public verification. A
+retention failure is therefore reported as a post-deployment cleanup failure:
+the newly verified release remains live, no rollback is attempted solely for
+cleanup, and the warning goes only to the admin webhook. The release changelog
+may still be sent because its commits genuinely became active.
+
+The public changelog is sent only after activation and public verification.
+It uses the exact previous deployed commit recorded in the formerly active
+release and the newly verified commit; it does not use an arbitrary
+`origin/main` range. Failed or rolled-back deployments send no changelog, and
+same-commit deployments do not invent changes.
+
+The default is five newest release directories (`FUSTIFY_KEEP_RELEASES=5`);
+the older `FUSTIFY_RELEASE_RETENTION` name remains supported when the preferred
+variable is unset. The active and immediate rollback releases are always
+protected even if that temporarily keeps more than the configured count. Every
+deletion candidate must be a canonical direct child of
+`/srv/fustify/releases` with a validated release name. Immediately before
+deletion, the candidate is revalidated against the resolved active and
+previous releases. Only that stale candidate's directories and files are made
+user-writable and removed; retained releases remain immutable, and symlink
+escapes are rejected.
 
 For a manual rollback, run as `chris` and replace `CANDIDATE` with an existing
 combined release:
