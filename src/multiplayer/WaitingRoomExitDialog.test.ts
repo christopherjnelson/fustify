@@ -6,6 +6,7 @@ import {
   closedRoomLandingNotice,
   runWaitingRoomExit,
   waitingRoomExitCopy,
+  waitingRoomExitRequiresConfirmation,
 } from './waitingRoomExit';
 
 describe('waiting room exit confirmation', () => {
@@ -24,10 +25,17 @@ describe('waiting room exit confirmation', () => {
     });
   });
 
-  it('uses guest-specific leave-room language', () => {
+  it('warns only hosts and seated players', () => {
+    expect(waitingRoomExitRequiresConfirmation(true, false)).toBe(true);
+    expect(waitingRoomExitRequiresConfirmation(false, true)).toBe(true);
+    expect(waitingRoomExitRequiresConfirmation(false, false)).toBe(false);
+  });
+
+  it('uses seated-player-specific leave-room language', () => {
     expect(waitingRoomExitCopy(false)).toEqual({
-      title: 'Leave Room?',
-      description: 'You will leave this multiplayer room.',
+      title: 'Release Seat and Leave?',
+      description:
+        'Leaving will release your seat so another player can claim it.',
       action: 'Leave Room',
     });
   });

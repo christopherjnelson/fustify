@@ -56,9 +56,9 @@ test('waiting-room exit dialogs are specific, keyboard accessible, and mobile-sa
   await page.goto(
     '/multiplayer?visual-review=1&browser-state=empty&exit-dialog=guest',
   );
-  await expect(page.getByRole('dialog', { name: 'Leave Room?' })).toContainText(
-    'You will leave this multiplayer room.',
-  );
+  await expect(
+    page.getByRole('dialog', { name: 'Release Seat and Leave?' }),
+  ).toContainText('Leaving will release your seat');
   await page.getByRole('button', { name: 'Leave Room' }).click();
   await expect(page.getByTestId('exit-confirmations')).toHaveText('1');
 
@@ -117,6 +117,35 @@ test('waiting-room navigation guard covers links, history, unload, and cleanup',
   expect(result.intents).toEqual([
     { destination: '/', external: false },
     { destination: '/local', external: false },
+  ]);
+});
+
+test('unseated viewers leave without an extra browser warning', async ({
+  page,
+}) => {
+  await page.goto('/multiplayer?visual-review=1&browser-state=empty');
+  const result = await page.evaluate(async () => {
+    const { installWaitingRoomNavigationGuard } =
+      await import('/src/multiplayer/waitingRoomExit.ts');
+    const intents: Array<{ destination: string; external: boolean }> = [];
+    const cleanup = installWaitingRoomNavigationGuard({
+      roomUrl: '/multiplayer?visual-review=1&browser-state=empty',
+      warnBeforeUnload: false,
+      requestExit: (intent) => intents.push(intent),
+    });
+
+    const unload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(unload);
+    window.history.pushState(null, '', '/multiplayer');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    cleanup();
+
+    return { unloadPrevented: unload.defaultPrevented, intents };
+  });
+
+  expect(result.unloadPrevented).toBe(false);
+  expect(result.intents).toEqual([
+    { destination: '/multiplayer', external: false },
   ]);
 });
 

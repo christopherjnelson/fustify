@@ -18,7 +18,10 @@ security harness, and complete two-browser winner test all pass.
 - `/multiplayer/room/:roomId` is the existing pre-game room lobby. It allows one
   human seat per member. Start is disabled until two seats are claimed, while
   the database independently enforces the same minimum against concurrent
-  changes.
+  changes. Browser Back and in-app navigation warn the host that leaving closes
+  the room and warn seated non-host players that leaving releases their seat.
+  Unseated viewers leave without a confirmation dialog. Confirmed and silent
+  exits both complete the authoritative `leave_room` cleanup before navigation.
 - `/multiplayer/match/:matchId` restores the persisted canonical world and
   mutable match snapshot. It never invents ownership or combat results locally.
 

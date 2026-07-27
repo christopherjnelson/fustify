@@ -45,20 +45,31 @@ export function waitingRoomExitCopy(host: boolean) {
         action: 'Close Room',
       }
     : {
-        title: 'Leave Room?',
-        description: 'You will leave this multiplayer room.',
+        title: 'Release Seat and Leave?',
+        description:
+          'Leaving will release your seat so another player can claim it.',
         action: 'Leave Room',
       };
+}
+
+export function waitingRoomExitRequiresConfirmation(
+  host: boolean,
+  seated: boolean,
+) {
+  return host || seated;
 }
 
 export function installWaitingRoomNavigationGuard({
   roomUrl,
   requestExit,
+  warnBeforeUnload = true,
 }: {
   roomUrl: string;
   requestExit: (intent: WaitingRoomExitIntent) => void;
+  warnBeforeUnload?: boolean;
 }) {
   const beforeUnload = (event: BeforeUnloadEvent) => {
+    if (!warnBeforeUnload) return;
     event.preventDefault();
     event.returnValue = '';
   };

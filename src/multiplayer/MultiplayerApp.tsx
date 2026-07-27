@@ -85,6 +85,7 @@ import { PublicRoomSettingsSummary } from './PublicRoomSettingsSummary';
 import {
   installWaitingRoomNavigationGuard,
   runWaitingRoomExit,
+  waitingRoomExitRequiresConfirmation,
   type WaitingRoomExitIntent,
 } from './waitingRoomExit';
 import {
@@ -451,6 +452,10 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   const waitingMember =
     state?.room.status === 'waiting' &&
     state.members.some((member) => member.user_id === userId);
+  const exitRequiresConfirmation = waitingRoomExitRequiresConfirmation(
+    state?.room.host_user_id === userId,
+    state?.seats.some((seat) => seat.occupant_user_id === userId) ?? false,
+  );
 
   useEffect(() => {
     if (!waitingMember) return;
@@ -472,24 +477,6 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   }, [client, refresh, roomId, userId, waitingMember]);
 
   useEffect(() => {
-    guardCleanupRef.current?.();
-    guardCleanupRef.current = null;
-    if (!waitingMember) return;
-    const roomUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    guardCleanupRef.current = installWaitingRoomNavigationGuard({
-      roomUrl,
-      requestExit: (intent) => {
-        setExitError(null);
-        setExitIntent(intent);
-      },
-    });
-    return () => {
-      guardCleanupRef.current?.();
-      guardCleanupRef.current = null;
-    };
-  }, [waitingMember]);
-
-  useEffect(() => {
     if (!state || state.room.status !== 'closed') return;
     transitionedRef.current = true;
     guardCleanupRef.current?.();
@@ -503,30 +490,65 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     );
   }, [state, userId]);
 
-  const confirmExit = async () => {
-    if (!exitIntent || exitingRef.current) return;
-    setBusy('leave');
-    setExitError(null);
-    await runWaitingRoomExit({
-      pending: exitingRef,
-      leave: () => leaveRoom(client, roomId),
-      isActive: () => mountedRef.current && !transitionedRef.current,
-      onSuccess: () => {
-        const destination = exitIntent.destination || '/multiplayer';
-        clearExitGuard();
-        if (exitIntent.external) {
-          window.location.assign(destination);
+  const leaveWaitingRoom = useCallback(
+    async (intent: WaitingRoomExitIntent, showDialogError: boolean) => {
+      if (exitingRef.current) return;
+      setBusy('leave');
+      setExitError(null);
+      await runWaitingRoomExit({
+        pending: exitingRef,
+        leave: () => leaveRoom(client, roomId),
+        isActive: () => mountedRef.current && !transitionedRef.current,
+        onSuccess: () => {
+          const destination = intent.destination || '/multiplayer';
+          clearExitGuard();
+          if (intent.external) {
+            window.location.assign(destination);
+          } else {
+            navigate(destination, true);
+          }
+        },
+        onFailure: () => {
+          if (!mountedRef.current) return;
+          const message = 'The room could not be left. Try again.';
+          if (showDialogError) {
+            setExitError(message);
+          } else {
+            setError(message);
+          }
+        },
+      });
+      if (mountedRef.current) setBusy(null);
+    },
+    [clearExitGuard, client, roomId],
+  );
+
+  useEffect(() => {
+    guardCleanupRef.current?.();
+    guardCleanupRef.current = null;
+    if (!waitingMember) return;
+    const roomUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    guardCleanupRef.current = installWaitingRoomNavigationGuard({
+      roomUrl,
+      warnBeforeUnload: exitRequiresConfirmation,
+      requestExit: (intent) => {
+        setExitError(null);
+        if (exitRequiresConfirmation) {
+          setExitIntent(intent);
         } else {
-          navigate(destination, true);
-        }
-      },
-      onFailure: () => {
-        if (mountedRef.current) {
-          setExitError('The room could not be left. Try again.');
+          void leaveWaitingRoom(intent, false);
         }
       },
     });
-    if (mountedRef.current) setBusy(null);
+    return () => {
+      guardCleanupRef.current?.();
+      guardCleanupRef.current = null;
+    };
+  }, [exitRequiresConfirmation, leaveWaitingRoom, waitingMember]);
+
+  const confirmExit = async () => {
+    if (!exitIntent) return;
+    await leaveWaitingRoom(exitIntent, true);
   };
 
   const act = async (name: string, action: () => Promise<void>) => {
