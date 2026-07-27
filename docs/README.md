@@ -10,6 +10,8 @@ routes coding agents to the appropriate runbook.
   authority, Realtime recovery, and multiplayer verification
 - [`gameplay/controllers.md`](gameplay/controllers.md): heuristic controllers,
   deterministic simulation, reports, and replay
+- [`gameplay/llm-bots.md`](gameplay/llm-bots.md): proposed LLM controllers,
+  model tournaments, research artifacts, and staged rollout
 - [`gameplay/balance-studies.md`](gameplay/balance-studies.md): balance-study
   operation, checkpoints, presets, and interpretation
 
