@@ -81,4 +81,5 @@ passing DOM/metric assertions do not replace image review. Camera captures use
 
 This suite does not run matches or bot simulations. Focused generator, URL,
 save, typecheck, lint, build, formatting, diff, and bundle checks remain
-separate gates. Details and quality thresholds are in `WORLD_GENERATION.md`.
+separate gates. Details and quality thresholds are in
+[`../world-generation/README.md`](../world-generation/README.md).

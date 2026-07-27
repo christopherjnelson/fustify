@@ -1,21 +1,25 @@
 # Fustify
 
-**Generate a world. Conquer it.**
+**Strategy on a different world every time.**
 
-A browser-based solo, local hot-seat, and public/private human multiplayer
-playtest for a voxel-styled planetary strategy game. Multiplayer persists a complete
-server-authoritative world and reducer state through Supabase; browsers submit
-typed commands and never write resulting state or combat outcomes.
+Fustify is a browser strategy game played across deterministic, procedurally
+generated spherical worlds. Registered players can play locally against
+heuristic bots or friends on the same device, or create public and private
+authoritative multiplayer rooms for 2–5 human players.
 
-The prototype currently provides:
+The current application provides:
 
+- A branded home page with separate local and online game entry points
+- Email/password and Discord accounts, profile names, password recovery, and safe return-to-game flows
 - A rotatable and zoomable 3D globe with desktop and touch-compatible orbit controls
-- A responsive, read-only equirectangular minimap derived from the same canonical globe geometry and ownership state
-- A deterministic, smoothed land/ocean mask with multiple landmasses and islands
+- A responsive equirectangular minimap derived from the same canonical globe geometry and ownership state, with focus-only territory navigation
+- A versioned normalized world generator with deterministic landmasses, territories, continents, borders, and sea routes
 - Normal creation at 42 playable territories, temporarily capped at 5 land-connected gameplay continents
 - Four recommended editable seats (one Local Human and three Heuristic Bots), expandable to five; custom two- and three-seat tables remain supported
 - Compatibility loading for existing valid six-continent/six-seat saves, URLs, canonical worlds, and fixtures
-- Registered-account 2–5-player public or private rooms with a public game browser, stored world previews, durable seats, trusted initialization, authoritative reducer commands, ordered revisions/idempotency, deterministic server combat, Realtime recovery, reconnect, and shared victory
+- Registered-account 2–5-player public or private rooms with a public game browser, immutable published settings, stored world previews, durable seats, direct public links, and private room codes
+- Trusted Node API match initialization plus authoritative reducer commands, ordered revisions/idempotency, deterministic server combat, Realtime recovery, reconnect, and shared victory
+- Persistent multiplayer Activity reactions and optional Discord announcements for newly published public rooms
 - A randomly named neutral world on fresh launch, before any player ownership exists
 - Subtle dotted canonical sea routes on the 3D globe while choosing a neutral world
 - Curated readable names that are also canonical deterministic world seeds
@@ -26,12 +30,12 @@ The prototype currently provides:
 - A separate serializable match state containing live ownership, armies, phase, selections, events, elimination, and victory
 - An asynchronous controller boundary whose commands are revalidated by the authoritative reducer
 - DOM-free reproducible bot matches with invariants, caps, metrics, JSON reports, and focused traces
-- A reactive, read-only local `/admin` dashboard for structured verification reports
+- An admin-authorized `/admin` operations dashboard with local structured verification reports in development
 - Reinforcement, repeated attacks, deterministic dice combat, mandatory post-capture movement, one connected-path fortification, and turn advancement
 - Phase-aware globe selection and numbered army markers with non-color source/target cues
 - Versioned setup URLs that reproduce the seed, territory count, continent count, player count, and assignment strategy
 - A searchable, keyboard-operable territory navigator with owner, armies, continent, legal status, and sea-route cues
-- Ownership, continent, and terrain display modes that do not affect rules state
+- Ownership and continent player views, plus development/debug terrain presentation, that do not affect rules state
 - Camera-facing marker hiding and silhouette fading so back-side markers do not detach from the globe
 - Non-playable visible oceans, emphasized coastlines, land borders, hover feedback, and persistent land selection
 - Geographic land-border connections plus a minimal sea-route tree and 0–3 deterministic redundancy routes
@@ -40,6 +44,20 @@ The prototype currently provides:
 - A responsive HUD with selection details and a compact graph/debug panel
 - Generator and graph tests covering neutral terrain, assignment, armies, compact continents, routes, bonuses, graph algorithms, validation, and serialization
 - A deterministic Playwright world-quality matrix with land-connectivity, tendril, narrow-neck, spherical-spread, globe/minimap agreement, and canonical camera evidence
+
+## Application routes
+
+| Route                         | Purpose                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| `/`                           | Public home page and account controls                                      |
+| `/local`                      | Local play against humans and/or deterministic heuristic bots              |
+| `/multiplayer`                | Registered-only public game browser and private-room creation/joining      |
+| `/multiplayer/room/:roomId`   | Multiplayer waiting room and seat selection                                |
+| `/multiplayer/match/:matchId` | Canonical authoritative multiplayer match                                  |
+| `/admin`                      | Admin-authorized operations plus local verification reports in development |
+
+Legacy setup links at `/?v=1&...` remain supported and open local setup
+directly.
 
 ## Run locally
 
@@ -51,14 +69,16 @@ pnpm dev
 ```
 
 `pnpm dev` starts both Vite on port 5173 and the localhost-only Node API. Vite
-proxies `/api/*` to the API using `FUSTIFY_API_PORT` (default `8787`). For
-multiplayer match start, copy `.env.example` to `.env.local` and set
-`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and the server-only
+proxies `/api/*` to the API using `FUSTIFY_API_PORT` (default `8787`). Copy
+`.env.example` to `.env.local` and set `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_PUBLISHABLE_KEY` for the account-gated application. Multiplayer
+match start additionally requires the server-only
 `SUPABASE_SERVICE_ROLE_KEY`. Never add a `VITE_` prefix to the service-role
-key. Without it, local play and `GET /api/health` still work, while match start
-fails closed with a configuration error.
+key. Without that server credential, authenticated local play and
+`GET /api/health` still work, while multiplayer match start fails closed with a
+configuration error.
 
-Quality checks:
+Common quality checks:
 
 ```bash
 pnpm test
@@ -80,6 +100,7 @@ pnpm test:visual:multiplayer
 pnpm test:multiplayer:concurrency
 pnpm test:multiplayer:authority
 pnpm test:integration:dev-proxy
+pnpm test:deployment
 ```
 
 The report-enabled commands incrementally write ignored, validated schema-v1
@@ -87,20 +108,30 @@ artifacts under `.fustify/reports/`. While `pnpm dev` is running, open
 `http://localhost:5173/admin` to inspect current progress, recent runs,
 coverage, simulations, failures, and reproduction commands. The filesystem API
 exists only in the local development server and is read-only. See
-[VERIFICATION.md](./VERIFICATION.md) for profiles, retention, interruption and
-security behavior.
+[verification runbook](./docs/operations/verification.md) for profiles,
+retention, interruption, and security behavior.
 
-The multiplayer route and hosted-database workflow are documented in
-[MULTIPLAYER.md](./MULTIPLAYER.md) and [SUPABASE.md](./SUPABASE.md). Local play
-does not require Supabase environment variables. Multiplayer player draft is
+The multiplayer route and hosted-database workflow are documented in the
+[multiplayer guide](./docs/gameplay/multiplayer.md) and
+[Supabase runbook](./docs/operations/supabase.md). Local play does not use the
+service-role credential, but the current product shell requires a registered
+Supabase account before entering either game mode. Multiplayer player draft is
 currently rejected; local player draft is unchanged.
+
+Production uses an immutable combined frontend/API release on an Ubuntu
+droplet behind Caddy. See the
+[deployment runbook](./docs/operations/deployment.md) for installation, private
+configuration, verified deployment, rollback, retention, and recovery.
+`pnpm build:release` creates the combined artifact; `pnpm deploy:droplet` is the
+repository-level activation entry point used by the managed deployment
+workflow.
 
 For unattended multi-configuration bot research, preview with
 `pnpm study:balance --preset thorough --dry-run`, run it from a second terminal,
 and monitor Balance Studies on `/admin`. See
-[BALANCE_STUDIES.md](./BALANCE_STUDIES.md) for checkpoint, resume, compact
-summary, export, and interpretation details. Large studies are not normal
-verification gates.
+[balance-study runbook](./docs/gameplay/balance-studies.md) for checkpoint,
+resume, compact summary, export, and interpretation details. Large studies are
+not normal verification gates.
 
 ## Production bundle inspection
 
@@ -116,9 +147,9 @@ React Three Fiber needed for the neutral globe on `/`; Vite's 500 kB warning is
 therefore understood and intentionally remains visible. `/admin` is a separate
 dynamic graph and does not load the globe. Source maps are not enabled in the
 current production configuration; if they are enabled later, report their size
-separately because map bytes are not shipped JavaScript. See
-[BUNDLE_ANALYSIS.md](./BUNDLE_ANALYSIS.md) for the measured baseline, budgets,
-route accounting, and investigation procedure.
+separately because map bytes are not shipped JavaScript. See the
+[bundle-analysis runbook](./docs/operations/bundle-analysis.md) for the measured
+baseline, budgets, route accounting, and investigation procedure.
 
 ## Playwright visual inspection
 
@@ -151,8 +182,8 @@ canonical globe longitudes, component metrics, JSON summary, and an HTML index
 under `.fustify/reports/world-generation/corrected/`. The non-blocking
 `audit:world-visual` command uses `WORLD_AUDIT_PHASE` to retain named exploratory
 runs without changing committed UI baselines. See
-[`WORLD_GENERATION.md`](./WORLD_GENERATION.md) for invariants, thresholds,
-before/after procedure, and the 42/6 versus 42/5 findings.
+[world-generation guide](./docs/world-generation/README.md) for invariants,
+thresholds, before/after procedure, and the 42/6 versus 42/5 findings.
 
 The visual route uses the fixed `visual-review-atlas` world, reduced motion, a deterministic font and timezone, and no animated star field. Minimap scenarios additionally cover a deliberate land-and-route antimeridian fixture and representative camera orientations. Scenario state is built with the real generator, match setup, match constructor, and rules reducer. The scenario driver is loaded only when Vite is in development mode and `visual-review=1` is present; production builds do not include or expose it. Full-page images are for human inspection, while assertions target UI regions with a small pixel tolerance so animated WebGL details do not make the suite brittle.
 
@@ -168,7 +199,15 @@ The simulator validates the runtime match schema and invariants after every tran
 
 The fast matrix runs ten deterministic setup combinations across player counts 2–6 with both policies. The local stress matrix runs 135 world/setup combinations—territory counts 12, 18, and 24; continent counts 2, 3, and 4; player counts 2–6; and three ownership variants—with both policies and a 750-action bound per match. Some small generated worlds cannot satisfy the bounded balanced-connected ownership or starting-position candidate search for their first seed; simulation setup retries a documented deterministic seed suffix sequence and reports the actual successful world seed.
 
-Complete heuristic-bot matches are a separate layer. `pnpm test:bot` runs focused controller and quick match checks; `pnpm test:bot:stress` runs a moderate all-bot matrix. `pnpm simulate:bots -- --games N` runs an explicit sequential extended batch and writes a Fustify-prefixed structured report with versioned project metadata under ignored `artifacts/bot-simulations/`. Exact descriptors replay with `--reproduce '<json>' --trace`. See [CONTROLLERS.md](./CONTROLLERS.md) for the command contract, heuristic, RNG boundaries, invariants, metrics, cap semantics, and report schema.
+Complete heuristic-bot matches are a separate layer. `pnpm test:bot` runs
+focused controller and quick match checks; `pnpm test:bot:stress` runs a
+moderate all-bot matrix. `pnpm simulate:bots -- --games N` runs an explicit
+sequential extended batch and writes a Fustify-prefixed structured report with
+versioned project metadata under ignored `artifacts/bot-simulations/`. Exact
+descriptors replay with `--reproduce '<json>' --trace`. See the
+[controller guide](./docs/gameplay/controllers.md) for the command contract,
+heuristic, RNG boundaries, invariants, metrics, cap semantics, and report
+schema.
 
 Every failure includes the actual world seed, generator version, territory and continent counts, player count, ownership variant, policy, turn, phase, last action, recent actions, and recent events. Replay a reported failure with:
 
@@ -184,23 +223,29 @@ pnpm test:simulation:replay
 
 The read-only `/admin` Balance Studies dashboard distinguishes all-match win
 rate from decided-victory share and includes a paired six-seat diagnostic. See
-[BALANCE_STUDIES.md](./BALANCE_STUDIES.md) for dry-run, standard, thorough,
-resume, compact JSON export, and single-match reproduction commands. Normal
-product creation defaults to 42 territories and 5 continents; new worlds and
-tables are temporarily capped at 5 continents and 5 seats. Existing valid
-6-continent/6-seat data remains engine compatibility coverage. Six-continent
-generation is a deferred investigation rather than a supported normal
-configuration.
+[balance-study runbook](./docs/gameplay/balance-studies.md) for dry-run,
+standard, thorough, resume, compact JSON export, and single-match reproduction
+commands. Normal product creation defaults to 42 territories and 5 continents;
+new worlds and tables are temporarily capped at 5 continents and 5 seats.
+Existing valid 6-continent/6-seat data remains engine compatibility coverage.
+Six-continent generation is a deferred investigation rather than a supported
+normal configuration.
 
-`pnpm test:coverage` writes text, HTML, and JSON-summary reports for the pure game and save-validation modules. The HTML report is generated under `coverage/`. Coverage is used to identify rule branches—not as a 100% target. Remaining low-value branches are mainly malformed/unknown command variants and defensive lookup failures; browser-local storage exceptions, free-form globe dragging, and subjective play balance still require integration or manual playtesting.
-
-The current focused report is 92% statements, 85.76% branches, 100% functions, and 93.05% lines. The change in scope includes the new schema-v3 lifecycle validation; the principal remaining gaps are defensive reducer command variants and malformed save/setup consistency branches.
-
-In the current deterministic matrices, the smoke suite reached 7 victories in 20 bounded runs and exercised 7,767 state transitions. The stress suite reached 124 victories in 270 bounded runs and exercised 146,287 transitions; the remaining runs stopped cleanly at their configured action limit rather than failing an invariant.
+`pnpm test:coverage` writes text, HTML, and JSON-summary reports for the pure
+game and save-validation modules. The HTML report is generated under
+`coverage/`. Coverage is used to identify rule branches—not as a 100% target.
+Browser-local storage exceptions, free-form globe dragging, multiplayer
+recovery, and subjective play balance still require integration or manual
+playtesting. Use generated verification and simulation reports for current
+counts rather than treating historical README figures as a baseline.
 
 ## Branding
 
-Runtime product metadata is centralized in `src/branding.ts`. The board-level Fustify wordmark is intentionally separate from the match HUD so the HUD remains gameplay-focused. The former working-title PNG explorations remain in `public/assets/` as historical design assets but are no longer loaded by the application.
+Runtime product metadata is centralized in `src/branding.ts`. Reusable logo
+components and the chartreuse visual system live under `src/brand/`, while
+production SVG marks and the favicon live under `public/brand/` and
+`public/favicon.svg`. The board-level Fustify wordmark remains separate from
+the match HUD so the HUD stays gameplay-focused.
 
 ## Shareable world setup URLs
 
@@ -218,10 +263,17 @@ World setup is plain serializable data kept separate from both immutable `Planet
 Example:
 
 ```text
-http://localhost:5173/?v=1&seed=atlas-prime&territories=42&continents=5&players=4&assignment=random
+http://localhost:5173/local?v=1&seed=atlas-prime&territories=42&continents=5&players=4&assignment=random
 ```
 
-On a normal root launch with no supported setup parameters, Fustify creates a readable slug such as `amber-meridian-482`, generates that neutral world once, and replaces the current URL with its complete setup. Refresh therefore reconstructs the same world. An explicit seed or supported shared setup URL takes precedence. Fixed seeds such as `atlas-prime` and `visual-review-atlas` remain test/demo fixtures, not the production root default. A requested local-save resume reconstructs the saved seed and is never replaced by fresh-launch naming.
+The normal root route renders the mode-selection home page. Entering `/local`
+creates a readable slug such as `amber-meridian-482`, generates that neutral
+world once, and writes its complete setup into the URL. Refresh therefore
+reconstructs the same world. An explicit seed or supported shared setup URL
+takes precedence. Fixed seeds such as `atlas-prime` and
+`visual-review-atlas` remain test/demo fixtures, not the production local
+default. A requested local-save resume reconstructs the saved seed and is never
+replaced by fresh-launch naming.
 
 Missing parameters in an otherwise supported setup URL use defaults. Malformed counts fall back or clamp to supported ranges and show a concise setup warning; an unsupported `v` falls back to the complete default setup. Serialization has a stable parameter order. Unknown query parameters, including the historical `logo` selector, are preserved when applying or generating a setup.
 
@@ -299,9 +351,16 @@ The navigator model reuses the same legal-action helpers as the renderer. Select
 
 Visible focus rings apply to buttons, inputs, and selects. The modal traps focus, Escape closes it, and focus returns to its trigger. Phase changes, result counts, and selections use polite live regions; invalid actions use an alert; victory is assertive. Capture movement and all phase action controls remain keyboard operable. Reduced-motion preferences replace camera interpolation with an immediate safe focus.
 
-### Read-only strategic minimap
+### Strategic minimap
 
-The compact flat map is a secondary overview; the 3D globe remains the authoritative board and the only spatial gameplay surface. It renders the current `PlanetDefinition.surfaceCells`, territory metadata, canonical connections, setup ownership, and live `MatchState` ownership. It never regenerates from the seed, owns no territory identifiers, dispatches no game commands, and provides no selection, draft, combat, zoom, pan, or camera-navigation controls.
+The compact flat map is a secondary overview; the 3D globe remains the
+authoritative board and the only spatial gameplay surface. It renders the
+current `PlanetDefinition.surfaceCells`, territory metadata, canonical
+connections, setup ownership, and live `MatchState` ownership. It never
+regenerates from the seed and dispatches no draft, reinforcement, combat, or
+fortification commands. Territory paths are keyboard-operable focus controls:
+activating one rotates the globe to that territory without selecting it as a
+game action. The map has no independent zoom or pan.
 
 Projection is equirectangular: longitude maps left-to-right and latitude maps north-to-south. Canonical icosphere cells become grouped SVG territory paths, shared cell edges become coast/territory/continent lines, and canonical sea routes become sampled great-circle polylines. Polygons are unwrapped and clipped into longitude bands at `-180°/+180°`; lines and routes are split at the crossing. Every fragment retains its canonical territory or route association, so a seam never creates another logical territory or a full-width false edge. Polar distortion is accepted, while near-polar cells remain visible.
 
@@ -313,7 +372,8 @@ highlighting, which remains visually stronger.
 
 Projected geometry and SVG path data are cached by the canonical `PlanetDefinition`. A regenerated or loaded world rebuilds them; assignment and gameplay only update fills, and globe motion only updates the crosshair. The crosshair is derived one-way from the globe camera direction, uses both a ring and crosshair shape, and honors reduced-motion styling. The visualization is a single labeled, non-focusable overview rather than thousands of screen-reader polygons. On narrow screens the setup panel becomes shorter and independently scrollable so the minimap remains visible without covering its controls.
 
-For continuation context and a ready-to-use next-task brief, see [`HANDOFF.md`](./HANDOFF.md).
+For historical implementation context, see the
+[July 2026 handoff](./docs/history/handoff.md).
 
 ## Architecture Decisions
 
@@ -385,38 +445,25 @@ Zustand owns the explicit application mode, current serializable world and match
 
 ## Current limitations
 
-- Boundaries and coastlines follow triangular surface-cell edges and are intentionally faceted.
-- The scalar field currently produces a binary strategic land/ocean mask, not detailed elevation or terrain modifiers.
-- Sea routes are strategic graph edges and debug lines, not navigable ocean territories.
-- This is trusted local hot-seat play. There is no server authority, hidden information security, remote-client validation, or reconnect across devices.
-- Starting-position balance is heuristic and may still produce strategically asymmetric but valid worlds.
-- The single local save is browser-specific and tied to a compatible generator version; there are no cloud saves.
-- Numbered markers are screen-facing sprites rather than troop models and do not aggregate at extreme zoom levels yet.
-- Camera focus centers a territory but does not yet frame a multi-territory selection.
-- Picking targets playable land territories and does not yet support structures.
-- The fixed subdivision-level-4 surface is tuned most heavily around 42 territories; the supported 12–48 range does not yet adapt mesh resolution to count.
-- URLs reconstruct world setup only, not player profiles, ownership variants, in-progress turns, or UI preferences.
-- The minimap is intentionally read-only. Optional click-to-focus globe navigation is a possible future enhancement, but territory actions and independent minimap navigation remain out of scope.
-- Browser history records applied setups, but there is no named setup library or durable server storage.
+- Multiplayer is human-only and supports 2–5 players. It has no bots, bot takeover, mid-match joins, spectators, matchmaking, chat, timers, kicking, or host migration.
+- Public rooms are discoverable only while waiting. Publishing is irreversible and locks the advertised setup; private rooms continue to use codes.
+- Local save/resume is browser-specific. Multiplayer state is durable and authoritative, but local games do not have cloud saves.
+- Multiplayer supports random assignment only. Player-controlled territory draft remains local-only.
+- Boundaries and coastlines follow triangular surface-cell edges and are intentionally faceted; terrain is a binary strategic land/ocean mask without elevation modifiers.
+- Sea routes are strategic graph edges, not navigable ocean territories.
+- Starting-position balance is heuristic and can still produce strategically asymmetric but valid worlds.
+- The fixed subdivision-level-4 surface is tuned most heavily around 42 territories; the supported 12–48 range does not adapt mesh resolution to count.
+- Setup URLs reconstruct geography and setup choices, not profiles, assignments, active turns, or UI preferences.
+- The minimap supports territory-to-globe focus but remains an overview rather than an independent gameplay surface.
 
-## Next recommended milestone
+## Near-term direction
 
-Run structured friend playtests, collect balance and usability observations, and tune the scoring weights, starting-army totals, and compact mobile layout before considering cards or any network-authority design.
+The next useful milestone is structured multiplayer and mixed human/bot
+playtesting across the recommended 42-territory, 5-continent, 4–5-seat
+configuration. Results should drive balance weights, starting armies, lobby
+clarity, reconnect behavior, and compact mobile polish before larger rules
+systems are added.
 
-## Deliberately Deferred
-
-- Online multiplayer
-- Networking and server authority
-- Backend or cloud persistence
-- Authentication
-- Matchmaking, reconnects, and spectators
-- Cards and trading
-- Alliances
-- Detailed terrain
-- True voxel terrain
-- Individual troop rendering
-- Animations beyond simple feedback
-- Sound
-- Remote-model controllers, provider API keys, hidden model reasoning, and networking
-- A spectator/admin dashboard or replay-viewer UI; structured bot reports are ready for later consumption
-- Production mobile polish
+Still deliberately deferred: cards and trading, alliances, spectators,
+matchmaking, chat, true voxel/elevation terrain, structures, individual troop
+models, remote-model controllers, and a replay viewer.

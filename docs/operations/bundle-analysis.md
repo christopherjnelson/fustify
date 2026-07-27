@@ -42,7 +42,7 @@ selected route graph are not counted.
 
 ## Current baseline, route map, and rationale
 
-See **[`docs/performance/bundle-budget-audit.md`](docs/performance/bundle-budget-audit.md)**
+See **[`../performance/bundle-budget-audit.md`](../performance/bundle-budget-audit.md)**
 for the audited commit, tool versions, reproducibility evidence, the exact
 contributing asset list for every route, chunk composition, historical growth
 attribution, dependency duplication findings, the optimizations applied, and the

@@ -136,13 +136,15 @@ format to URLs.
 The local verification dashboard adapts this existing report contract rather
 than replacing it. It presents outcomes, win distribution, turn percentiles,
 caps, errors, invariant failures, throughput, and exact reproduction commands.
-See `VERIFICATION.md`. Authentication, upload, database storage, tournament,
+See [`../operations/verification.md`](../operations/verification.md).
+Authentication, upload, database storage, tournament,
 networking, and remote providers remain out of scope.
 
 The dedicated balance-study orchestrator expands the same headless runner over
 deterministic world, match, assignment, and rotated-seat matrices. It writes
 schema-v1 atomic reports and resumable checkpoints for the local `/admin`
-viewer; it is not a competing simulation engine. See `BALANCE_STUDIES.md`.
+viewer; it is not a competing simulation engine. See
+[`balance-studies.md`](balance-studies.md).
 
 The corrected seed scheme intentionally changes bot choices produced by old
 reproduction descriptors, even though world generation, combat rules, and all

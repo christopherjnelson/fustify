@@ -38,9 +38,11 @@ all 26 returned source dependencies match Git byte-for-byte.
 
 The three authority migrations are remotely recorded in Git order. No frontend
 deployment or production-domain smoke test was performed; follow the checklist
-in `MULTIPLAYER.md` after deploying this commit to `dev.fustify.com`. Deployment,
+in [`../gameplay/multiplayer.md`](../gameplay/multiplayer.md) after deploying
+this commit to `dev.fustify.com`. Deployment,
 security model, and known human-only limitations are canonical in
-`MULTIPLAYER.md` and `SUPABASE.md`.
+[`../gameplay/multiplayer.md`](../gameplay/multiplayer.md) and
+[`../operations/supabase.md`](../operations/supabase.md).
 
 ## Supabase multiplayer foundation (July 2026)
 
@@ -66,7 +68,8 @@ multiplayer work; investigate six-continent quality separately.
 
 Operational details, remote audit, migration/type commands, security boundaries,
 cleanup, tests, limitations, and the next server-authoritative gameplay milestone
-are in `MULTIPLAYER.md` and `SUPABASE.md`.
+are in [`../gameplay/multiplayer.md`](../gameplay/multiplayer.md) and
+[`../operations/supabase.md`](../operations/supabase.md).
 
 ## Continent-generation quality (July 2026)
 
@@ -93,7 +96,7 @@ canonical globe views under `.fustify/reports/world-generation/<phase>/`.
 Generator seed output intentionally changes, but setup URLs, save schema v4,
 migrations, territory-ID state restoration, gameplay, bonuses, controllers,
 and sea routes retain their contracts. Full details are in
-`WORLD_GENERATION.md`.
+[`../world-generation/README.md`](../world-generation/README.md).
 
 ## Production bundle audit (July 2026)
 
@@ -109,7 +112,8 @@ manifest, and isolated build under `.fustify/reports/bundle/`.
 `pnpm bundle:check` applies tolerant, hash-independent route/chunk budgets and
 rejects test, development-only, and Node runner imports. No manual chunks,
 source-map setting, warning threshold, gameplay, generation, visuals, URLs,
-admin behavior, or save schema v4 semantics changed. See `BUNDLE_ANALYSIS.md`
+admin behavior, or save schema v4 semantics changed. See
+[`../operations/bundle-analysis.md`](../operations/bundle-analysis.md)
 for the complete baseline and investigation procedure.
 
 ## Gameplay UX and study-liveness polish (July 2026)
@@ -150,7 +154,8 @@ for factor classification and does not resolve the historical 121-versus-61
 observation. Chris should run the documented 576-match standard diagnostic.
 
 > This handoff now also includes a local verification dashboard milestone.
-> Canonical operational details are in `VERIFICATION.md`; the historical
+> Canonical operational details are in
+> [`../operations/verification.md`](../operations/verification.md); the historical
 > controller context below remains valid.
 
 ## Current state
@@ -240,7 +245,8 @@ command. Invalid or stale commands cannot mutate canonical state.
   classified termination, aggregation, and reproduction descriptors.
 - `src/core/simulation/matchInvariants.ts`: after-command state-integrity checks.
 - `scripts/simulateBots.ts`: JSON-report and exact-reproduction CLI.
-- `CONTROLLERS.md`: architecture, heuristic, RNG, cap, report, and replay docs.
+- [`../gameplay/controllers.md`](../gameplay/controllers.md): architecture,
+  heuristic, RNG, cap, report, and replay docs.
 
 ## Determinism
 

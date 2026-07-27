@@ -1,5 +1,37 @@
 # Fustify agent guidance
 
+## Documentation router
+
+Keep `README.md` and this file at the repository root. Long-form documentation
+lives under `docs/`; load only the guides relevant to the task:
+
+- Documentation index: [`docs/README.md`](docs/README.md)
+- Product overview, local setup, commands, rules, and architecture:
+  [`README.md`](README.md)
+- Multiplayer lifecycle and authority model:
+  [`docs/gameplay/multiplayer.md`](docs/gameplay/multiplayer.md)
+- Bots, controller boundaries, simulation, and replay:
+  [`docs/gameplay/controllers.md`](docs/gameplay/controllers.md)
+- Balance-study operation and interpretation:
+  [`docs/gameplay/balance-studies.md`](docs/gameplay/balance-studies.md)
+- Verification reports and the development admin dashboard:
+  [`docs/operations/verification.md`](docs/operations/verification.md)
+- Supabase schema, security, Auth, functions, and remote validation:
+  [`docs/operations/supabase.md`](docs/operations/supabase.md)
+- Production builds and bundle budgets:
+  [`docs/operations/bundle-analysis.md`](docs/operations/bundle-analysis.md)
+- Droplet deployment, rollback, and recovery:
+  [`docs/operations/deployment.md`](docs/operations/deployment.md)
+- Generator invariants, visual audits, and normalized-generator design:
+  [`docs/world-generation/README.md`](docs/world-generation/README.md)
+- Brand assets and usage: [`docs/brand/README.md`](docs/brand/README.md)
+- Historical implementation handoff (context only, not a current runbook):
+  [`docs/history/handoff.md`](docs/history/handoff.md)
+
+When guidance conflicts, follow this file first, then the current domain
+runbook, then historical notes. Update the relevant domain guide when behavior
+or operational commands change.
+
 ## Required visual workflow
 
 For changes that affect layout, controls, dialogs, responsive behavior, globe presentation, or accessibility, use the Playwright workflow in addition to unit tests.
