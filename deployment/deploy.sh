@@ -119,8 +119,7 @@ http_status_is() {
   [[ "${status}" == "${expected}" ]]
 }
 
-verify_public_release() {
-  local expected_commit="$1"
+verify_public_surface() {
   local body
   body="$(curl --fail --silent --max-time 10 "${public_origin}/api/health" 2>/dev/null)" &&
     grep --quiet --extended-regexp '"status"[[:space:]]*:[[:space:]]*"ok"' <<<"${body}" ||
@@ -133,10 +132,21 @@ verify_public_release() {
   http_status_is "${public_origin}/src/main.tsx" "404" || return 1
   http_status_is "${public_origin}/node_modules/" "404" || return 1
   http_status_is "${public_origin}/assets/app.js.map" "404" || return 1
+}
+
+verify_public_metadata() {
+  local expected_commit="$1"
+  local body
   body="$(curl --fail --silent --max-time 10 "${public_origin}/release.json" 2>/dev/null)" ||
     return 1
   grep --quiet --extended-regexp \
     "\"commit\"[[:space:]]*:[[:space:]]*\"${expected_commit}\"" <<<"${body}"
+}
+
+verify_public_release() {
+  local expected_commit="$1"
+  verify_public_surface &&
+    verify_public_metadata "${expected_commit}"
 }
 
 service_diagnostics() {
@@ -176,8 +186,7 @@ rollback() {
   ln -s "${previous_release}" "${rollback_link}" || return 1
   mv -Tf "${rollback_link}" "${current_link}" || return 1
   systemctl --user restart "${service_name}" || return 1
-  health_check || return 1
-  verify_public_release "${previous_commit}" || return 1
+  verify_rollback_release "${previous_release}" "${previous_commit}" || return 1
 }
 
 read_release_commit() {
@@ -186,6 +195,34 @@ read_release_commit() {
     '"commit"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"' "${metadata}" |
     sed -nE 's/.*"([0-9a-f]{40})"$/\1/p' |
     head -n 1
+}
+
+verify_private_release_metadata() {
+  local release="$1"
+  local expected_commit="$2"
+  local actual_commit
+  actual_commit="$(read_release_commit "${release}/release.json")"
+  [[ "${actual_commit}" == "${expected_commit}" ]] || return 1
+  [[ "$(basename "${release}")" == *-"${expected_commit:0:12}" ||
+    "$(basename "${release}")" == *-"${expected_commit:0:12}"-[0-9]* ]]
+}
+
+verify_rollback_release() {
+  local expected_release="$1"
+  local expected_commit="$2"
+  local active_release
+  active_release="$(readlink -f "${current_link}")" || return 1
+  [[ "${active_release}" == "${expected_release}" ]] || return 1
+  verify_private_release_metadata "${expected_release}" "${expected_commit}" ||
+    return 1
+  health_check || return 1
+  verify_public_surface || return 1
+  if [[ -f "${expected_release}/web/release.json" ]]; then
+    verify_public_metadata "${expected_commit}" || return 1
+  else
+    printf 'Rollback compatibility: verified legacy release %s using private metadata; public release metadata is unavailable.\n' \
+      "$(basename "${expected_release}")"
+  fi
 }
 
 on_error() {

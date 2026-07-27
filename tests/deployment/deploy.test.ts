@@ -19,6 +19,7 @@ const projectRoot = resolve(import.meta.dirname, '../..');
 const deployScript = resolve(projectRoot, 'deployment/deploy.sh');
 const operatorScript = resolve(projectRoot, 'deployment/fustify-deploy');
 const caddyInstaller = resolve(projectRoot, 'deployment/install-caddy.sh');
+const caddyFragment = resolve(projectRoot, 'deployment/fustify.caddy');
 const buildReleaseScript = resolve(projectRoot, 'scripts/buildRelease.ts');
 const deployedCommit = 'a'.repeat(40);
 const previousCommit = 'b'.repeat(40);
@@ -215,16 +216,32 @@ if ((writes_status)); then
     */.env|*/.git/config|*/src/main.tsx|*/node_modules/|*.map) status=404 ;;
   esac
   if [[ "\${FAKE_SCENARIO}" == public-failure &&
-    "$url" == */multiplayer && $is_previous -eq 0 ]]; then
+    "$url" == */multiplayer ]]; then
     status=500
+  fi
+  if [[ "\${FAKE_SCENARIO}" == security-failure && "$url" == */.env ]]; then
+    status=200
   fi
   printf '%s' "$status"
   exit 0
 fi
 
 case "$url" in
-  */api/health) printf '{"status":"ok"}\\n' ;;
-  */release.json) cat "$target/web/release.json" ;;
+  */api/health)
+    if [[ "\${FAKE_SCENARIO}" == public-health-failure ]]; then
+      printf '{"status":"unhealthy"}\\n'
+    else
+      printf '{"status":"ok"}\\n'
+    fi
+    ;;
+  */release.json)
+    if [[ "\${FAKE_SCENARIO}" == fresh-metadata-mismatch &&
+      $is_previous -eq 0 ]]; then
+      printf '{"commit":"%s"}\\n' "${'c'.repeat(40)}"
+    else
+      cat "$target/web/release.json"
+    fi
+    ;;
   *) printf 'ok\\n' ;;
 esac
 `,
@@ -306,6 +323,17 @@ describe('combined droplet deployment', () => {
     );
   });
 
+  it('strictly rejects a newly activated release with mismatched public metadata', async () => {
+    const harness = await createHarness();
+    const result = runDeployment(harness, {
+      FAKE_SCENARIO: 'fresh-metadata-mismatch',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('public deployment verification');
+    expect(await readlink(harness.currentLink)).toBe(harness.previousRelease);
+  });
+
   it('fails before any build when frontend configuration is missing', async () => {
     const harness = await createHarness();
     await rm(join(harness.repository, '.env.production.local'));
@@ -349,13 +377,14 @@ describe('combined droplet deployment', () => {
     expect(result.stderr).not.toContain('Failed to connect');
   });
 
-  it('rolls back and verifies the previous release after API exhaustion', async () => {
+  it('rolls back and requires public metadata for a modern release', async () => {
     const harness = await createHarness('health-failure');
     const result = runDeployment(harness);
 
     expect(result.status).not.toBe(0);
     expect(await readlink(harness.currentLink)).toBe(harness.previousRelease);
     expect(result.stderr).toContain('Rollback succeeded');
+    expect(result.stdout).not.toContain('Rollback compatibility');
     expect(await readFile(harness.notificationLog, 'utf8')).toContain(
       'failure|',
     );
@@ -368,7 +397,47 @@ describe('combined droplet deployment', () => {
     expect(result.status).not.toBe(0);
     expect(await readlink(harness.currentLink)).toBe(harness.previousRelease);
     expect(result.stderr).toContain('public deployment verification');
+    expect(result.stderr).toContain('ROLLBACK VERIFICATION FAILED');
+  });
+
+  it('rolls back to a legacy release using validated private metadata', async () => {
+    const harness = await createHarness('health-failure');
+    await rm(join(harness.previousRelease, 'web/release.json'));
+    const result = runDeployment(harness);
+
+    expect(result.status).not.toBe(0);
+    expect(await readlink(harness.currentLink)).toBe(harness.previousRelease);
     expect(result.stderr).toContain('Rollback succeeded');
+    expect(result.stdout).toContain('Rollback compatibility');
+  });
+
+  it('rejects a legacy rollback with mismatched private metadata', async () => {
+    const harness = await createHarness('health-failure');
+    await rm(join(harness.previousRelease, 'web/release.json'));
+    await writeFile(
+      join(harness.previousRelease, 'release.json'),
+      `${JSON.stringify({ commit: 'c'.repeat(40) })}\n`,
+    );
+    const result = runDeployment(harness);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('ROLLBACK VERIFICATION FAILED');
+  });
+
+  it('fails rollback when sensitive paths are not blocked', async () => {
+    const harness = await createHarness('security-failure');
+    const result = runDeployment(harness);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('ROLLBACK VERIFICATION FAILED');
+  });
+
+  it('fails rollback when the public API is unhealthy', async () => {
+    const harness = await createHarness('public-health-failure');
+    const result = runDeployment(harness);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('ROLLBACK VERIFICATION FAILED');
   });
 
   it('reports rollback verification failure explicitly', async () => {
@@ -591,6 +660,22 @@ esac
 });
 
 describe('droplet installer contracts', () => {
+  it('keeps sensitive-path blocking inside the ordered route before handlers', async () => {
+    const fragment = await readFile(caddyFragment, 'utf8');
+    const route = fragment.indexOf('\troute {');
+    const blockedMatcher = fragment.indexOf('\t\t@blocked path_regexp');
+    const blockedResponse = fragment.indexOf('\t\trespond @blocked 404');
+    const apiHandler = fragment.indexOf('\t\thandle /api/*');
+    const spaHandler = fragment.indexOf('\t\thandle {');
+
+    expect(route).toBeGreaterThan(-1);
+    expect(blockedMatcher).toBeGreaterThan(route);
+    expect(blockedResponse).toBeGreaterThan(blockedMatcher);
+    expect(apiHandler).toBeGreaterThan(blockedResponse);
+    expect(spaHandler).toBeGreaterThan(apiHandler);
+    expect(fragment).not.toMatch(/^(\t)respond @blocked 404$/mu);
+  });
+
   it('installs the managed Caddy fragment only after backup and validation', async () => {
     const harness = await createHarness();
     const fakeBin = join(harness.root, 'bin');

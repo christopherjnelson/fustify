@@ -128,10 +128,17 @@ Git-updating operator command.
 ## Rollback and retention
 
 Activation or local/public verification failure atomically restores the
-previous release, restarts the API, and verifies the restored local API,
-public routes, and commit metadata. The failure notification names the failed
-stage and whether rollback verification succeeded. If rollback verification
-fails, the deploy command prints an explicit emergency diagnostic.
+previous release and restarts the API. Rollback verification confirms that
+`current` resolves to that exact release, its private root metadata contains
+the expected full commit, the local and public APIs are healthy, required
+public routes return `200`, and sensitive paths return `404`. Modern releases
+that contain `web/release.json` must also expose that exact commit publicly.
+A legacy release without `web/release.json` may use its validated private
+metadata instead; the deploy command reports when this compatibility path is
+used. Missing public metadata is the only check omitted for a legacy release.
+The failure notification names the failed stage and whether rollback
+verification succeeded. If any applicable rollback check fails, the deploy
+command prints an explicit emergency diagnostic.
 
 Retention runs only after successful local and public verification. The
 legacy default is five newest release directories
@@ -151,16 +158,45 @@ case "${candidate}" in
 esac
 test -f "${candidate}/web/index.html"
 test -f "${candidate}/api/server.mjs"
+expected_commit="$(
+  grep --only-matching --extended-regexp \
+    '"commit"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"' \
+    "${candidate}/release.json" |
+    sed -nE 's/.*"([0-9a-f]{40})"$/\1/p' |
+    head -n 1
+)"
+test "${#expected_commit}" = 40
+case "$(basename "${candidate}")" in
+  *-"${expected_commit:0:12}"|*-"${expected_commit:0:12}"-[0-9]*) ;;
+  *) echo "Release metadata does not match its directory" >&2; exit 1 ;;
+esac
 next="/srv/fustify/.current-manual-$$"
 ln -s "${candidate}" "${next}"
 mv -Tf "${next}" /srv/fustify/current
+test "$(readlink -f /srv/fustify/current)" = "${candidate}"
 systemctl --user restart fustify-api.service
 curl --fail --silent http://127.0.0.1:8787/api/health
 curl --fail --silent https://dev.fustify.com/api/health
-curl --fail --silent https://dev.fustify.com/release.json
+for route in / /multiplayer /admin; do
+  test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+    "https://dev.fustify.com${route}")" = 200
+done
+for route in /.env /.git/config /src/main.tsx /node_modules/ /assets/app.js.map; do
+  test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+    "https://dev.fustify.com${route}")" = 404
+done
+if test -f "${candidate}/web/release.json"; then
+  curl --fail --silent https://dev.fustify.com/release.json
+else
+  cat "${candidate}/release.json"
+fi
 ```
 
-Confirm the last response contains the selected release's full commit.
+Confirm `current` still resolves to `${candidate}` and that the final response
+contains the selected release's full commit. Public metadata is mandatory when
+`web/release.json` exists. Only a legacy release lacking that file may be
+confirmed from its private root metadata; do not add files to an immutable old
+release.
 
 ## Operations and recovery
 
