@@ -464,38 +464,6 @@
   text-decoration: none;
 }
 
-.home-wordmark-mark {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  color: #dff4ff;
-  border: 1px solid rgba(132, 205, 234, 0.3);
-  border-radius: 50%;
-  background: var(--brand-panel-raised);
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.home-wordmark > span:last-child {
-  display: grid;
-  gap: 1px;
-}
-
-.home-wordmark strong {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 1rem;
-  letter-spacing: -0.02em;
-}
-
-.home-wordmark small {
-  color: #7f9aaa;
-  font-size: 0.62rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .home-header .account-control {
   position: static;
   max-width: min(620px, 70vw);
@@ -1203,10 +1171,6 @@ html.game-route .protected-route-shell {
     min-height: 32px;
     padding: 5px 8px;
     font-size: 0.68rem;
-  }
-
-  .home-wordmark small {
-    display: none;
   }
 
   body:not(:has(.home-shell)) .account-control {
@@ -5871,8 +5835,7 @@ html.home-route body {
 }
 
 .home-wordmark .fustify-logo {
-  width: auto;
-  height: 42px;
+  flex-flow: row nowrap;
 }
 
 .home-wordmark:focus-visible,
@@ -6223,8 +6186,12 @@ html.home-route body {
   }
 
   .home-wordmark .fustify-logo {
-    width: 108px;
-    height: auto;
+    --fustify-logo-height: 32px !important;
+    width: calc(var(--fustify-logo-height) * 3.8);
+  }
+
+  .home-wordmark .fustify-logo__descriptor {
+    display: none;
   }
 
   .home-main {

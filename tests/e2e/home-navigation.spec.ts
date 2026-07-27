@@ -22,6 +22,23 @@ test('home choices route through the account-required shell without loading game
     .locator('.fustify-logo');
   await expect(homeLogo).toBeVisible();
   await expect(homeLogo).toHaveAttribute('aria-hidden', 'true');
+  const markBox = await homeLogo.locator('.fustify-logo__mark').boundingBox();
+  const wordmarkBox = await homeLogo
+    .locator('.fustify-logo__wordmark')
+    .boundingBox();
+  expect(markBox).not.toBeNull();
+  expect(wordmarkBox).not.toBeNull();
+  expect(wordmarkBox!.x).toBeGreaterThan(markBox!.x + markBox!.width);
+  const descriptor = homeLogo.locator('.fustify-logo__descriptor');
+  if (testInfo.project.name === 'mobile-390') {
+    await expect(descriptor).toHaveCSS('display', 'none');
+  } else {
+    expect(
+      await descriptor.evaluate((element) =>
+        Number.parseFloat(getComputedStyle(element).fontSize),
+      ),
+    ).toBeGreaterThanOrEqual(8);
+  }
   await expect(page.locator('.hero-orbit')).toHaveCount(0);
   await expect(page.getByText(/procedural sphere|seed locked/i)).toHaveCount(0);
   await expect(page.locator('.home-shell')).toHaveCSS(

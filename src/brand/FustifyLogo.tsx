@@ -1,6 +1,5 @@
-import type { SVGProps } from 'react';
+import type { CSSProperties, HTMLAttributes } from 'react';
 import { FustifyMark, type FustifyLogoVariant } from './FustifyMark';
-import { FUSTIFY_LOGO_VIEW_BOX } from './logoGeometry';
 
 const LOGO_HEIGHTS = {
   compact: 32,
@@ -11,8 +10,8 @@ const LOGO_HEIGHTS = {
 export type FustifyLogoSize = keyof typeof LOGO_HEIGHTS;
 
 export interface FustifyLogoProps extends Omit<
-  SVGProps<SVGSVGElement>,
-  'children' | 'height' | 'width'
+  HTMLAttributes<HTMLSpanElement>,
+  'children'
 > {
   size?: FustifyLogoSize | number;
   variant?: FustifyLogoVariant;
@@ -28,6 +27,7 @@ export function FustifyLogo({
   decorative = false,
   label = 'Fustify',
   className,
+  style,
   ...svgProps
 }: FustifyLogoProps) {
   const height = typeof size === 'number' ? size : LOGO_HEIGHTS[size];
@@ -36,34 +36,39 @@ export function FustifyLogo({
     : ({ 'aria-label': label, role: 'img' } as const);
 
   return (
-    <svg
+    <span
       {...svgProps}
       {...accessibilityProps}
-      className={['fustify-logo', `fustify-logo--${variant}`, className]
+      className={[
+        'fustify-logo',
+        `fustify-logo--${variant}`,
+        showDescriptor && 'fustify-logo--with-descriptor',
+        className,
+      ]
         .filter(Boolean)
         .join(' ')}
-      focusable="false"
-      height={height}
-      viewBox={FUSTIFY_LOGO_VIEW_BOX}
-      width={height * 3.4375}
-      xmlns="http://www.w3.org/2000/svg"
+      style={
+        {
+          ...style,
+          '--fustify-logo-height': `${height}px`,
+        } as CSSProperties
+      }
     >
       <FustifyMark
         className="fustify-logo__mark"
         decorative
-        size={128}
+        size={height}
+        style={{ height: '100%', width: 'auto' }}
         variant={variant}
-        x="0"
-        y="0"
       />
-      <text className="fustify-logo__wordmark" x="151" y="76">
-        FUSTIFY
-      </text>
-      {showDescriptor ? (
-        <text className="fustify-logo__descriptor" x="154" y="99">
-          PROCEDURAL GLOBE STRATEGY
-        </text>
-      ) : null}
-    </svg>
+      <span className="fustify-logo__copy" aria-hidden="true">
+        <span className="fustify-logo__wordmark">FUSTIFY</span>
+        {showDescriptor ? (
+          <span className="fustify-logo__descriptor">
+            PROCEDURAL GLOBE STRATEGY
+          </span>
+        ) : null}
+      </span>
+    </span>
   );
 }

@@ -29,7 +29,7 @@ export function MatchLaunchOverlay({
       >
         <div className="match-launch-brand">
           <FustifyLogo
-            size="compact"
+            size={40}
             decorative
             showDescriptor
             variant="full-color"

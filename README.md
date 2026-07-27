@@ -243,9 +243,11 @@ counts rather than treating historical README figures as a baseline.
 
 Runtime product metadata is centralized in `src/branding.ts`. Reusable logo
 components and the chartreuse visual system live under `src/brand/`, while
-production SVG marks and the favicon live under `public/brand/` and
-`public/favicon.svg`. The board-level Fustify wordmark remains separate from
-the match HUD so the HUD stays gameplay-focused.
+the approved raster master, responsive logo assets, and browser icons live
+under `public/brand/` and `public/`. The standalone globe-and-F is the primary
+logo; spelled-out identity lockups use the Orbitron display face. The
+board-level Fustify wordmark remains separate from the match HUD so the HUD
+stays gameplay-focused.
 
 ## Shareable world setup URLs
 

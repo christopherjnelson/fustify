@@ -1,12 +1,11 @@
-import type { CSSProperties, SVGProps } from 'react';
-import { FUSTIFY_MARK_GEOMETRY, FUSTIFY_MARK_VIEW_BOX } from './logoGeometry';
+import type { CSSProperties, ImgHTMLAttributes } from 'react';
 
 export type FustifyLogoVariant =
   'full-color' | 'monochrome-light' | 'monochrome-dark';
 
 export interface FustifyMarkProps extends Omit<
-  SVGProps<SVGSVGElement>,
-  'children' | 'height' | 'width'
+  ImgHTMLAttributes<HTMLImageElement>,
+  'alt' | 'children' | 'height' | 'src' | 'srcSet' | 'width'
 > {
   size?: number;
   variant?: FustifyLogoVariant;
@@ -25,41 +24,22 @@ export function FustifyMark({
   style,
   ...svgProps
 }: FustifyMarkProps) {
-  const accessibilityProps = decorative
-    ? ({ 'aria-hidden': true } as const)
-    : ({ 'aria-label': label, role: 'img' } as const);
-
   return (
-    <svg
+    <img
       {...svgProps}
-      {...accessibilityProps}
+      alt={decorative ? '' : label}
+      aria-hidden={decorative || undefined}
+      aria-label={decorative ? undefined : label}
       className={['fustify-mark', `fustify-mark--${variant}`, className]
         .filter(Boolean)
         .join(' ')}
-      focusable="false"
+      draggable={false}
       height={size}
-      style={{ ...style, color }}
-      viewBox={FUSTIFY_MARK_VIEW_BOX}
+      role={decorative ? undefined : 'img'}
+      src="/brand/fustify-globe-f-256.png"
+      srcSet="/brand/fustify-globe-f-256.png 1x, /brand/fustify-globe-f-512.png 2x"
+      style={{ color, height: size, width: size, ...style }}
       width={size}
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <circle className="fustify-mark__field" cx="64" cy="64" r="54.5" />
-      <circle className="fustify-mark__rim" cx="64" cy="64" r="55" />
-      <g className="fustify-mark__grid">
-        <path d={FUSTIFY_MARK_GEOMETRY.westLongitude} />
-        <path d={FUSTIFY_MARK_GEOMETRY.eastLongitude} />
-        <path d={FUSTIFY_MARK_GEOMETRY.northLatitude} />
-        <path d={FUSTIFY_MARK_GEOMETRY.southLatitude} />
-      </g>
-      <g className="fustify-mark__orbit">
-        <path d={FUSTIFY_MARK_GEOMETRY.orbitLead} />
-        <path d={FUSTIFY_MARK_GEOMETRY.orbitFollow} />
-        <circle cx="111.5" cy="28.5" r="5.5" />
-      </g>
-      <path
-        className="fustify-mark__letter"
-        d={FUSTIFY_MARK_GEOMETRY.letterF}
-      />
-    </svg>
+    />
   );
 }

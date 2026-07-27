@@ -4,20 +4,26 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { FustifyLogo } from './FustifyLogo';
 import { FustifyMark } from './FustifyMark';
-import {
-  FUSTIFY_FAVICON_GEOMETRY,
-  FUSTIFY_LOGO_VIEW_BOX,
-  FUSTIFY_MARK_GEOMETRY,
-  FUSTIFY_MARK_VIEW_BOX,
-} from './logoGeometry';
 
 const assetPaths = [
-  'public/brand/fustify-mark.svg',
-  'public/brand/fustify-logo-horizontal.svg',
-  'public/brand/fustify-mark-monochrome-light.svg',
-  'public/brand/fustify-mark-monochrome-dark.svg',
-  'public/favicon.svg',
+  'public/brand/fustify-globe-f-master.png',
+  'public/brand/fustify-globe-f-512.png',
+  'public/brand/fustify-globe-f-256.png',
+  'public/apple-touch-icon.png',
+  'public/favicon-64.png',
+  'public/favicon-32.png',
 ] as const;
+
+function pngDimensions(assetPath: string) {
+  const png = readFileSync(assetPath);
+
+  expect(png.subarray(1, 4).toString('ascii')).toBe('PNG');
+  expect(png.readUInt8(25)).toBe(6);
+  return {
+    width: png.readUInt32BE(16),
+    height: png.readUInt32BE(20),
+  };
+}
 
 describe('FustifyMark', () => {
   it('renders meaningful and decorative accessibility states', () => {
@@ -36,7 +42,7 @@ describe('FustifyMark', () => {
     expect(decorative).not.toContain('role="img"');
   });
 
-  it('has a stable viewBox, predictable size, and variant class', () => {
+  it('uses the production raster assets at a predictable size', () => {
     const markup = renderToStaticMarkup(
       createElement(FustifyMark, {
         size: 64,
@@ -44,10 +50,11 @@ describe('FustifyMark', () => {
       }),
     );
 
-    expect(markup).toContain(`viewBox="${FUSTIFY_MARK_VIEW_BOX}"`);
     expect(markup).toContain('height="64"');
     expect(markup).toContain('width="64"');
     expect(markup).toContain('fustify-mark--monochrome-light');
+    expect(markup).toContain('src="/brand/fustify-globe-f-256.png"');
+    expect(markup).toContain('/brand/fustify-globe-f-512.png 2x');
   });
 
   it('does not generate IDs when multiple marks render together', () => {
@@ -74,59 +81,42 @@ describe('FustifyLogo', () => {
       }),
     );
 
-    expect(markup).toContain(`viewBox="${FUSTIFY_LOGO_VIEW_BOX}"`);
-    expect(markup).toContain('height="32"');
-    expect(markup).toContain('width="110"');
+    expect(markup).toContain('--fustify-logo-height:32px');
     expect(markup).toContain('PROCEDURAL GLOBE STRATEGY');
     expect(markup).toContain('fustify-logo--monochrome-dark');
   });
 });
 
 describe('static brand assets', () => {
-  it.each(assetPaths)('%s is a clean standalone SVG', (assetPath) => {
-    const svg = readFileSync(assetPath, 'utf8');
+  it.each(assetPaths)('%s is a square PNG', (assetPath) => {
+    const dimensions = pngDimensions(assetPath);
 
-    expect(svg).toMatch(/<svg[^>]+viewBox="0 0 \d+ \d+"/);
-    expect(svg).not.toMatch(/<image\b|data:|base64|<metadata\b/i);
-    expect(svg).not.toMatch(/\b(?:href|src)="https?:/i);
-    expect(svg).not.toMatch(/xmlns:[a-z]+=/i);
-    expect(svg).not.toMatch(/\sid=/);
+    expect(dimensions.width).toBe(dimensions.height);
   });
 
-  it('keeps static mark paths synchronized with React geometry', () => {
-    const fullColorMark = readFileSync('public/brand/fustify-mark.svg', 'utf8');
-    const horizontalLogo = readFileSync(
-      'public/brand/fustify-logo-horizontal.svg',
-      'utf8',
-    );
-    const monochromeLight = readFileSync(
-      'public/brand/fustify-mark-monochrome-light.svg',
-      'utf8',
-    );
-    const monochromeDark = readFileSync(
-      'public/brand/fustify-mark-monochrome-dark.svg',
-      'utf8',
-    );
-
-    for (const path of Object.values(FUSTIFY_MARK_GEOMETRY)) {
-      expect(fullColorMark).toContain(path);
-      expect(horizontalLogo).toContain(path);
-      expect(monochromeLight).toContain(path);
-      expect(monochromeDark).toContain(path);
-    }
+  it('keeps expected production dimensions', () => {
+    expect(pngDimensions('public/brand/fustify-globe-f-master.png')).toEqual({
+      width: 998,
+      height: 998,
+    });
+    expect(pngDimensions('public/brand/fustify-globe-f-512.png')).toEqual({
+      width: 512,
+      height: 512,
+    });
+    expect(pngDimensions('public/brand/fustify-globe-f-256.png')).toEqual({
+      width: 256,
+      height: 256,
+    });
   });
 
-  it('uses reduced geometry for the favicon and is referenced by HTML', () => {
-    const favicon = readFileSync('public/favicon.svg', 'utf8');
+  it('references the PNG favicon and Apple touch icon from HTML', () => {
     const html = readFileSync('index.html', 'utf8');
 
-    for (const path of Object.values(FUSTIFY_FAVICON_GEOMETRY)) {
-      expect(favicon).toContain(path);
-    }
-    expect(favicon).not.toContain(FUSTIFY_MARK_GEOMETRY.westLongitude);
-    expect(favicon).not.toContain(FUSTIFY_MARK_GEOMETRY.eastLongitude);
     expect(html).toContain(
-      'rel="icon" type="image/svg+xml" href="/favicon.svg"',
+      'rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png"',
+    );
+    expect(html).toContain(
+      'rel="apple-touch-icon" href="/apple-touch-icon.png"',
     );
   });
 });

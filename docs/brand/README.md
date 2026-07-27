@@ -1,22 +1,25 @@
 # Fustify brand foundation
 
-This directory documents the initial production logo system derived from the
-approved chartreuse concept. The concept image remains an untracked visual
-reference only; no raster material from it is embedded in these assets.
+The supplied globe-and-F artwork is the canonical Fustify logo. Production
+assets are cleaned and resized from that approved raster master. When the
+product name is presented as a wordmark beside the logo, it uses Orbitron
+semibold in uppercase.
 
 ## Assets
 
-- `public/brand/fustify-mark.svg` — full-color standalone mark
-- `public/brand/fustify-logo-horizontal.svg` — full-color horizontal lockup
-- `public/brand/fustify-mark-monochrome-light.svg` — light one-color mark
-- `public/brand/fustify-mark-monochrome-dark.svg` — dark one-color mark
-- `public/favicon.svg` — simplified small-size mark without globe grid lines
+- `public/brand/fustify-globe-f-master.png` — cleaned 998 px production master
+- `public/brand/fustify-globe-f-512.png` — high-density application source
+- `public/brand/fustify-globe-f-256.png` — default application source
+- `public/favicon-32.png`, `public/favicon-64.png`, and `public/favicon.ico` —
+  browser icons
+- `public/apple-touch-icon.png` — 180 px home-screen icon
 - `src/brand/FustifyMark.tsx` — typed React mark
 - `src/brand/FustifyLogo.tsx` — typed React horizontal lockup
 - `src/brand/brand.css` — isolated brand tokens and component styles
 
-All SVGs have transparent outer backgrounds. The dark circle in the full-color
-mark is intentional logo geometry, not a page-sized background.
+All PNGs have transparent outer backgrounds. The production master removes the
+low-opacity export residue around the supplied artwork and applies a clean
+anti-aliased globe edge.
 
 ## React usage
 
@@ -31,25 +34,15 @@ mark is intentional logo geometry, not a page-sized background.
 />
 ```
 
-Supported variants are `full-color`, `monochrome-light`, and
-`monochrome-dark`. Decorative instances set `aria-hidden`; meaningful
-instances render as an image with the supplied accessible label. Neither
-component generates SVG IDs.
+The globe remains full color in every variant. The optional variant changes
+only wordmark text color for compatibility with light and dark placements.
+Decorative instances set `aria-hidden`; meaningful instances render with the
+supplied accessible label.
 
-The horizontal lockup uses real SVG text and the self-hosted Orbitron semibold
-face. Orbitron is intentionally limited to the wordmark and display samples.
-The body-font token prefers Inter with system UI fallbacks and does not alter
-the application’s existing global typography.
-
-## Geometry synchronization
-
-`src/brand/logoGeometry.ts` is the source of truth for the mark’s path data.
-The checked-in SVGs repeat that data so they remain standalone and portable.
-Focused tests compare every production mark path with the shared constants;
-update both together when geometry changes.
-
-The core assets use only flat fills and strokes. Optional presentation glow is
-demonstrated exclusively in `preview.html`.
+The horizontal lockup uses HTML text with the self-hosted Orbitron semibold
+face. Orbitron is intentionally limited to identity and short display samples.
+Normal prose that mentions Fustify remains in the body typeface for
+readability.
 
 ## Preview
 

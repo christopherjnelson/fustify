@@ -139,18 +139,63 @@
         place-items: center;
       }
 
-      .logo-stage img {
+      .logo-stage > img {
         display: block;
         width: min(100%, 430px);
         height: auto;
       }
 
-      .mark-stage img {
+      .mark-stage > img {
         width: 128px;
       }
 
+      .preview-lockup {
+        display: flex;
+        width: min(100%, 430px);
+        align-items: center;
+        gap: 18px;
+      }
+
+      .preview-lockup > img {
+        display: block;
+        width: 104px;
+        height: 104px;
+      }
+
+      .preview-lockup-copy {
+        display: grid;
+        min-width: 0;
+        gap: 5px;
+      }
+
+      .preview-lockup-copy strong {
+        color: var(--brand-chartreuse);
+        font-family: var(--brand-display-font);
+        font-size: clamp(1.15rem, 3vw, 2.25rem);
+        font-weight: 600;
+        letter-spacing: 0.11em;
+        line-height: 1;
+      }
+
+      .preview-lockup-copy small {
+        color: var(--brand-steel);
+        font-size: 0.58rem;
+        font-weight: 600;
+        letter-spacing: 0.24em;
+        white-space: nowrap;
+      }
+
+      .preview-lockup-compact {
+        width: 250px;
+      }
+
+      .preview-lockup-compact > img {
+        width: 64px;
+        height: 64px;
+      }
+
       .preview-glow {
-        filter: drop-shadow(0 0 13px rgb(204 255 0 / 0.3));
+        filter: drop-shadow(0 0 13px rgb(204 255 0 / 0.2));
       }
 
       .size-row {
@@ -366,12 +411,12 @@
   <body>
     <main>
       <header>
-        <span class="eyebrow">Brand foundation / v1</span>
+        <span class="eyebrow">Brand foundation / v2</span>
         <h1>FUSTIFY</h1>
         <p>
-          A flat, scalable orbit-and-globe system built around a bold
-          forward-moving F. Chartreuse signals brand identity and primary
-          action—not every status or surface.
+          The approved globe-and-F is the primary logo. Orbitron semibold spells
+          out the FUSTIFY identity in application lockups while chartreuse
+          remains the signature brand accent.
         </p>
       </header>
 
@@ -381,52 +426,70 @@
           <article class="preview-card">
             <h3>Deep navy</h3>
             <div class="logo-stage">
-              <img
-                class="preview-glow"
-                src="/brand/fustify-logo-horizontal.svg"
-                alt="Fustify"
-              />
+              <div
+                class="preview-lockup preview-glow"
+                role="img"
+                aria-label="Fustify"
+              >
+                <img src="/brand/fustify-globe-f-256.png" alt="" />
+                <span class="preview-lockup-copy" aria-hidden="true">
+                  <strong>FUSTIFY</strong>
+                  <small>PROCEDURAL GLOBE STRATEGY</small>
+                </span>
+              </div>
             </div>
           </article>
           <article class="preview-card transparent-card">
             <h3>Transparent surround</h3>
             <div class="logo-stage">
-              <img src="/brand/fustify-logo-horizontal.svg" alt="Fustify" />
+              <div class="preview-lockup" role="img" aria-label="Fustify">
+                <img src="/brand/fustify-globe-f-256.png" alt="" />
+                <span class="preview-lockup-copy" aria-hidden="true">
+                  <strong>FUSTIFY</strong>
+                  <small>PROCEDURAL GLOBE STRATEGY</small>
+                </span>
+              </div>
             </div>
           </article>
           <article class="preview-card">
             <h3>Mark only</h3>
             <div class="logo-stage mark-stage">
-              <img src="/brand/fustify-mark.svg" alt="Fustify mark" />
+              <img src="/brand/fustify-globe-f-256.png" alt="Fustify mark" />
             </div>
           </article>
         </div>
       </section>
 
       <section>
-        <h2>Variants</h2>
+        <h2>Approved applications</h2>
         <div class="preview-grid">
           <article class="preview-card">
-            <h3>Full color</h3>
+            <h3>Primary mark</h3>
             <div class="logo-stage mark-stage">
-              <img src="/brand/fustify-mark.svg" alt="Full-color mark" />
+              <img src="/brand/fustify-globe-f-256.png" alt="Fustify mark" />
             </div>
           </article>
           <article class="preview-card">
-            <h3>Monochrome light</h3>
-            <div class="logo-stage mark-stage">
-              <img
-                src="/brand/fustify-mark-monochrome-light.svg"
-                alt="Light monochrome mark"
-              />
+            <h3>Compact lockup</h3>
+            <div class="logo-stage">
+              <div
+                class="preview-lockup preview-lockup-compact"
+                role="img"
+                aria-label="Fustify"
+              >
+                <img src="/brand/fustify-globe-f-256.png" alt="" />
+                <span class="preview-lockup-copy" aria-hidden="true">
+                  <strong>FUSTIFY</strong>
+                </span>
+              </div>
             </div>
           </article>
-          <article class="preview-card light-card">
-            <h3>Monochrome dark</h3>
+          <article class="preview-card transparent-card">
+            <h3>Transparent edge</h3>
             <div class="logo-stage mark-stage">
               <img
-                src="/brand/fustify-mark-monochrome-dark.svg"
-                alt="Dark monochrome mark"
+                src="/brand/fustify-globe-f-256.png"
+                alt="Fustify mark on a transparency grid"
               />
             </div>
           </article>
@@ -439,7 +502,7 @@
           <div class="size-row">
             <div class="size-sample">
               <img
-                src="/brand/fustify-mark.svg"
+                src="/brand/fustify-globe-f-256.png"
                 alt=""
                 width="16"
                 height="16"
@@ -448,7 +511,7 @@
             </div>
             <div class="size-sample">
               <img
-                src="/brand/fustify-mark.svg"
+                src="/brand/fustify-globe-f-256.png"
                 alt=""
                 width="24"
                 height="24"
@@ -457,7 +520,7 @@
             </div>
             <div class="size-sample">
               <img
-                src="/brand/fustify-mark.svg"
+                src="/brand/fustify-globe-f-256.png"
                 alt=""
                 width="32"
                 height="32"
@@ -466,7 +529,7 @@
             </div>
             <div class="size-sample">
               <img
-                src="/brand/fustify-mark.svg"
+                src="/brand/fustify-globe-f-256.png"
                 alt=""
                 width="48"
                 height="48"
@@ -475,7 +538,7 @@
             </div>
             <div class="size-sample">
               <img
-                src="/brand/fustify-mark.svg"
+                src="/brand/fustify-globe-f-256.png"
                 alt=""
                 width="64"
                 height="64"
@@ -484,7 +547,7 @@
             </div>
             <div class="size-sample">
               <img
-                src="/brand/fustify-mark.svg"
+                src="/brand/fustify-globe-f-256.png"
                 alt=""
                 width="128"
                 height="128"
@@ -496,19 +559,19 @@
       </section>
 
       <section>
-        <h2>Simplified favicon</h2>
+        <h2>Browser icon</h2>
         <article class="preview-card">
           <div class="favicon-row">
             <div class="favicon-tile">
-              <img src="/favicon.svg" alt="" width="16" height="16" />
+              <img src="/favicon-32.png" alt="" width="16" height="16" />
               <span>16 px</span>
             </div>
             <div class="favicon-tile">
-              <img src="/favicon.svg" alt="" width="32" height="32" />
+              <img src="/favicon-32.png" alt="" width="32" height="32" />
               <span>32 px</span>
             </div>
             <div class="favicon-tile">
-              <img src="/favicon.svg" alt="" width="64" height="64" />
+              <img src="/favicon-64.png" alt="" width="64" height="64" />
               <span>64 px</span>
             </div>
           </div>

@@ -35,94 +35,68 @@
 .fustify-mark,
 .fustify-logo {
   display: inline-block;
-  overflow: visible;
   flex: 0 0 auto;
 }
 
 .fustify-mark {
-  --fustify-field: var(--brand-background);
-  --fustify-rim: var(--brand-slate);
-  --fustify-grid: var(--brand-steel);
-  --fustify-accent: var(--brand-chartreuse);
+  object-fit: contain;
+  user-select: none;
 }
 
-.fustify-mark__field {
-  fill: var(--fustify-field);
+.fustify-logo {
+  display: inline-flex;
+  width: calc(var(--fustify-logo-height) * 3.4375);
+  height: var(--fustify-logo-height);
+  align-items: center;
+  gap: calc(var(--fustify-logo-height) * 0.18);
 }
 
-.fustify-mark__rim {
-  fill: none;
-  stroke: var(--fustify-rim);
-  stroke-width: 4;
+.fustify-logo--with-descriptor {
+  width: calc(var(--fustify-logo-height) * 4.8);
 }
 
-.fustify-mark__grid {
-  fill: none;
-  opacity: 0.57;
-  stroke: var(--fustify-grid);
-  stroke-linecap: round;
-  stroke-width: 2.8;
+.fustify-logo__mark {
+  width: var(--fustify-logo-height);
+  height: var(--fustify-logo-height);
 }
 
-.fustify-mark__orbit {
-  fill: none;
-  stroke: var(--fustify-accent);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 6;
-}
-
-.fustify-mark__orbit circle {
-  fill: var(--fustify-accent);
-  stroke: var(--fustify-field);
-  stroke-width: 3;
-}
-
-.fustify-mark__letter {
-  fill: var(--fustify-accent);
-}
-
-.fustify-mark--monochrome-light,
-.fustify-logo--monochrome-light {
-  --fustify-field: transparent;
-  --fustify-rim: currentColor;
-  --fustify-grid: currentColor;
-  --fustify-accent: currentColor;
-  color: var(--brand-text-strong);
-}
-
-.fustify-mark--monochrome-dark,
-.fustify-logo--monochrome-dark {
-  --fustify-field: transparent;
-  --fustify-rim: currentColor;
-  --fustify-grid: currentColor;
-  --fustify-accent: currentColor;
-  color: var(--brand-background);
+.fustify-logo__copy {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: calc(var(--fustify-logo-height) * 0.035);
 }
 
 .fustify-logo__wordmark {
-  fill: var(--fustify-accent, var(--brand-chartreuse));
+  color: var(--brand-chartreuse);
   font-family: var(--brand-display-font);
-  font-size: 45px;
+  font-size: calc(var(--fustify-logo-height) * 0.42);
   font-weight: 600;
-  letter-spacing: 5px;
+  letter-spacing: 0.11em;
+  line-height: 1;
 }
 
 .fustify-logo__descriptor {
-  fill: var(--brand-steel);
+  color: var(--brand-steel);
   font-family: var(--brand-body-font);
-  font-size: 10px;
+  font-size: max(7px, calc(var(--fustify-logo-height) * 0.15));
   font-weight: 600;
-  letter-spacing: 3.1px;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.fustify-logo--monochrome-light,
+.fustify-logo--monochrome-light {
+  color: var(--brand-text-strong);
+}
+
 .fustify-logo--monochrome-dark {
-  --fustify-accent: currentColor;
+  color: var(--brand-background);
 }
 
+.fustify-logo--monochrome-light .fustify-logo__wordmark,
+.fustify-logo--monochrome-dark .fustify-logo__wordmark,
 .fustify-logo--monochrome-light .fustify-logo__descriptor,
 .fustify-logo--monochrome-dark .fustify-logo__descriptor {
-  fill: currentColor;
-  opacity: 0.72;
+  color: currentColor;
 }

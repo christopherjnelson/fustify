@@ -32,7 +32,7 @@ function HomeHeader() {
   return (
     <header className="home-header">
       <a className="home-wordmark" href="/" aria-label="Fustify home">
-        <FustifyLogo decorative showDescriptor size="standard" />
+        <FustifyLogo decorative showDescriptor size={56} />
       </a>
       <AccountControl />
     </header>
