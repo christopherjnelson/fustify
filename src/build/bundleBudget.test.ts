@@ -38,7 +38,11 @@ function manifest(): BundleManifest {
       name: 'BrowserApp',
       isDynamicEntry: true,
       imports: ['index.html', '_authFlow-cccc.js'],
-      dynamicImports: ['src/app/App.tsx', 'src/multiplayer/MultiplayerApp.tsx'],
+      dynamicImports: [
+        'src/home/HomeWorldPreview.tsx',
+        'src/app/App.tsx',
+        'src/multiplayer/MultiplayerApp.tsx',
+      ],
     },
     '_authFlow-cccc.js': {
       file: 'assets/authFlow-cccc.js',
@@ -50,6 +54,12 @@ function manifest(): BundleManifest {
       file: 'assets/GameSetup-eeee.js',
       name: 'GameSetup',
       imports: ['index.html', '_schemas-dddd.js', '_BrowserApp-bbbb.js'],
+    },
+    'src/home/HomeWorldPreview.tsx': {
+      file: 'assets/HomeWorldPreview-home.js',
+      name: 'HomeWorldPreview',
+      isDynamicEntry: true,
+      imports: ['index.html', '_GameSetup-eeee.js', '_BrowserApp-bbbb.js'],
     },
     'src/app/App.tsx': {
       file: 'assets/App-ffff.js',
@@ -90,6 +100,8 @@ const sizes: AssetSizes = {
   'assets/authFlow-cccc.js': { raw: 4000, gzip: 400 },
   'assets/schemas-dddd.js': { raw: 8000, gzip: 800 },
   'assets/GameSetup-eeee.js': { raw: 16_000, gzip: 1600 },
+  'assets/HomeWorldPreview-home.js': { raw: 96, gzip: 48 },
+  'assets/homeWorld.worker-wwww.js': { raw: 12_000, gzip: 1200 },
   'assets/App-ffff.js': { raw: 32, gzip: 16 },
   'assets/MultiplayerApp-gggg.js': { raw: 64, gzip: 32 },
   'assets/AdminApp-hhhh.js': { raw: 128, gzip: 64 },
@@ -178,6 +190,18 @@ describe('manifest traversal', () => {
       /missing a size/,
     );
   });
+
+  it('includes emitted worker assets selected by a stable prefix', () => {
+    const assets = routeAssets(
+      manifest(),
+      ['index.html', 'src/home/HomeWorldPreview.tsx'],
+      sizes,
+      ['assets/homeWorld.worker-'],
+    );
+    expect(assets.map((asset) => asset.file)).toContain(
+      'assets/homeWorld.worker-wwww.js',
+    );
+  });
 });
 
 describe('route isolation', () => {
@@ -202,6 +226,22 @@ describe('route isolation', () => {
       'assets/MultiplayerApp-gggg.js',
     );
     expect(files('public-shell')).not.toContain('assets/AdminApp-hhhh.js');
+  });
+
+  it('measures the deferred preview and its worker separately from the shell', () => {
+    expect(files('homepage-preview')).toEqual(
+      expect.arrayContaining([
+        'assets/GameSetup-eeee.js',
+        'assets/HomeWorldPreview-home.js',
+        'assets/homeWorld.worker-wwww.js',
+      ]),
+    );
+    expect(files('public-shell')).not.toContain(
+      'assets/HomeWorldPreview-home.js',
+    );
+    expect(files('public-shell')).not.toContain(
+      'assets/homeWorld.worker-wwww.js',
+    );
   });
 
   it('keeps gameplay chunks out of the standalone auth page', () => {
@@ -292,6 +332,7 @@ describe('budget evaluation', () => {
   it('covers every routed application area', () => {
     expect(BUNDLE_BUDGETS.routes.map((route) => route.id)).toEqual([
       'public-shell',
+      'homepage-preview',
       'auth-page',
       'local-game',
       'multiplayer-entry',

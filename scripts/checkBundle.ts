@@ -1,4 +1,4 @@
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import { resolve } from 'node:path';
 import {
@@ -15,12 +15,16 @@ const statsPath = resolve(reportRoot, 'stats.json');
 const auditPath = resolve(reportRoot, 'audit.json');
 
 async function measureAssets(manifest: BundleManifest): Promise<AssetSizes> {
+  const emittedAssets = await readdir(resolve(outputRoot, 'assets'));
   const files = [
-    ...new Set(
-      Object.values(manifest)
+    ...new Set([
+      ...Object.values(manifest)
         .map((entry) => entry.file)
         .filter((file) => file.endsWith('.js')),
-    ),
+      ...emittedAssets
+        .filter((file) => file.endsWith('.js'))
+        .map((file) => `assets/${file}`),
+    ]),
   ];
   const sizes: AssetSizes = {};
   await Promise.all(

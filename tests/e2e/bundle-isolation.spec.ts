@@ -29,6 +29,18 @@ const ADMIN_FINGERPRINTS = ['AdminDashboard', 'reportSource', 'reportFixtures'];
 const MULTIPLAYER_FINGERPRINTS = ['MultiplayerApp', 'multiplayerApi'];
 const LOCAL_GAME_FINGERPRINTS = ['app/App.tsx', 'useBotTurnRunner'];
 const TEST_ONLY_FINGERPRINTS = ['visualScenarios', 'testFixtures'];
+const HOME_FORBIDDEN_FINGERPRINTS = [
+  'GlobeScene',
+  '/Planet.tsx',
+  'CameraController',
+  'GameSetup',
+  'PregamePanel',
+  'WorldSetupPanel',
+  'gameReducer',
+  'useGameStore',
+  'core/simulation',
+  'matchSynchronization',
+];
 
 function recordRequests(page: Page): string[] {
   const requested: string[] = [];
@@ -61,16 +73,28 @@ async function settle(page: Page) {
 }
 
 test.describe('route chunk isolation', () => {
-  test('a signed-out visit to / downloads no gameplay, admin, or test-only code', async ({
+  test('a signed-out visit to / isolates the neutral preview from gameplay code', async ({
     page,
-  }) => {
+  }, testInfo) => {
     const requested = recordRequests(page);
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Fustify' })).toBeVisible();
-    await settle(page);
 
     expect(requested.length).toBeGreaterThan(0);
-    expectAbsent(requested, GAMEPLAY_FINGERPRINTS, 'gameplay code');
+    if (testInfo.project.name === 'mobile-390') {
+      await expect(
+        page.getByRole('button', { name: 'View Generated Globe' }),
+      ).toBeVisible();
+      await page.waitForTimeout(500);
+      expectAbsent(requested, GAMEPLAY_FINGERPRINTS, 'deferred globe code');
+    } else {
+      await page.locator('.home-world-canvas').waitFor({ state: 'visible' });
+      expect(
+        matching(requested, ['/deps/three', 'three.js']).length,
+      ).toBeGreaterThan(0);
+      expect(matching(requested, ['generatePlanet']).length).toBeGreaterThan(0);
+    }
+    expectAbsent(requested, HOME_FORBIDDEN_FINGERPRINTS, 'full gameplay code');
     expectAbsent(requested, ADMIN_FINGERPRINTS, 'admin code');
     expectAbsent(requested, MULTIPLAYER_FINGERPRINTS, 'multiplayer code');
     expectAbsent(requested, LOCAL_GAME_FINGERPRINTS, 'local game code');

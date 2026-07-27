@@ -45,6 +45,11 @@ export interface RouteBudget {
    * shared chunk.
    */
   chunkNames: string[];
+  /**
+   * Prefixes for emitted JavaScript resources that Vite does not expose as
+   * manifest imports, notably module workers created with `new Worker()`.
+   */
+  additionalAssetPrefixes?: string[];
   /** Maximum permitted gzip total, in bytes, for the whole route closure. */
   gzipBudget: number;
 }
@@ -88,6 +93,14 @@ export const BUNDLE_BUDGETS: BundleBudgets = {
       description: 'Signed-out or signed-in homepage at /',
       chunkNames: ['BrowserApp'],
       gzipBudget: 158_000,
+    },
+    {
+      id: 'homepage-preview',
+      description:
+        'Homepage after the deferred generated-globe preview is loaded',
+      chunkNames: ['BrowserApp', 'HomeWorldPreview'],
+      additionalAssetPrefixes: ['assets/homeWorld.worker-'],
+      gzipBudget: 470_000,
     },
     {
       id: 'auth-page',
@@ -202,11 +215,17 @@ export function routeAssets(
   manifest: BundleManifest,
   roots: string[],
   sizes: AssetSizes,
+  additionalAssetPrefixes: string[] = [],
 ): RouteAsset[] {
   const files = new Set<string>();
   for (const key of staticClosure(manifest, roots)) {
     const file = manifest[key]?.file;
     if (file?.endsWith('.js')) files.add(file);
+  }
+  for (const file of Object.keys(sizes)) {
+    if (additionalAssetPrefixes.some((prefix) => file.startsWith(prefix))) {
+      files.add(file);
+    }
   }
   return [...files]
     .map((file) => ({ file, ...assetSize(sizes, file) }))
@@ -223,7 +242,12 @@ export function measureRoute(
     entryKey,
     ...route.chunkNames.map((name) => findChunkKeyByName(manifest, name)),
   ];
-  const assets = routeAssets(manifest, roots, sizes);
+  const assets = routeAssets(
+    manifest,
+    roots,
+    sizes,
+    route.additionalAssetPrefixes,
+  );
   return {
     id: route.id,
     description: route.description,
@@ -235,16 +259,10 @@ export function measureRoute(
 }
 
 export function largestJavaScriptAsset(
-  manifest: BundleManifest,
+  _manifest: BundleManifest,
   sizes: AssetSizes,
 ): RouteAsset {
-  const files = [
-    ...new Set(
-      Object.values(manifest)
-        .map((entry) => entry.file)
-        .filter((file) => file.endsWith('.js')),
-    ),
-  ];
+  const files = Object.keys(sizes).filter((file) => file.endsWith('.js'));
   if (files.length === 0) {
     throw new Error('Bundle manifest contains no JavaScript assets.');
   }

@@ -2,6 +2,7 @@ import type { MouseEvent } from 'react';
 import { AccountControl } from '../auth/AccountControl';
 import { FustifyLogo } from '../brand/FustifyLogo';
 import { BRAND } from '../branding';
+import { HomeWorldPreviewSlot } from './HomeWorldPreviewSlot';
 
 type Navigate = (event: MouseEvent<HTMLAnchorElement>) => void;
 
@@ -128,6 +129,7 @@ function Hero({ onNavigate }: { onNavigate: Navigate }) {
             conquer continents in local or online multiplayer.
           </p>
         </div>
+        <HomeWorldPreviewSlot />
       </div>
       <GameModeCards onNavigate={onNavigate} />
     </section>
