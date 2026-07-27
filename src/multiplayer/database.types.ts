@@ -496,6 +496,22 @@ export type Database = {
           winner_user_id: string;
         }[];
       };
+      authority_begin_room_match_initialization: {
+        Args: {
+          p_actor_user_id: string;
+          p_match_id: string;
+          p_room_id: string;
+        };
+        Returns: undefined;
+      };
+      authority_cancel_room_match_initialization: {
+        Args: {
+          p_actor_user_id: string;
+          p_match_id: string;
+          p_room_id: string;
+        };
+        Returns: undefined;
+      };
       authority_initialize_room_match: {
         Args: {
           p_actor_user_id: string;

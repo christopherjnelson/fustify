@@ -53,6 +53,7 @@ import { isMatchState } from './gameProtocol';
 import { ReadonlyMinimap } from './ReadonlyWorld';
 import { ClipboardCopyButton } from './RoomCodeCopyButton';
 import {
+  isMatchLaunchPending,
   roomLobbyPresentation,
   shouldReplaceRoomSettingsDraft,
 } from './roomLobbyPresentation';
@@ -601,6 +602,11 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
   ).length;
   const canStart =
     claimedHumanSeats >= 2 && state.room.assignment_mode === 'random';
+  const launchPending = isMatchLaunchPending(
+    state.room,
+    state.match,
+    busy === 'start',
+  );
   if (!previewPlanet) throw new Error('Room world preview is unavailable.');
 
   return (
@@ -843,7 +849,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
       }
       actions={
         <>
-          {busy === 'start' && (
+          {launchPending && (
             <Suspense fallback={null}>
               <MatchLaunchOverlay
                 planet={previewPlanet}

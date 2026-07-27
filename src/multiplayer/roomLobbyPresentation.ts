@@ -1,4 +1,8 @@
-import { publicRoomUrl, type Room } from './multiplayerApi';
+import {
+  publicRoomUrl,
+  type Room,
+  type RoomMatchSummary,
+} from './multiplayerApi';
 
 export function shouldReplaceRoomSettingsDraft(
   room: Room,
@@ -9,6 +13,14 @@ export function shouldReplaceRoomSettingsDraft(
     room.status !== 'waiting' ||
     !hasUnsavedPrivateSettings
   );
+}
+
+export function isMatchLaunchPending(
+  room: Room,
+  match: RoomMatchSummary | null,
+  locallyStarting: boolean,
+): boolean {
+  return locallyStarting || (room.status === 'active' && match === null);
 }
 
 export function roomLobbyPresentation(room: Room, userId: string) {

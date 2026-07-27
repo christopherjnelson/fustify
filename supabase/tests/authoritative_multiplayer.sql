@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(18);
+select extensions.plan(22);
 
 insert into auth.users (id, aud, role, is_anonymous, raw_app_meta_data, raw_user_meta_data)
 values
@@ -33,6 +33,25 @@ select public.claim_room_seat((select room_id from authority_fixture), 1);
 
 reset role;
 set local role service_role;
+select public.authority_begin_room_match_initialization(
+  (select room_id from authority_fixture),
+  '40000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001'
+);
+select extensions.is(
+  (select status from public.rooms where id = (select room_id from authority_fixture)),
+  'active',
+  'trusted launch marks the room active before initialization'
+);
+select extensions.is(
+  (
+    select match_id
+    from multiplayer_private.match_launches
+    where room_id = (select room_id from authority_fixture)
+  ),
+  '40000000-0000-4000-8000-000000000001'::uuid,
+  'trusted launch exposes the canonical launch lease'
+);
 select public.authority_initialize_room_match(
   (select room_id from authority_fixture),
   '40000000-0000-4000-8000-000000000001',
@@ -54,6 +73,15 @@ select extensions.is(
   (select revision from public.matches where id = '40000000-0000-4000-8000-000000000001'),
   0::bigint,
   'authoritative match begins at revision zero'
+);
+select extensions.is(
+  (
+    select match_id
+    from multiplayer_private.match_launches
+    where room_id = (select room_id from authority_fixture)
+  ),
+  null::uuid,
+  'canonical match insertion clears the launch lease'
 );
 
 select * from public.authority_commit_match_command(
@@ -194,6 +222,15 @@ select extensions.throws_ok(
   )$$,
   '42501', 'permission denied for function authority_commit_match_command',
   'browser cannot invoke the trusted commit function'
+);
+select extensions.throws_ok(
+  $$select public.authority_begin_room_match_initialization(
+    (select room_id from authority_fixture),
+    '40000000-0000-4000-8000-000000000099',
+    '30000000-0000-4000-8000-000000000001'
+  )$$,
+  '42501', 'permission denied for function authority_begin_room_match_initialization',
+  'browser cannot invoke the trusted launch function'
 );
 
 reset role;

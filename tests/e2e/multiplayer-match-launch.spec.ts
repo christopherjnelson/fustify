@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-test('authoritative match launch overlay is responsive and accessible', async ({
+test('a non-host sees the responsive and accessible authoritative match launch overlay', async ({
   page,
 }, testInfo) => {
   await page.goto(
-    '/multiplayer/match/visual-match?visual-review=1&scenario=multiplayer-match-launch',
+    '/multiplayer/match/visual-match?visual-review=1&scenario=multiplayer-match-launch&role=nonhost',
   );
 
   const overlay = page.getByRole('dialog', {

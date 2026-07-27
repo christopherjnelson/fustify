@@ -36,6 +36,16 @@ export interface StartMatchRepository {
   loadRoom(roomId: string): Promise<AuthoritativeRoom>;
   loadExistingMatch(roomId: string): Promise<MultiplayerMatch | null>;
   loadClaimedSeats(roomId: string): Promise<ClaimedSeat[]>;
+  beginInitialization(input: {
+    roomId: string;
+    matchId: string;
+    actorUserId: string;
+  }): Promise<void>;
+  cancelInitialization(input: {
+    roomId: string;
+    matchId: string;
+    actorUserId: string;
+  }): Promise<void>;
   commitInitialization(input: {
     roomId: string;
     matchId: string;
@@ -145,15 +155,34 @@ export class MatchStartService {
     room: AuthoritativeRoom,
     actorUserId: string,
   ): Promise<MultiplayerMatch> {
-    const claimedSeats = await this.repository.loadClaimedSeats(room.id);
     const matchId = randomUUID();
-    const initialized = await this.initialize(matchId, room, claimedSeats);
-    return this.repository.commitInitialization({
+    await this.repository.beginInitialization({
       roomId: room.id,
       matchId,
       actorUserId,
-      initialized,
     });
+    try {
+      const claimedSeats = await this.repository.loadClaimedSeats(room.id);
+      const initialized = await this.initialize(matchId, room, claimedSeats);
+      return await this.repository.commitInitialization({
+        roomId: room.id,
+        matchId,
+        actorUserId,
+        initialized,
+      });
+    } catch (error) {
+      try {
+        await this.repository.cancelInitialization({
+          roomId: room.id,
+          matchId,
+          actorUserId,
+        });
+      } catch {
+        // Preserve the initialization failure. A later launch can recover an
+        // abandoned canonical launch lease after its database timeout.
+      }
+      throw error;
+    }
   }
 }
 
@@ -258,6 +287,46 @@ export class SupabaseStartMatchRepository implements StartMatchRepository {
         controllerType: 'human',
       };
     });
+  }
+
+  async beginInitialization({
+    roomId,
+    matchId,
+    actorUserId,
+  }: {
+    roomId: string;
+    matchId: string;
+    actorUserId: string;
+  }): Promise<void> {
+    const { error } = await this.admin.rpc(
+      'authority_begin_room_match_initialization',
+      {
+        p_room_id: roomId,
+        p_match_id: matchId,
+        p_actor_user_id: actorUserId,
+      },
+    );
+    if (error) throw error;
+  }
+
+  async cancelInitialization({
+    roomId,
+    matchId,
+    actorUserId,
+  }: {
+    roomId: string;
+    matchId: string;
+    actorUserId: string;
+  }): Promise<void> {
+    const { error } = await this.admin.rpc(
+      'authority_cancel_room_match_initialization',
+      {
+        p_room_id: roomId,
+        p_match_id: matchId,
+        p_actor_user_id: actorUserId,
+      },
+    );
+    if (error) throw error;
   }
 
   async commitInitialization({

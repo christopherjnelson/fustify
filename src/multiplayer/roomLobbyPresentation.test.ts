@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Room } from './multiplayerApi';
 import {
+  isMatchLaunchPending,
   roomLobbyPresentation,
   shouldReplaceRoomSettingsDraft,
 } from './roomLobbyPresentation';
@@ -16,6 +17,26 @@ const room = {
 } as Room;
 
 describe('room lobby publication presentation', () => {
+  it('shows canonical match launch work to hosts and other room members', () => {
+    const active = { ...room, status: 'active' };
+
+    expect(isMatchLaunchPending(room, null, true)).toBe(true);
+    expect(isMatchLaunchPending(active, null, false)).toBe(true);
+    expect(
+      isMatchLaunchPending(
+        active,
+        {
+          id: '40000000-0000-4000-8000-000000000004',
+          room_id: room.id,
+          status: 'active',
+          revision: 0,
+        },
+        false,
+      ),
+    ).toBe(false);
+    expect(isMatchLaunchPending(room, null, false)).toBe(false);
+  });
+
   it('keeps private host settings editable and exposes only the private code', () => {
     expect(roomLobbyPresentation(room, hostId)).toMatchObject({
       host: true,

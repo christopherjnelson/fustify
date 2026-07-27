@@ -73,6 +73,14 @@ turn/phase/reinforcement values, combat sequence, events, and match status. It
 persists those snapshots before clients enter the match. Setup and generator
 metadata remain as audit/reproduction data.
 
+Before generation begins, the Node authority acquires a short-lived launch
+lease on the room and moves it to `active`. Room Realtime and the two-second
+reconciliation path therefore show the same indeterminate launch screen to
+every current member, not only the host whose start request is pending. The
+canonical match insert clears the lease atomically. A failed initializer
+returns a still-matchless room to `waiting`, while a later host retry may
+recover a lease abandoned for more than five minutes.
+
 ## Durable state and command protocol
 
 `public.matches` contains immutable setup/seat/generator/planet snapshots and

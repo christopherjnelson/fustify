@@ -57,6 +57,8 @@ function repository(
     loadRoom: vi.fn(async () => room),
     loadExistingMatch: vi.fn(async () => null),
     loadClaimedSeats: vi.fn(async () => seats),
+    beginInitialization: vi.fn(async () => undefined),
+    cancelInitialization: vi.fn(async () => undefined),
     commitInitialization: vi.fn(async () => match),
     ...overrides,
   };
@@ -109,6 +111,11 @@ describe('Node match start service', () => {
       match,
     );
     expect(repo.loadRoom).toHaveBeenCalledWith(roomId);
+    expect(repo.beginInitialization).toHaveBeenCalledWith({
+      roomId,
+      matchId: expect.any(String),
+      actorUserId: hostId,
+    });
     expect(repo.loadClaimedSeats).toHaveBeenCalledWith(roomId);
     expect(initialize).toHaveBeenCalledWith(expect.any(String), room, seats);
     expect(repo.commitInitialization).toHaveBeenCalledWith({
@@ -130,6 +137,7 @@ describe('Node match start service', () => {
       match,
     );
     expect(repo.loadClaimedSeats).not.toHaveBeenCalled();
+    expect(repo.beginInitialization).not.toHaveBeenCalled();
     expect(initialize).not.toHaveBeenCalled();
     expect(repo.commitInitialization).not.toHaveBeenCalled();
   });
@@ -171,5 +179,27 @@ describe('Node match start service', () => {
       match,
     );
     expect(initialize).toHaveBeenCalledTimes(2);
+    expect(repo.cancelInitialization).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not mask an initialization error when launch cleanup also fails', async () => {
+    const repo = repository({
+      cancelInitialization: vi.fn(async () => {
+        throw new Error('launch_cleanup_failed');
+      }),
+    });
+    const initialize = vi.fn(async () => {
+      throw new Error('multiplayer_request_failed');
+    });
+    const service = new MatchStartService(repo, initialize);
+
+    await expect(service.start('Bearer registered', roomId)).rejects.toThrow(
+      'multiplayer_request_failed',
+    );
+    expect(repo.cancelInitialization).toHaveBeenCalledWith({
+      roomId,
+      matchId: expect.any(String),
+      actorUserId: hostId,
+    });
   });
 });

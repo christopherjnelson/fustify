@@ -33,6 +33,7 @@ Migration order:
 16. `20260725193047_expire_inactive_multiplayer_rooms.sql`
 17. `20260725212915_discord_room_announcements.sql`
 18. `20260725231245_publish_immutable_public_lobbies.sql`
+19. `20260727055631_multiplayer_match_launch_state.sql`
 
 The authority migration extends `matches`, creates append-only
 `match_commands`, adds member-scoped read RLS, removes browser execution of the
@@ -74,6 +75,13 @@ advertised settings after publication, clears published room codes, narrows
 public joining to an ID-only result, and makes the private-to-public update the
 sole Discord enqueue event. Existing public rooms are immediately treated as
 published and locked; existing private waiting rooms remain editable.
+
+The multiplayer-match-launch-state migration adds a service-role-only launch
+lease. It moves a validated room to `active` before server-side world
+generation so all current members receive the launch state through the
+existing member-scoped room subscription, clears the lease when the canonical
+match is inserted, and supports token-matched failure cleanup plus a
+five-minute abandoned-launch retry.
 
 ## Secrets and browser configuration
 
