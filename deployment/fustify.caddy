@@ -1,6 +1,6 @@
 dev.fustify.com {
 	route {
-		@blocked path_regexp blocked "(^|/)(\\.[^/]+|src(/|$)|node_modules(/|$))|\\.map$"
+		@blocked path_regexp blocked (^|/)(\.[^/]+|src(/|$)|node_modules(/|$))|\.map$
 		respond @blocked 404
 
 		handle /api/* {

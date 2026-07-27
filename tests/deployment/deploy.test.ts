@@ -676,6 +676,30 @@ describe('droplet installer contracts', () => {
     expect(fragment).not.toMatch(/^(\t)respond @blocked 404$/mu);
   });
 
+  it('uses a blocked-path regular expression with the intended semantics', async () => {
+    const fragment = await readFile(caddyFragment, 'utf8');
+    const matcher = fragment.match(
+      /^\s*@blocked path_regexp blocked (\S+)\s*$/mu,
+    );
+
+    expect(matcher).not.toBeNull();
+    const blockedPath = new RegExp(matcher![1]);
+
+    for (const path of [
+      '/.env',
+      '/.git/config',
+      '/src/main.tsx',
+      '/node_modules/',
+      '/assets/app.js.map',
+    ]) {
+      expect(blockedPath.test(path), path).toBe(true);
+    }
+
+    for (const path of ['/', '/multiplayer', '/assets/app.js', '/api/health']) {
+      expect(blockedPath.test(path), path).toBe(false);
+    }
+  });
+
   it('installs the managed Caddy fragment only after backup and validation', async () => {
     const harness = await createHarness();
     const fakeBin = join(harness.root, 'bin');
