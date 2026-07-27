@@ -1,12 +1,12 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { WaitingRoomExitDialog } from './WaitingRoomExitDialog';
 import {
   closedRoomLandingNotice,
   runWaitingRoomExit,
   waitingRoomExitCopy,
-  WaitingRoomExitDialog,
-} from './WaitingRoomExitDialog';
+} from './waitingRoomExit';
 
 describe('waiting room exit confirmation', () => {
   it('returns host and guest closure feedback to the correct lifecycle owner', () => {

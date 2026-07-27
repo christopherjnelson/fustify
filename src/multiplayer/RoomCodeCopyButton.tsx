@@ -25,21 +25,27 @@ export function scheduleRoomCodeCopyReset(
 export function RoomCodeCopyControl({
   feedback,
   onCopy,
+  idleLabel = 'Copy room code',
+  copiedAnnouncement = 'Room code copied.',
+  failedAnnouncement = 'Could not copy room code.',
 }: {
   feedback: RoomCodeCopyFeedback;
   onCopy: () => void;
+  idleLabel?: string;
+  copiedAnnouncement?: string;
+  failedAnnouncement?: string;
 }) {
   const label =
     feedback === 'copied'
       ? 'Copied!'
       : feedback === 'failed'
         ? 'Copy failed'
-        : 'Copy room code';
+        : idleLabel;
   const announcement =
     feedback === 'copied'
-      ? 'Room code copied.'
+      ? copiedAnnouncement
       : feedback === 'failed'
-        ? 'Could not copy room code.'
+        ? failedAnnouncement
         : '';
 
   return (
@@ -55,6 +61,27 @@ export function RoomCodeCopyControl({
 }
 
 export function RoomCodeCopyButton({ roomCode }: { roomCode: string }) {
+  return (
+    <ClipboardCopyButton
+      value={roomCode}
+      idleLabel="Copy room code"
+      copiedAnnouncement="Room code copied."
+      failedAnnouncement="Could not copy room code."
+    />
+  );
+}
+
+export function ClipboardCopyButton({
+  value,
+  idleLabel,
+  copiedAnnouncement,
+  failedAnnouncement,
+}: {
+  value: string;
+  idleLabel: string;
+  copiedAnnouncement: string;
+  failedAnnouncement: string;
+}) {
   const [feedback, setFeedback] = useState<RoomCodeCopyFeedback>('idle');
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const operation = useRef(0);
@@ -78,7 +105,7 @@ export function RoomCodeCopyButton({ roomCode }: { roomCode: string }) {
     setFeedback('idle');
 
     const result = await copyRoomCode(
-      roomCode,
+      value,
       navigator.clipboard.writeText.bind(navigator.clipboard),
     );
     if (currentOperation !== operation.current) return;
@@ -93,6 +120,12 @@ export function RoomCodeCopyButton({ roomCode }: { roomCode: string }) {
   };
 
   return (
-    <RoomCodeCopyControl feedback={feedback} onCopy={() => void handleCopy()} />
+    <RoomCodeCopyControl
+      feedback={feedback}
+      onCopy={() => void handleCopy()}
+      idleLabel={idleLabel}
+      copiedAnnouncement={copiedAnnouncement}
+      failedAnnouncement={failedAnnouncement}
+    />
   );
 }

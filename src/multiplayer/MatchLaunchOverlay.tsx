@@ -59,3 +59,5 @@ export function MatchLaunchOverlay({
     </div>
   );
 }
+
+export default MatchLaunchOverlay;

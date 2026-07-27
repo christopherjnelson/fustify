@@ -46,7 +46,7 @@ test('waiting-room navigation guard covers links, history, unload, and cleanup',
   await page.goto('/multiplayer?visual-review=1&browser-state=empty');
   const result = await page.evaluate(async () => {
     const { installWaitingRoomNavigationGuard } =
-      await import('/src/multiplayer/WaitingRoomExitDialog.tsx');
+      await import('/src/multiplayer/waitingRoomExit.ts');
     const intents: Array<{ destination: string; external: boolean }> = [];
     const cleanup = installWaitingRoomNavigationGuard({
       roomUrl: '/multiplayer?visual-review=1&browser-state=empty',
@@ -276,7 +276,7 @@ test('stored world preview conversion produces a 640 by 360 WebP', async ({
   await page.goto('/multiplayer?visual-review=1&browser-state=empty');
   const result = await page.evaluate(async () => {
     const { createRoomThumbnail } =
-      await import('/src/multiplayer/worldThumbnail.ts');
+      await import('/src/multiplayer/worldThumbnailPublication.ts');
     const thumbnail = await createRoomThumbnail({
       assignment_mode: 'random',
       continent_count: 2,

@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -33,7 +35,6 @@ import {
   leaveRoom,
   multiplayerError,
   isAccountRequiredError,
-  publishRoom,
   releaseSeat,
   startMatch,
   submitGameplayCommand,
@@ -50,9 +51,7 @@ import { MatchSynchronization } from './matchSynchronization';
 import { getSupabaseClient } from './supabaseClient';
 import { isMatchState } from './gameProtocol';
 import { ReadonlyMinimap } from './ReadonlyWorld';
-import { RoomCodeCopyButton } from './RoomCodeCopyButton';
-import { RoomLinkCopyButton } from './RoomLinkCopyButton';
-import { RoomPublicationDialog } from './RoomPublicationDialog';
+import { ClipboardCopyButton } from './RoomCodeCopyButton';
 import {
   roomLobbyPresentation,
   shouldReplaceRoomSettingsDraft,
@@ -67,7 +66,6 @@ import {
 import { MultiplayerRoomRoster } from './MultiplayerRoomRoster';
 import { buildMultiplayerRosterDisplay } from './multiplayerRoomRosterViewModel';
 import { createMultiplayerPlayerConfigs } from './multiplayerPlayerConfig';
-import { PostMatchActions } from './PostMatchActions';
 import {
   aggregateMatchEventReactions,
   fetchMatchEventReactions,
@@ -81,16 +79,13 @@ import {
   MultiplayerBrowser,
   type MultiplayerBrowserServices,
 } from './MultiplayerBrowser';
-import { replaceRoomThumbnail, roomThumbnailPublicUrl } from './worldThumbnail';
+import { roomThumbnailPublicUrl } from './worldThumbnail';
 import { PublicRoomSettingsSummary } from './PublicRoomSettingsSummary';
-import { MatchLaunchOverlay } from './MatchLaunchOverlay';
 import {
-  closedRoomLandingNotice,
   installWaitingRoomNavigationGuard,
   runWaitingRoomExit,
-  WaitingRoomExitDialog,
   type WaitingRoomExitIntent,
-} from './WaitingRoomExitDialog';
+} from './waitingRoomExit';
 import {
   directRoomEntryFailure,
   directRoomEntryStatus,
@@ -103,6 +98,13 @@ type Route =
   | { kind: 'lobby' }
   | { kind: 'room'; id: string }
   | { kind: 'match'; id: string };
+
+const RoomPublicationController = lazy(
+  () => import('./RoomPublicationController'),
+);
+const MatchLaunchOverlay = lazy(() => import('./MatchLaunchOverlay'));
+const PostMatchActions = lazy(() => import('./PostMatchActions'));
+const WaitingRoomExitDialog = lazy(() => import('./WaitingRoomExitDialog'));
 
 declare global {
   interface Window {
@@ -494,7 +496,9 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
     navigate(
       '/multiplayer',
       true,
-      closedRoomLandingNotice(state.room.host_user_id, userId),
+      state.room.host_user_id === userId
+        ? undefined
+        : 'The host closed this room.',
     );
   }, [state, userId]);
 
@@ -615,7 +619,12 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
               <a data-testid="room-direct-link" href={directUrl}>
                 {directUrl}
               </a>
-              <RoomLinkCopyButton roomUrl={directUrl} />
+              <ClipboardCopyButton
+                value={directUrl}
+                idleLabel="Copy direct link"
+                copiedAnnouncement="Direct room link copied."
+                failedAnnouncement="Could not copy the direct room link."
+              />
             </div>
           ) : (
             <div className="room-summary-code">
@@ -625,8 +634,11 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                   <strong data-testid="room-code">
                     {formatRoomCode(state.room.join_code)}
                   </strong>
-                  <RoomCodeCopyButton
-                    roomCode={formatRoomCode(state.room.join_code)}
+                  <ClipboardCopyButton
+                    value={formatRoomCode(state.room.join_code)}
+                    idleLabel="Copy room code"
+                    copiedAnnouncement="Room code copied."
+                    failedAnnouncement="Could not copy room code."
                   />
                 </>
               ) : (
@@ -832,10 +844,12 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
       actions={
         <>
           {busy === 'start' && (
-            <MatchLaunchOverlay
-              planet={previewPlanet}
-              roomName={state.room.name}
-            />
+            <Suspense fallback={null}>
+              <MatchLaunchOverlay
+                planet={previewPlanet}
+                roomName={state.room.name}
+              />
+            </Suspense>
           )}
           {error && (
             <p
@@ -907,110 +921,55 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
             </div>
           </footer>
           {exitIntent && waiting && (
-            <WaitingRoomExitDialog
-              host={host}
-              busy={busy === 'leave'}
-              error={exitError}
-              onCancel={() => {
-                if (busyRef.current !== null || exitingRef.current) return;
-                setExitError(null);
-                setExitIntent(null);
-              }}
-              onConfirm={() => void confirmExit()}
-            />
+            <Suspense fallback={null}>
+              <WaitingRoomExitDialog
+                host={host}
+                busy={busy === 'leave'}
+                error={exitError}
+                onCancel={() => {
+                  if (busyRef.current !== null || exitingRef.current) return;
+                  setExitError(null);
+                  setExitIntent(null);
+                }}
+                onConfirm={() => void confirmExit()}
+              />
+            </Suspense>
           )}
           {publicationOpen && lobby.canPublish && (
-            <RoomPublicationDialog
-              busy={busy === 'publish'}
-              error={publicationError}
-              onCancel={() => {
-                if (busyRef.current !== null) return;
-                setPublicationError(null);
-                setPublicationOpen(false);
-              }}
-              onConfirm={() => {
-                if (busyRef.current !== null) return;
-                busyRef.current = 'publish';
-                setBusy('publish');
-                setError(null);
-                setPublicationError(null);
-                void (async () => {
-                  try {
-                    if (settingsDirty.current) {
-                      const saved = await updateRoomSettings(client, settings);
-                      settingsDirty.current = false;
-                      if (mountedRef.current) setSettings(saved);
-                    }
-                    await publishRoom(client, roomId);
-                    const sequence = ++requestSequence.current;
-                    const canonical = await fetchRoomState(client, roomId);
-                    if (
-                      !mountedRef.current ||
-                      sequence !== requestSequence.current
-                    ) {
-                      return;
-                    }
-                    settingsDirty.current = false;
-                    setState(canonical);
-                    setSettings(canonical.room);
-                    setPublicationOpen(false);
-                    if (canonical.room.visibility === 'public') {
-                      void replaceRoomThumbnail(client, canonical.room).catch(
-                        () => {
-                          console.warn(
-                            'Public room thumbnail publication failed.',
-                          );
-                        },
-                      );
-                    }
-                  } catch (requestError) {
-                    try {
-                      const sequence = ++requestSequence.current;
-                      const canonical = await fetchRoomState(client, roomId);
-                      if (
-                        !mountedRef.current ||
-                        sequence !== requestSequence.current
-                      ) {
-                        return;
-                      }
-                      setState(canonical);
-                      if (
-                        shouldReplaceRoomSettingsDraft(
-                          canonical.room,
-                          settingsDirty.current,
-                        )
-                      ) {
-                        setSettings(canonical.room);
-                      }
-                      if (canonical.room.visibility === 'public') {
-                        settingsDirty.current = false;
-                        setPublicationOpen(false);
-                        setPublicationError(null);
-                        void replaceRoomThumbnail(client, canonical.room).catch(
-                          () => {
-                            console.warn(
-                              'Public room thumbnail publication failed.',
-                            );
-                          },
-                        );
-                        return;
-                      }
-                    } catch {
-                      // Keep the safe publication error below if reconciliation
-                      // is temporarily unavailable.
-                    }
-                    if (mountedRef.current) {
-                      setPublicationError(
-                        multiplayerError(requestError).message,
-                      );
-                    }
-                  } finally {
-                    if (mountedRef.current) setBusy(null);
-                    busyRef.current = null;
-                  }
-                })();
-              }}
-            />
+            <Suspense fallback={null}>
+              <RoomPublicationController
+                client={client}
+                roomId={roomId}
+                settings={settings}
+                isSettingsDirty={() => settingsDirty.current}
+                markSettingsClean={() => {
+                  settingsDirty.current = false;
+                }}
+                isMounted={() => mountedRef.current}
+                nextRequestSequence={() => ++requestSequence.current}
+                isCurrentRequest={(sequence) =>
+                  sequence === requestSequence.current
+                }
+                busy={busy}
+                isBusy={() => busyRef.current !== null}
+                beginPublishing={() => {
+                  if (busyRef.current !== null) return false;
+                  busyRef.current = 'publish';
+                  setBusy('publish');
+                  return true;
+                }}
+                finishPublishing={() => {
+                  if (mountedRef.current) setBusy(null);
+                  busyRef.current = null;
+                }}
+                error={publicationError}
+                setPageError={setError}
+                setError={setPublicationError}
+                setOpen={setPublicationOpen}
+                setSettings={setSettings}
+                setState={setState}
+              />
+            </Suspense>
           )}
         </>
       }
@@ -1443,14 +1402,16 @@ function MatchView({
       renderPostMatchActions={
         match.status === 'completed' && postMatch
           ? (reviewing, onReviewingChange) => (
-              <PostMatchActions
-                reviewing={reviewing}
-                isHost={postMatch.isHost}
-                settings={postMatch.settings}
-                createRoom={(settings) => createRoom(client, { settings })}
-                onReviewingChange={onReviewingChange}
-                navigate={navigate}
-              />
+              <Suspense fallback={null}>
+                <PostMatchActions
+                  reviewing={reviewing}
+                  isHost={postMatch.isHost}
+                  settings={postMatch.settings}
+                  createRoom={(settings) => createRoom(client, { settings })}
+                  onReviewingChange={onReviewingChange}
+                  navigate={navigate}
+                />
+              </Suspense>
             )
           : undefined
       }

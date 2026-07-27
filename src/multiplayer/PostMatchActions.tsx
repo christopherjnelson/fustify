@@ -90,3 +90,5 @@ export function PostMatchActions({
     </>
   );
 }
+
+export default PostMatchActions;

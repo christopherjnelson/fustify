@@ -4,11 +4,11 @@ import { DEFAULT_GENERATOR_VERSION } from '../core/generation/constants';
 import type { Database } from './database.types';
 import type { Room } from './multiplayerApi';
 import { generateRoomPreviewPlanet } from './roomWorld';
+import { roomThumbnailPath } from './worldThumbnail';
 import {
   buildWorldThumbnailSvg,
   replaceRoomThumbnail,
-  roomThumbnailPath,
-} from './worldThumbnail';
+} from './worldThumbnailPublication';
 
 const room: Room = {
   assignment_mode: 'random',
