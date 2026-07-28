@@ -29,6 +29,7 @@ function errorCode(error: unknown): string {
   const known = [
     'room_access_denied',
     'account_required',
+    'account_blocked',
     'host_only',
     'not_enough_players',
     'multiplayer_draft_unsupported',
@@ -54,6 +55,7 @@ function statusFor(code: string): number {
   if (
     [
       'account_required',
+      'account_blocked',
       'room_access_denied',
       'host_only',
       'seat_required',
@@ -99,6 +101,21 @@ Deno.serve(async (request) => {
   });
 
   try {
+    const { data: moderation, error: moderationError } = await admin
+      .from('account_moderation')
+      .select('state,banned_until')
+      .eq('user_id', actorUserId)
+      .maybeSingle();
+    if (moderationError) throw moderationError;
+    if (
+      moderation?.state === 'deleted' ||
+      moderation?.state === 'revoked' ||
+      (moderation?.state === 'banned' &&
+        (!moderation.banned_until ||
+          Date.parse(moderation.banned_until) > Date.now()))
+    ) {
+      throw new Error('account_blocked');
+    }
     const body = (await request.json()) as Record<string, unknown>;
     if (body.operation !== 'command') throw new Error('invalid_request');
     if (

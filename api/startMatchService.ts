@@ -212,11 +212,40 @@ export class SupabaseStartMatchRepository implements StartMatchRepository {
     );
   }
 
-  authorize(authorization: string | null) {
-    return authorizeGameplayRequest(authorization, async (token) => {
-      const { data, error } = await this.authClient.auth.getUser(token);
-      return { user: data.user, error };
-    });
+  async authorize(
+    authorization: string | null,
+  ): ReturnType<StartMatchRepository['authorize']> {
+    const authorized = await authorizeGameplayRequest(
+      authorization,
+      async (token) => {
+        const { data, error } = await this.authClient.auth.getUser(token);
+        return { user: data.user, error };
+      },
+    );
+    if (!authorized.ok) return authorized;
+    const unrestrictedAdmin = this.admin as unknown as SupabaseClient;
+    const { data: moderation, error } = await unrestrictedAdmin
+      .from('account_moderation')
+      .select('state,banned_until')
+      .eq('user_id', authorized.actorUserId)
+      .maybeSingle();
+    if (error?.code !== 'PGRST205' && error) {
+      throw new MatchStartError('server_configuration_error', 503);
+    }
+    if (
+      moderation?.state === 'deleted' ||
+      moderation?.state === 'revoked' ||
+      (moderation?.state === 'banned' &&
+        (!moderation.banned_until ||
+          Date.parse(moderation.banned_until) > Date.now()))
+    ) {
+      return {
+        ok: false,
+        status: 403,
+        code: 'account_required',
+      } as const;
+    }
+    return authorized;
   }
 
   async loadRoom(roomId: string): Promise<AuthoritativeRoom> {
