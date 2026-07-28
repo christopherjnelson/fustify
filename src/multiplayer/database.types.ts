@@ -7,8 +7,94 @@ export type Json =
   | Json[];
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: '14.5';
+  };
   public: {
     Tables: {
+      account_moderation: {
+        Row: {
+          banned_until: string | null;
+          created_at: string;
+          reason: string | null;
+          revoked_after: string | null;
+          state: string;
+          updated_at: string;
+          updated_by: string | null;
+          user_id: string;
+        };
+        Insert: {
+          banned_until?: string | null;
+          created_at?: string;
+          reason?: string | null;
+          revoked_after?: string | null;
+          state?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          user_id: string;
+        };
+        Update: {
+          banned_until?: string | null;
+          created_at?: string;
+          reason?: string | null;
+          revoked_after?: string | null;
+          state?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      admin_action_audit: {
+        Row: {
+          action: string;
+          actor_user_id: string | null;
+          after_summary: Json | null;
+          before_summary: Json | null;
+          created_at: string;
+          error_code: string | null;
+          id: number;
+          idempotency_key: string;
+          outcome: string;
+          reason: string;
+          request_id: string;
+          target_id: string;
+          target_type: string;
+        };
+        Insert: {
+          action: string;
+          actor_user_id?: string | null;
+          after_summary?: Json | null;
+          before_summary?: Json | null;
+          created_at?: string;
+          error_code?: string | null;
+          id?: never;
+          idempotency_key: string;
+          outcome: string;
+          reason: string;
+          request_id: string;
+          target_id: string;
+          target_type: string;
+        };
+        Update: {
+          action?: string;
+          actor_user_id?: string | null;
+          after_summary?: Json | null;
+          before_summary?: Json | null;
+          created_at?: string;
+          error_code?: string | null;
+          id?: never;
+          idempotency_key?: string;
+          outcome?: string;
+          reason?: string;
+          request_id?: string;
+          target_id?: string;
+          target_type?: string;
+        };
+        Relationships: [];
+      };
       discord_room_announcement_config: {
         Row: {
           avatar_url: string | null;
@@ -447,6 +533,11 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      admin_cleanup_candidates: { Args: never; Returns: Json };
+      admin_close_room: {
+        Args: { p_force?: boolean; p_room_id: string };
+        Returns: Json;
+      };
       admin_dashboard_overview: {
         Args: never;
         Returns: {
@@ -460,6 +551,7 @@ export type Database = {
           total_matches: number;
         }[];
       };
+      admin_purge_room: { Args: { p_room_id: string }; Returns: Json };
       admin_recent_rooms: {
         Args: never;
         Returns: {
@@ -475,6 +567,27 @@ export type Database = {
           updated_at: string;
           visibility: string;
         }[];
+      };
+      admin_retry_discord_announcement: {
+        Args: { p_announcement_id: string };
+        Returns: boolean;
+      };
+      admin_server_health: { Args: never; Returns: Json };
+      authority_begin_room_match_initialization: {
+        Args: {
+          p_actor_user_id: string;
+          p_match_id: string;
+          p_room_id: string;
+        };
+        Returns: undefined;
+      };
+      authority_cancel_room_match_initialization: {
+        Args: {
+          p_actor_user_id: string;
+          p_match_id: string;
+          p_room_id: string;
+        };
+        Returns: undefined;
       };
       authority_commit_match_command: {
         Args: {
@@ -498,22 +611,6 @@ export type Database = {
           winner_player_id: string;
           winner_user_id: string;
         }[];
-      };
-      authority_begin_room_match_initialization: {
-        Args: {
-          p_actor_user_id: string;
-          p_match_id: string;
-          p_room_id: string;
-        };
-        Returns: undefined;
-      };
-      authority_cancel_room_match_initialization: {
-        Args: {
-          p_actor_user_id: string;
-          p_match_id: string;
-          p_room_id: string;
-        };
-        Returns: undefined;
       };
       authority_initialize_room_match: {
         Args: {
@@ -604,6 +701,23 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      complete_own_profile: {
+        Args: { p_avatar_url: string; p_display_name: string };
+        Returns: {
+          avatar_url: string | null;
+          created_at: string;
+          display_name: string;
+          onboarding_completed: boolean;
+          updated_at: string;
+          user_id: string;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'profiles';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_room: {
         Args: {
           assignment_mode?: string;
@@ -641,27 +755,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
-      current_user_is_admin: {
-        Args: never;
-        Returns: boolean;
-      };
-      complete_own_profile: {
-        Args: { p_avatar_url: string | null; p_display_name: string };
-        Returns: {
-          avatar_url: string | null;
-          created_at: string;
-          display_name: string;
-          onboarding_completed: boolean;
-          updated_at: string;
-          user_id: string;
-        };
-        SetofOptions: {
-          from: '*';
-          to: 'profiles';
-          isOneToOne: true;
-          isSetofReturn: false;
-        };
-      };
+      current_user_is_admin: { Args: never; Returns: boolean };
       ensure_own_profile: {
         Args: never;
         Returns: {
@@ -685,7 +779,9 @@ export type Database = {
       };
       join_public_room: {
         Args: { p_room_id: string };
-        Returns: { id: string }[];
+        Returns: {
+          id: string;
+        }[];
       };
       join_room: {
         Args: { display_name: string; join_code: string };
@@ -723,7 +819,7 @@ export type Database = {
           continent_count: number;
           created_at: string;
           current_players: number;
-          host_avatar_url: string | null;
+          host_avatar_url: string;
           host_display_name: string;
           maximum_players: number;
           players: Json;
@@ -732,7 +828,7 @@ export type Database = {
           room_seed: string;
           room_state: string;
           territory_count: number;
-          thumbnail_path: string | null;
+          thumbnail_path: string;
           thumbnail_version: number;
         }[];
       };
@@ -774,11 +870,7 @@ export type Database = {
       };
       release_room_seat: { Args: { room_id: string }; Returns: undefined };
       set_match_event_reaction: {
-        Args: {
-          p_event_id: string;
-          p_match_id: string;
-          p_reaction: string | null;
-        };
+        Args: { p_event_id: string; p_match_id: string; p_reaction: string };
         Returns: undefined;
       };
       start_room_match: {
@@ -808,7 +900,7 @@ export type Database = {
         };
       };
       update_own_profile: {
-        Args: { p_avatar_url: string | null; p_display_name: string };
+        Args: { p_avatar_url: string; p_display_name: string };
         Returns: {
           avatar_url: string | null;
           created_at: string;
@@ -823,13 +915,6 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
-      };
-      username_options: {
-        Args: { p_candidate: string };
-        Returns: {
-          available: boolean;
-          suggestions: string[];
-        }[];
       };
       update_room_settings: {
         Args: {
@@ -866,6 +951,13 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      username_options: {
+        Args: { p_candidate: string };
+        Returns: {
+          available: boolean;
+          suggestions: string[];
+        }[];
       };
     };
     Enums: {

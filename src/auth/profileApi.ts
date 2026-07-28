@@ -163,7 +163,8 @@ export async function updateCurrentProfile(
   const { data, error } = await runProfileRequest(
     client.rpc('update_own_profile', {
       p_display_name: parsedUpdate.displayName,
-      p_avatar_url: parsedUpdate.avatarUrl,
+      // Supabase's generated RPC arguments do not preserve PostgreSQL nullability.
+      p_avatar_url: parsedUpdate.avatarUrl as string,
     }),
   );
   if (error || !data) {
@@ -186,7 +187,8 @@ export async function completeCurrentProfile(
   const { data, error } = await runProfileRequest(
     client.rpc('complete_own_profile', {
       p_display_name: parsedUpdate.displayName,
-      p_avatar_url: parsedUpdate.avatarUrl,
+      // The database intentionally accepts null to clear or decline an avatar.
+      p_avatar_url: parsedUpdate.avatarUrl as string,
     }),
   );
   if (error || !data) {

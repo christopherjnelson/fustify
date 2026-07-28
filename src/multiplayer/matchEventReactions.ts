@@ -120,7 +120,8 @@ export async function setMatchEventReaction(
   const { error } = await client.rpc('set_match_event_reaction', {
     p_match_id: matchId,
     p_event_id: eventId,
-    p_reaction: reaction,
+    // The database intentionally accepts null to remove the caller's reaction.
+    p_reaction: reaction as string,
   });
   if (error) throw multiplayerError(error);
 }
