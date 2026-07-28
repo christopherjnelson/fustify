@@ -1,5 +1,4 @@
 import { createClient, type User } from '@supabase/supabase-js';
-import { discordIdentityAvatarUrl } from '../../../src/auth/discordProfileMetadata.ts';
 import {
   profileAvatarUrlSchema,
   profileDisplayNameSchema,
@@ -24,6 +23,21 @@ function hasDiscordIdentity(user: User): boolean {
   return (
     user.identities?.some(({ provider }) => provider === 'discord') === true
   );
+}
+
+function discordIdentityAvatarUrl(user: User): string | null {
+  const discordIdentity = user.identities?.find(
+    (identity) => identity.provider === 'discord',
+  );
+  const metadata = discordIdentity?.identity_data;
+  if (!metadata) return null;
+  for (const key of ['avatar_url', 'picture']) {
+    const value = metadata[key];
+    if (typeof value !== 'string') continue;
+    const parsed = profileAvatarUrlSchema.safeParse(value);
+    if (parsed.success) return parsed.data;
+  }
+  return null;
 }
 
 function errorCode(error: unknown): string {
