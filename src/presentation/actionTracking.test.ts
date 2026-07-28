@@ -47,11 +47,13 @@ describe('action event tracking', () => {
     const initial = reconcileActionEvents(null, 'match-a', []);
     const events = [
       event('combat', 'combat', {
+        actingPlayerId: 'player-a',
         sourceTerritoryId: 'territory-a',
         targetTerritoryId: 'territory-b',
         primaryTerritoryId: 'territory-b',
       }),
       event('captured', 'territory-captured', {
+        actingPlayerId: 'player-a',
         sourceTerritoryId: 'territory-a',
         targetTerritoryId: 'territory-b',
         primaryTerritoryId: 'territory-b',
@@ -62,6 +64,7 @@ describe('action event tracking', () => {
 
     expect(appended.cue).toMatchObject({
       eventId: 'captured',
+      actingPlayerId: 'player-a',
       kind: 'capture',
       sourceTerritoryId: 'territory-a',
       targetTerritoryId: 'territory-b',
@@ -132,6 +135,7 @@ describe('action event tracking', () => {
       actionCueFromEvent(
         'match-a',
         event('placed', 'armies-placed', {
+          playerId: 'legacy-player',
           sourceTerritoryId: 'legacy-source',
           primaryTerritoryId: 'territory-a',
         }),
@@ -140,11 +144,35 @@ describe('action event tracking', () => {
     ).toEqual({
       matchId: 'match-a',
       eventId: 'placed',
+      actingPlayerId: 'legacy-player',
       sourceTerritoryId: null,
       targetTerritoryId: 'territory-a',
       kind: 'reinforcement',
       sequence: 3,
     });
+  });
+
+  it('prefers acting player identity and safely handles missing legacy identity', () => {
+    expect(
+      actionCueFromEvent(
+        'match-a',
+        event('modern', 'armies-placed', {
+          actingPlayerId: 'acting-player',
+          playerId: 'legacy-player',
+          primaryTerritoryId: 'territory-a',
+        }),
+        1,
+      )?.actingPlayerId,
+    ).toBe('acting-player');
+    expect(
+      actionCueFromEvent(
+        'match-a',
+        event('legacy', 'armies-placed', {
+          primaryTerritoryId: 'territory-a',
+        }),
+        2,
+      )?.actingPlayerId,
+    ).toBeNull();
   });
 
   it.each([

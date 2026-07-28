@@ -178,10 +178,20 @@ test('public browser renders cards without room codes and disables full games', 
     page.locator('.public-game-card').first().getByText('atlas-prime-271'),
   ).toBeVisible();
   await expect(
-    page.locator('.public-game-card').first().getByText('42 territories'),
+    page
+      .locator('.public-game-card')
+      .first()
+      .getByText('Territories', { exact: true })
+      .locator('..')
+      .getByText('42', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator('.public-game-card').first().getByText('5 continents'),
+    page
+      .locator('.public-game-card')
+      .first()
+      .getByText('Continents', { exact: true })
+      .locator('..')
+      .getByText('5', { exact: true }),
   ).toBeVisible();
   await expect(
     page.locator('.public-game-card').first().getByText('Random'),

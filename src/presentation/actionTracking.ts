@@ -14,6 +14,7 @@ export type FollowActionTransition = 'enable' | 'disable' | 'pause' | 'reset';
 export interface ActionCue {
   matchId: string;
   eventId: string;
+  actingPlayerId: string | null;
   sourceTerritoryId: string | null;
   targetTerritoryId: string;
   kind: ActionCueKind;
@@ -74,6 +75,7 @@ export function actionCueFromEvent(
   return {
     matchId,
     eventId: event.id,
+    actingPlayerId: event.actingPlayerId ?? event.playerId ?? null,
     sourceTerritoryId:
       kind === 'reinforcement' ? null : (event.sourceTerritoryId ?? null),
     targetTerritoryId,

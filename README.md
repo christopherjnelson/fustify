@@ -33,7 +33,7 @@ The current application provides:
 - An admin-authorized `/admin` operations dashboard with local structured verification reports in development
 - Reinforcement, repeated attacks, deterministic dice combat, mandatory post-capture movement, one connected-path fortification, and turn advancement
 - Phase-aware globe selection and numbered army markers with non-color source/target cues
-- Brief globe and minimap action beacons plus an opt-in Follow Action camera mode that yields immediately to manual control
+- Brief player-colored destination beams for other players and bots on the globe and directional minimap action cues, plus an opt-in Follow Action camera mode that yields immediately to manual control
 - Versioned setup URLs that reproduce the seed, territory count, continent count, player count, and assignment strategy
 - A searchable, keyboard-operable territory navigator with owner, armies, continent, legal status, and sea-route cues
 - Ownership and continent player views, plus development/debug terrain presentation, that do not affect rules state

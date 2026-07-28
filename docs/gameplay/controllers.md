@@ -153,7 +153,8 @@ stream rotation where relevant and replay stably under this scheme. Save schema
 v4 and setup URLs are unchanged because controller streams are derived runtime
 state rather than persisted state.
 
-Interactive bot actions use the same presentation-only action beacon and
-optional Follow Action behavior as remote human actions. The cue is derived
-after the real reducer event is appended; it does not enter controller
-observations, fingerprints, pacing, decisions, saves, or simulation.
+Interactive bot actions use the same presentation-only player-colored
+destination beam and optional Follow Action behavior as remote human actions.
+Local human actions omit the redundant globe beam. The cue is derived after the
+real reducer event is appended; it does not enter controller observations,
+fingerprints, pacing, decisions, saves, or simulation.

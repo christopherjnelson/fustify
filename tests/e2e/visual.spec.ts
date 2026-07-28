@@ -12,87 +12,87 @@ const scenarios: Array<{
 }> = [
   {
     name: 'world-setup',
-    region: '.setup-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Choose your world/i,
   },
   {
     name: 'generated-world',
-    region: '.setup-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Choose your world/i,
   },
   {
     name: 'generate-world-busy',
-    region: '.setup-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Choose your world/i,
   },
   {
     name: 'pregame',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Preview and assign territories/i,
   },
   {
     name: 'pregame-random-ready',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Preview and assign territories/i,
   },
   {
     name: 'human-vs-bot-setup',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Preview and assign territories/i,
   },
   {
     name: 'multiple-bot-setup',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Preview and assign territories/i,
   },
   {
     name: 'pregame-six-seats',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Preview and assign territories/i,
   },
   {
     name: 'draft-started',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /chooses now/i,
   },
   {
     name: 'draft-in-progress',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /chooses now/i,
   },
   {
     name: 'draft-complete',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Preview and assign territories/i,
   },
   {
     name: 'draft-invalid',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /chooses now/i,
   },
   {
     name: 'pregame-poor',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Preview and assign territories/i,
   },
   {
     name: 'pregame-invalid',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Preview and assign territories/i,
   },
   {
     name: 'pregame-expanded',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Preview and assign territories/i,
   },
   {
     name: 'pregame-rerolled',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Preview and assign territories/i,
   },
   {
     name: 'reroll-busy',
-    region: '.pregame-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Preview and assign territories/i,
   },
   { name: 'handoff', region: '.handoff-card', heading: /Pass the device/i },
@@ -145,7 +145,7 @@ const scenarios: Array<{
   },
   {
     name: 'saved-resume',
-    region: '.setup-panel',
+    region: '.game-setup-shell-overlay',
     heading: /Local session available/i,
   },
   {
@@ -192,6 +192,11 @@ for (const scenario of scenarios) {
       );
       await expect(page.getByTestId('minimap-action-cue')).toBeVisible();
       await page.waitForTimeout(700);
+      await page.screenshot({
+        path: reviewPath(testInfo, 'action-follow-beam'),
+        fullPage: true,
+        animations: 'disabled',
+      });
       await expect(page.locator('.minimap-panel')).toHaveScreenshot(
         'action-follow-minimap-ui.png',
         { animations: 'disabled' },
@@ -204,7 +209,7 @@ for (const scenario of scenarios) {
     }
     if (scenario.name === 'pregame-expanded') {
       await page.getByText('How is this scored?').click();
-      await page.locator('.pregame-panel').evaluate((element) => {
+      await page.locator('.game-setup-shell-overlay').evaluate((element) => {
         element.scrollTop = element.scrollHeight;
       });
     }
@@ -212,7 +217,7 @@ for (const scenario of scenarios) {
       scenario.name === 'draft-complete' ||
       scenario.name === 'draft-invalid'
     ) {
-      await page.locator('.pregame-panel').evaluate((element) => {
+      await page.locator('.game-setup-shell-overlay').evaluate((element) => {
         element.scrollTop = element.scrollHeight;
       });
     }

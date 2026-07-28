@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openScenario, stateSnapshot } from './helpers';
+import { installRegisteredAuthFixture } from './registeredAuthTestClient';
+
+test.beforeEach(async ({ page }) => {
+  await installRegisteredAuthFixture(page);
+});
 
 function territoryNavigator(page: Page) {
   return page.locator('#territory-navigator');
@@ -19,9 +24,7 @@ test('shows the Fustify application brand and browser title', async ({
   await expect(page.locator('main')).toHaveAccessibleName(
     'Fustify — Procedural Globe Strategy',
   );
-  await expect(page.getByLabel('Fustify', { exact: true })).toContainText(
-    'Fustify',
-  );
+  await expect(page.getByRole('link', { name: 'Fustify home' })).toBeVisible();
 });
 
 test('fresh local launch creates one readable URL-stable neutral world', async ({
@@ -145,8 +148,10 @@ test('recommended setup starts with four seats and caps new tables at five', asy
 }) => {
   await page.goto('/?v=1&seed=recommended-setup&territories=42&continents=5');
   await page.getByRole('button', { name: 'Start Game' }).click();
-  await expect(page.getByLabel('Player count')).toHaveValue('4');
-  await expect(page.locator('.player-config')).toHaveCount(4);
+  const playerCount = page.getByLabel('Player count');
+  await expect(playerCount).toHaveValue('4');
+  await expect(playerCount).toHaveAttribute('max', '5');
+  await expect(page.getByTestId(/^local-seat-/)).toHaveCount(4);
   await expect(page.getByLabel(/Crimson League controller/i)).toHaveValue(
     'local-human',
   );
@@ -155,18 +160,15 @@ test('recommended setup starts with four seats and caps new tables at five', asy
       hasText: 'Heuristic Bot',
     }),
   ).toHaveCount(3);
-  await expect(page.getByText(/Recommended: four seats/)).toBeVisible();
-  const addSeat = page.getByRole('button', { name: 'Add Seat' });
-  await addSeat.click();
-  await expect(page.locator('.player-config')).toHaveCount(5);
+  await playerCount.fill('5');
+  await expect(page.getByTestId(/^local-seat-/)).toHaveCount(5);
   await expect(page.getByLabel(/Violet Assembly controller/i)).toHaveValue(
     'heuristic-bot',
   );
-  await expect(addSeat).toBeDisabled();
   await page
     .getByLabel(/Violet Assembly controller/i)
     .selectOption('local-human');
-  await expect(page.getByLabel('Player count')).toHaveValue('5');
+  await expect(playerCount).toHaveValue('5');
 });
 
 test('bot status locks gameplay selection and human controls return afterward', async ({
@@ -266,6 +268,7 @@ test('local bot playback pauses safely and resumes with the selected pacing', as
       ),
     )
     .toBe('fast');
+  await page.getByText('Game', { exact: true }).click();
   await page.waitForTimeout(350);
   expect(await savedEventCount()).toBe(beforeDeliberateAction);
 
@@ -273,8 +276,6 @@ test('local bot playback pauses safely and resumes with the selected pacing', as
     .getByTestId('bot-turn-status')
     .getByRole('button', { name: 'Resume Bots' })
     .click();
-  await page.waitForTimeout(350);
-  expect(await savedEventCount()).toBe(beforeDeliberateAction);
   await expect
     .poll(savedEventCount, { timeout: 3000 })
     .toBeGreaterThan(beforeDeliberateAction);
@@ -348,7 +349,7 @@ test('minimap follows neutral, draft, ready, and active ownership lifecycle', as
   );
 });
 
-test('minimap reflects reducer ownership and remains a non-interactive overview', async ({
+test('minimap reflects reducer ownership and focuses territories without changing match state', async ({
   page,
 }) => {
   await openScenario(page, 'pending-capture');
@@ -361,12 +362,14 @@ test('minimap reflects reducer ownership and remains a non-interactive overview'
       minimap.locator(`[data-territory-id="${territoryId}"]`),
     ).toHaveAttribute('data-owner-id', territory.ownerId);
   }
-  await expect(
-    minimap.locator('button, input, select, a, [tabindex]'),
-  ).toHaveCount(0);
-  const bounds = await minimap.boundingBox();
-  expect(bounds).not.toBeNull();
-  await page.mouse.click(bounds!.x + bounds!.width / 2, bounds!.y + 12);
+  const territoryButtons = minimap.getByRole('button');
+  await expect(territoryButtons).toHaveCount(
+    Object.keys(before.match.territories).length,
+  );
+  await territoryButtons.first().click();
+  await expect
+    .poll(async () => (await stateSnapshot(page)).focusSequence)
+    .toBeGreaterThan(before.focusSequence);
   const after = await stateSnapshot(page);
   expect(after.match).toEqual(before.match);
   expect(after.setupPhase).toBe(before.setupPhase);
@@ -388,7 +391,7 @@ test('minimap stays in bounds and separate from primary controls', async ({
   await openScenario(page, 'pregame');
   const viewport = page.viewportSize()!;
   const minimap = await page.getByTestId('minimap').boundingBox();
-  const panel = await page.locator('.pregame-panel').boundingBox();
+  const panel = await page.locator('.game-setup-shell-overlay').boundingBox();
   expect(minimap).not.toBeNull();
   expect(panel).not.toBeNull();
   expect(minimap!.x).toBeGreaterThanOrEqual(0);
@@ -404,6 +407,7 @@ test('minimap stays in bounds and separate from primary controls', async ({
 
   const legend = page.locator('.control-legend');
   await expect(legend).toBeVisible();
+  await legend.getByRole('button', { name: 'Controls' }).click();
   await expect(legend).toContainText('DragRotate globe');
   await expect(legend).toContainText('Wheel / pinchZoom');
   await expect(legend).toContainText('Click / tapSelect territory');
@@ -651,7 +655,7 @@ test('pregame balance states enforce start behavior and expose details', async (
   await expect(
     page.getByText(/Eight categories compare totals/i),
   ).toBeVisible();
-  await page.locator('.pregame-panel').evaluate((element) => {
+  await page.locator('.game-setup-shell-overlay').evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
   await expect(page.getByRole('button', { name: 'Begin Match' })).toBeVisible();
@@ -926,7 +930,7 @@ test('reinforcement amount selection submits once, clamps, and supports Max', as
     territoryId,
     armyCount: placedAmount,
   });
-  await expect(amount).toHaveValue('1');
+  await expect(amount).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: 'Place 1 army' }),
   ).toBeVisible();
@@ -1129,7 +1133,7 @@ test('capture rejects insufficient movement and player elimination is announced 
   expect((await stateSnapshot(page)).match).toEqual(before);
 
   await openScenario(page, 'player-elimination');
-  await expect(page.getByText('A player was eliminated.')).toBeVisible();
+  await expect(page.getByText(/was eliminated by/i)).toBeVisible();
   expect(
     Object.values((await stateSnapshot(page)).match.players).some(
       ({ eliminated }) => eliminated,
@@ -1368,20 +1372,19 @@ test('restores a validated save from the legacy Worldseed storage key', async ({
   ).toEqual({ current: true, legacy: true });
 });
 
-test('turn completion advances to the next-player handoff', async ({
+test('turn completion advances to the next-player bot handoff', async ({
   page,
 }) => {
   await openScenario(page, 'fortification');
   const active = (await stateSnapshot(page)).match.activePlayerId;
   await page.getByRole('button', { name: 'Skip fortification' }).click();
   await page.getByRole('button', { name: 'End turn' }).click();
-  await expect(page.getByRole('dialog')).toContainText('Pass the device');
+  await expect(page.getByRole('dialog')).toContainText('Turn 2 handoff');
+  await expect(page.getByRole('dialog')).toContainText(
+    'The heuristic bot will begin automatically.',
+  );
   const handed = await stateSnapshot(page);
   expect(handed.match.activePlayerId).not.toBe(active);
-  await page.getByRole('button', { name: /Begin turn 2/i }).click();
-  await expect(page.locator('.turn-banner')).toContainText(
-    'Turn 2 · Reinforce',
-  );
 });
 
 test('Activity dock and saved resume controls are operable', async ({
@@ -1406,7 +1409,7 @@ test('Activity dock and saved resume controls are operable', async ({
   await expect(page.getByRole('dialog')).toContainText('Pass the device');
 });
 
-test('action beacons remain visible while Follow Action is opt-in and manually pausable', async ({
+test('other-player action cues remain visible while Follow Action is opt-in and manually pausable', async ({
   page,
 }) => {
   await openScenario(page, 'action-follow');
@@ -1488,6 +1491,59 @@ test('action beacons remain visible while Follow Action is opt-in and manually p
   await expect(
     page.getByRole('button', { name: 'Follow action' }),
   ).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('globe action beams skip self actions while retaining minimap cues', async ({
+  page,
+}) => {
+  await openScenario(page, 'action-follow');
+  const selfBeam = await page.evaluate(
+    () =>
+      new Promise<{ actingPlayerId: string | null; visible: boolean }>(
+        (resolve) => {
+          window.addEventListener(
+            'fustify:action-beam',
+            (event) =>
+              resolve(
+                (
+                  event as CustomEvent<{
+                    actingPlayerId: string | null;
+                    visible: boolean;
+                  }>
+                ).detail,
+              ),
+            { once: true },
+          );
+          window.__WORLDSEED_VISUAL__!.appendActionEventBatch('self');
+        },
+      ),
+  );
+  expect(selfBeam.visible).toBe(false);
+  await expect(page.getByTestId('minimap-action-cue')).toBeVisible();
+
+  const otherBeam = await page.evaluate(
+    () =>
+      new Promise<{ actingPlayerId: string | null; visible: boolean }>(
+        (resolve) => {
+          window.addEventListener(
+            'fustify:action-beam',
+            (event) =>
+              resolve(
+                (
+                  event as CustomEvent<{
+                    actingPlayerId: string | null;
+                    visible: boolean;
+                  }>
+                ).detail,
+              ),
+            { once: true },
+          );
+          window.__WORLDSEED_VISUAL__!.appendActionEventBatch('other');
+        },
+      ),
+  );
+  expect(otherBeam.visible).toBe(true);
+  expect(otherBeam.actingPlayerId).not.toBe(selfBeam.actingPlayerId);
 });
 
 test('reduced motion uses a static action beacon and immediate follow focus', async ({
