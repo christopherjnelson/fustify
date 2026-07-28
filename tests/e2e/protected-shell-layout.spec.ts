@@ -32,12 +32,24 @@ test('multiplayer match shell owns the upper-right navigation and connection sta
     const shellRect = rect('.branded-app-header');
     const hudRect = rect('.left-hud-rail');
     const minimapRect = rect('.minimap-panel');
+    const territoryElement = document.querySelector('.territory-tools-panel');
+    const territoryRect = territoryElement
+      ? territoryElement.getBoundingClientRect()
+      : null;
     return {
       shellRight: shellRect.right,
       viewportWidth: window.innerWidth,
       hudTop: hudRect.top,
       shellOverlapsHud: overlaps(shellRect, hudRect),
       shellOverlapsMinimap: overlaps(shellRect, minimapRect),
+      shellOverlapsTerritory: territoryRect
+        ? overlaps(shellRect, territoryRect)
+        : false,
+      territoryOverlapsMinimap: territoryRect
+        ? overlaps(territoryRect, minimapRect)
+        : false,
+      territoryRight: territoryRect?.right ?? null,
+      minimapRight: minimapRect.right,
       overflow:
         document.documentElement.scrollWidth -
         document.documentElement.clientWidth,
@@ -50,6 +62,13 @@ test('multiplayer match shell owns the upper-right navigation and connection sta
   );
   expect(layout.shellOverlapsHud).toBe(false);
   expect(layout.shellOverlapsMinimap).toBe(false);
+  expect(layout.shellOverlapsTerritory).toBe(false);
+  expect(layout.territoryOverlapsMinimap).toBe(false);
+  if (layout.viewportWidth > 900) {
+    expect(layout.territoryRight).toBe(layout.minimapRight);
+  } else {
+    expect(layout.territoryRight).toBeNull();
+  }
   expect(layout.overflow).toBeLessThanOrEqual(1);
   await expect(hud).toBeVisible();
   await expect(minimap).toBeVisible();

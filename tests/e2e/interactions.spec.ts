@@ -1,5 +1,15 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { openScenario, stateSnapshot } from './helpers';
+
+function territoryNavigator(page: Page) {
+  return page.locator('#territory-navigator');
+}
+
+function closeTerritoryNavigator(page: Page) {
+  return territoryNavigator(page).getByRole('button', {
+    name: /Close and view globe|Collapse territory list/i,
+  });
+}
 
 test('shows the Fustify application brand and browser title', async ({
   page,
@@ -170,12 +180,10 @@ test('bot status locks gameplay selection and human controls return afterward', 
     0,
   );
   await page.keyboard.press('Control+K');
-  const navigator = page.getByRole('dialog');
+  const navigator = territoryNavigator(page);
   await expect(navigator).toBeVisible();
   await expect(navigator.locator('ul button').first()).toBeDisabled();
-  await navigator
-    .getByRole('button', { name: /Close and view globe/i })
-    .click();
+  await closeTerritoryNavigator(page).click();
 
   await openScenario(page, 'human-after-bot');
   await expect(
@@ -241,15 +249,13 @@ test('local bot playback pauses safely and resumes with the selected pacing', as
   expect(await savedEventCount()).toBe(beforeDeliberateAction);
 
   await page.getByRole('button', { name: 'Territory list' }).click();
-  const navigator = page.getByRole('dialog', { name: 'Territory navigator' });
+  const navigator = territoryNavigator(page);
   await expect(navigator).toBeVisible();
   const inspectTerritory = navigator.locator('ul button').first();
   await expect(inspectTerritory).toBeEnabled();
   await inspectTerritory.click();
   await expect(pausedStatus).toHaveAttribute('data-bot-state', 'paused');
-  await navigator
-    .getByRole('button', { name: /Close and view globe/i })
-    .click();
+  await closeTerritoryNavigator(page).click();
 
   await openGameMenu();
   await menuPacing.getByLabel('Fast · 1 second').click();
@@ -727,22 +733,38 @@ test('territory navigator opens, focuses search, selects, focuses camera, and cl
   await openScenario(page, 'navigator');
   const trigger = page.getByRole('button', { name: /Territory list/i });
   await trigger.click();
-  const dialog = page.getByRole('dialog', { name: 'Territory navigator' });
-  await expect(dialog).toBeVisible();
+  const navigator = territoryNavigator(page);
+  await expect(navigator).toBeVisible();
+  if (page.viewportSize()!.width > 900) {
+    await expect(navigator).toHaveRole('region');
+    await expect(
+      page.getByRole('dialog', { name: 'Territory navigator' }),
+    ).toHaveCount(0);
+  } else {
+    await expect(navigator).toHaveRole('dialog');
+    await expect(navigator).toHaveAttribute('aria-modal', 'true');
+  }
   await expect(page.getByLabel('Search territories')).toBeFocused();
   const before = await stateSnapshot(page);
   const focusMarker = page.locator('.minimap-focus');
   const initialTransform = await focusMarker.getAttribute('transform');
-  await dialog.locator('ul button:not(:disabled)').first().click();
+  await navigator.locator('ul button:not(:disabled)').first().click();
+  await expect(navigator).toBeVisible();
   const after = await stateSnapshot(page);
   expect(after.focusSequence).toBe(before.focusSequence + 1);
   expect(after.focusTargetTerritoryId).not.toBeNull();
+  const focusedTerritory = after.planet.territories.find(
+    (territory) => territory.id === after.focusTargetTerritoryId,
+  )!;
+  await expect(navigator.locator('.territory-selection-card')).toContainText(
+    focusedTerritory.name,
+  );
   await expect
     .poll(() => focusMarker.getAttribute('transform'))
     .not.toBe(initialTransform);
   expect((await stateSnapshot(page)).globeFocus).not.toEqual(before.globeFocus);
-  await page.getByRole('button', { name: /Close and view globe/i }).click();
-  await expect(dialog).toBeHidden();
+  await closeTerritoryNavigator(page).click();
+  await expect(navigator).toBeHidden();
   await expect(trigger).toBeFocused();
 });
 
@@ -806,9 +828,46 @@ test('keyboard shortcut opens and Escape closes the navigator', async ({
 }) => {
   await openScenario(page, 'navigator');
   await page.keyboard.press('Control+K');
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(territoryNavigator(page)).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(territoryNavigator(page)).toBeHidden();
+});
+
+test('territory navigator scrolls within its minimap-bounded presentation', async ({
+  page,
+}) => {
+  await openScenario(page, 'navigator');
+  await page.getByRole('button', { name: /Territory list/i }).click();
+  const layout = await page.evaluate(() => {
+    const navigatorElement = document.querySelector('#territory-navigator')!;
+    const list = navigatorElement.querySelector('ul')!;
+    const minimap = document
+      .querySelector('.minimap-panel')!
+      .getBoundingClientRect();
+    const bounds = navigatorElement.getBoundingClientRect();
+    return {
+      compact: window.innerWidth <= 900,
+      navigatorTop: bounds.top,
+      navigatorRight: bounds.right,
+      navigatorBottom: bounds.bottom,
+      minimapTop: minimap.top,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      listScrollHeight: list.scrollHeight,
+      listClientHeight: list.clientHeight,
+      documentOverflow:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    };
+  });
+
+  expect(layout.navigatorTop).toBeGreaterThanOrEqual(0);
+  expect(layout.navigatorRight).toBeLessThanOrEqual(layout.viewportWidth + 1);
+  expect(layout.navigatorBottom).toBeLessThanOrEqual(
+    layout.compact ? layout.viewportHeight + 1 : layout.minimapTop,
+  );
+  expect(layout.listScrollHeight).toBeGreaterThan(layout.listClientHeight);
+  expect(layout.documentOverflow).toBeLessThanOrEqual(1);
 });
 
 test('reinforcement amount selection submits once, clamps, and supports Max', async ({
@@ -821,9 +880,9 @@ test('reinforcement amount selection submits once, clamps, and supports Max', as
   expect(initialPool).toBeGreaterThan(2);
 
   await page.getByRole('button', { name: /Territory list/i }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.locator('ul button:not(:disabled)').first().click();
-  await page.getByRole('button', { name: /Close and view globe/i }).click();
+  const navigator = territoryNavigator(page);
+  await navigator.locator('ul button:not(:disabled)').first().click();
+  await closeTerritoryNavigator(page).click();
   const selected = await stateSnapshot(page);
   expect(selected.match.events).toHaveLength(initialEvents);
 
@@ -841,11 +900,11 @@ test('reinforcement amount selection submits once, clamps, and supports Max', as
   ).toBeVisible();
 
   await page.getByRole('button', { name: /Territory list/i }).click();
-  await dialog
+  await navigator
     .locator('ul button:not([aria-current="true"]):not(:disabled)')
     .first()
     .click();
-  await page.getByRole('button', { name: /Close and view globe/i }).click();
+  await closeTerritoryNavigator(page).click();
   await expect(amount).toHaveValue(String(placedAmount));
   const placementTarget = await stateSnapshot(page);
   const territoryId = placementTarget.match.selectedSourceTerritoryId!;
@@ -1186,7 +1245,7 @@ test('multiplayer territory intent stays immediate while confirmation is delayed
   });
 
   await page.getByRole('button', { name: /Territory list/i }).click();
-  const navigator = page.getByRole('dialog', { name: 'Territory navigator' });
+  const navigator = territoryNavigator(page);
   await navigator.getByRole('button', { name: 'All territories' }).click();
   await navigator
     .getByRole('button', { name: new RegExp(`^${selection.sourceName}\\.`) })
@@ -1208,7 +1267,7 @@ test('multiplayer territory intent stays immediate while confirmation is delayed
       ).__MULTIPLAYER_SELECTION_COMMAND_COUNT__(),
     ),
   ).toBe(0);
-  await navigator.getByRole('button', { name: 'Close and view globe' }).click();
+  await closeTerritoryNavigator(page).click();
   const fortify = page.getByRole('button', { name: 'Fortify', exact: true });
   await expect(fortify).toBeEnabled();
   await fortify.evaluate((button: HTMLButtonElement) => {

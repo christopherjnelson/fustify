@@ -27,7 +27,7 @@ export function App() {
         aria-label={`${BRAND.productName} — ${BRAND.shortDescription}`}
       >
         <GlobeScene />
-        <Minimap />
+        {mode !== 'playing' && mode !== 'game-over' && <Minimap />}
         <ControlLegend />
         <TurnNotificationController />
         {mode === 'world-setup' && <WorldSetupPanel />}

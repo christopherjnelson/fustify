@@ -6,7 +6,6 @@ import {
   useState,
   type CSSProperties,
   type ReactNode,
-  type RefObject,
 } from 'react';
 import {
   calculateReinforcements,
@@ -18,6 +17,7 @@ import {
 } from '../core/game';
 import { useGameStore, type PlanetViewMode } from '../state/useGameStore';
 import { TerritoryNavigator } from './TerritoryNavigator';
+import { Minimap } from './Minimap';
 import { territoryDrawerReducer } from '../core/navigation/territoryNavigator';
 import { playerColorValue } from '../core/setup/playerConfig';
 import { PLAYER_COLORS } from '../core/setup/playerConfig';
@@ -202,31 +202,105 @@ export function PlayerViewModeSelector({
   );
 }
 
-export function HudUtilityRow({
-  navigatorOpen,
-  navigatorTriggerRef,
-  onOpenNavigator,
-  children,
+export function HudUtilityRow({ children }: { children?: ReactNode }) {
+  return <div className="utility-row">{children}</div>;
+}
+
+export interface TerritorySummaryData {
+  name: string;
+  statusLabel: string;
+  ownerName: string;
+  ownerColor?: string;
+  armyCount: number;
+  continentName: string;
+  connection: string;
+  adjacentNames: string[];
+  seaRouteNames: string[];
+  inspecting: boolean;
+}
+
+export function TerritorySelectionCard({
+  summary,
+  compact = false,
+  onFocus,
 }: {
-  navigatorOpen: boolean;
-  navigatorTriggerRef: RefObject<HTMLButtonElement | null>;
-  onOpenNavigator: () => void;
-  children?: ReactNode;
+  summary: TerritorySummaryData | null;
+  compact?: boolean;
+  onFocus: () => void;
 }) {
+  if (!summary) {
+    return (
+      <section className="selection-card compact territory-selection-card empty">
+        <div>
+          <span className="eyebrow">Territories</span>
+          <h2>Select on the globe</h2>
+          <p>Choose a territory to see ownership and army details.</p>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <div className="utility-row">
-      <button
-        type="button"
-        ref={navigatorTriggerRef}
-        className="icon-button territory-list-trigger"
-        onClick={onOpenNavigator}
-        aria-haspopup="dialog"
-        aria-expanded={navigatorOpen}
-      >
-        Territory list <kbd>⌘/Ctrl K</kbd>
-      </button>
-      {children}
-    </div>
+    <section
+      className={`selection-card compact territory-selection-card${compact ? ' territory-selection-summary' : ''}`}
+      aria-live="polite"
+    >
+      <div className="territory-title">
+        <span
+          className="color-swatch"
+          style={{ background: summary.ownerColor }}
+        />
+        <div>
+          <span className="eyebrow">{summary.statusLabel}</span>
+          <h2>{summary.name}</h2>
+          {compact && (
+            <small>
+              {summary.ownerName} · {summary.armyCount}{' '}
+              {summary.armyCount === 1 ? 'army' : 'armies'}
+            </small>
+          )}
+        </div>
+        <button type="button" className="focus-button" onClick={onFocus}>
+          Focus
+        </button>
+      </div>
+      {!compact && (
+        <dl>
+          <div>
+            <dt>Owner</dt>
+            <dd>{summary.ownerName}</dd>
+          </div>
+          <div>
+            <dt>Armies</dt>
+            <dd>{summary.armyCount}</dd>
+          </div>
+          <div>
+            <dt>Continent</dt>
+            <dd>{summary.continentName}</dd>
+          </div>
+          <div>
+            <dt>Connection</dt>
+            <dd>{summary.connection}</dd>
+          </div>
+          {summary.inspecting && (
+            <>
+              <div>
+                <dt>Adjacent</dt>
+                <dd>{summary.adjacentNames.join(', ')}</dd>
+              </div>
+              <div>
+                <dt>Sea routes</dt>
+                <dd>
+                  {summary.seaRouteNames.length > 0
+                    ? summary.seaRouteNames.join(', ')
+                    : 'None'}
+                </dd>
+              </div>
+            </>
+          )}
+        </dl>
+      )}
+    </section>
   );
 }
 
@@ -392,6 +466,11 @@ export function TerritoryHud({
     territoryDrawerReducer,
     false,
   );
+  const [compactLayout, setCompactLayout] = useState(() =>
+    typeof window === 'undefined'
+      ? false
+      : window.matchMedia('(max-width: 900px)').matches,
+  );
   const navigatorTriggerRef = useRef<HTMLButtonElement>(null);
   const endAttackTriggerRef = useRef<HTMLButtonElement>(null);
   const endAttackConfirmRef = useRef<HTMLButtonElement>(null);
@@ -405,6 +484,14 @@ export function TerritoryHud({
     dispatchNavigator('close');
     window.requestAnimationFrame(() => navigatorTriggerRef.current?.focus());
   };
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 900px)');
+    const update = () => setCompactLayout(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
 
   useEffect(() => {
     const openFromShortcut = (event: KeyboardEvent) => {
@@ -475,8 +562,51 @@ export function TerritoryHud({
             : connection.fromTerritoryId,
         )
         .map((territoryId) => territoryById.get(territoryId)?.name)
-        .filter(Boolean)
+        .filter((name): name is string => Boolean(name))
     : [];
+  const selectedConnection =
+    source && target
+      ? (planet.connections.find(
+          (connection) =>
+            (connection.fromTerritoryId === source.id &&
+              connection.toTerritoryId === target.id) ||
+            (connection.toTerritoryId === source.id &&
+              connection.fromTerritoryId === target.id),
+        )?.type ?? 'owned path')
+      : '—';
+  const territorySummary: TerritorySummaryData | null =
+    selected && selectedState
+      ? {
+          name: selected.name,
+          statusLabel:
+            inspected?.id === selected.id
+              ? 'Inspecting territory'
+              : target?.id === selected.id
+                ? 'Selected target'
+                : 'Selected source',
+          ownerName: selectedOwner?.name ?? 'Unknown',
+          ownerColor: selectedOwner
+            ? playerColorValue(selectedOwner.colorId)
+            : undefined,
+          armyCount: selectedState.armyCount,
+          continentName:
+            planet.continents.find(
+              (continent) => continent.id === selected.continentId,
+            )?.name ?? 'Unknown continent',
+          connection: selectedConnection,
+          adjacentNames: inspected
+            ? inspected.adjacentTerritoryIds
+                .map((id) => territoryById.get(id)?.name)
+                .filter((name): name is string => Boolean(name))
+            : [],
+          seaRouteNames: inspectedSeaRoutes,
+          inspecting: inspected !== undefined,
+        }
+      : null;
+  const focusTerritorySummary = () => {
+    pauseFollowing();
+    focusSelected();
+  };
   const owned = getOwnedTerritories(match, match.activePlayerId);
   const ownedContinents = getFullyOwnedContinents(
     planet,
@@ -919,101 +1049,39 @@ export function TerritoryHud({
             </section>
           )}
 
-          {selected && selectedState && (
-            <section className="selection-card compact" aria-live="polite">
-              <div className="territory-title">
-                <span
-                  className="color-swatch"
-                  style={{
-                    background: selectedOwner
-                      ? playerColorValue(selectedOwner.colorId)
-                      : undefined,
-                  }}
-                />
-                <div>
-                  <span className="eyebrow">
-                    {inspected?.id === selected.id
-                      ? 'Inspecting territory'
-                      : target?.id === selected.id
-                        ? 'Selected target'
-                        : 'Selected source'}
-                  </span>
-                  <h2>{selected.name}</h2>
-                </div>
-                <button
-                  type="button"
-                  className="focus-button"
-                  onClick={() => {
-                    pauseFollowing();
-                    focusSelected();
-                  }}
-                >
-                  Focus
-                </button>
-              </div>
-              <dl>
-                <div>
-                  <dt>Owner</dt>
-                  <dd>{selectedOwner?.name}</dd>
-                </div>
-                <div>
-                  <dt>Armies</dt>
-                  <dd>{selectedState.armyCount}</dd>
-                </div>
-                <div>
-                  <dt>Continent</dt>
-                  <dd>
-                    {
-                      planet.continents.find(
-                        (item) => item.id === selected.continentId,
-                      )?.name
-                    }
-                  </dd>
-                </div>
-                <div>
-                  <dt>Connection</dt>
-                  <dd>
-                    {source && target
-                      ? (planet.connections.find(
-                          (connection) =>
-                            (connection.fromTerritoryId === source.id &&
-                              connection.toTerritoryId === target.id) ||
-                            (connection.toTerritoryId === source.id &&
-                              connection.fromTerritoryId === target.id),
-                        )?.type ?? 'owned path')
-                      : '—'}
-                  </dd>
-                </div>
-                {inspected && (
-                  <>
-                    <div>
-                      <dt>Adjacent</dt>
-                      <dd>
-                        {inspected.adjacentTerritoryIds
-                          .map((id) => territoryById.get(id)?.name)
-                          .filter(Boolean)
-                          .join(', ')}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Sea routes</dt>
-                      <dd>
-                        {inspectedSeaRoutes.length > 0
-                          ? inspectedSeaRoutes.join(', ')
-                          : 'None'}
-                      </dd>
-                    </div>
-                  </>
+          {compactLayout && (
+            <section
+              className="mobile-territory-control"
+              aria-label="Selected territory"
+            >
+              <div>
+                <span className="eyebrow">Territories</span>
+                <strong>
+                  {territorySummary?.name ?? 'Select on the globe'}
+                </strong>
+                {territorySummary && (
+                  <small>
+                    {territorySummary.ownerName} · {territorySummary.armyCount}{' '}
+                    {territorySummary.armyCount === 1 ? 'army' : 'armies'}
+                  </small>
                 )}
-              </dl>
+              </div>
+              <button
+                type="button"
+                ref={navigatorTriggerRef}
+                className="icon-button territory-list-trigger"
+                onClick={() => dispatchNavigator('open')}
+                aria-haspopup="dialog"
+                aria-expanded={navigatorOpen}
+                aria-controls="territory-navigator"
+                aria-label="Territory list"
+              >
+                Browse
+              </button>
             </section>
           )}
 
-          <HudUtilityRow
-            navigatorOpen={navigatorOpen}
-            navigatorTriggerRef={navigatorTriggerRef}
-            onOpenNavigator={() => dispatchNavigator('open')}
-          >
+          <HudUtilityRow>
             <details className="game-menu">
               <summary>Game</summary>
               <div>
@@ -1170,7 +1238,67 @@ export function TerritoryHud({
           reactions={activityReactions}
         />
       </div>
-      <TerritoryNavigator open={navigatorOpen} onClose={closeNavigator} />
+      <div className="gameplay-right-rail">
+        {!compactLayout && (
+          <aside
+            className={`territory-tools-panel${navigatorOpen ? ' expanded' : ''}`}
+            aria-label="Territory information"
+          >
+            {navigatorOpen ? (
+              <TerritoryNavigator
+                open
+                onClose={closeNavigator}
+                presentation="rail"
+                selectedSummary={
+                  <TerritorySelectionCard
+                    summary={territorySummary}
+                    compact
+                    onFocus={focusTerritorySummary}
+                  />
+                }
+              />
+            ) : (
+              <>
+                <header className="territory-tools-heading">
+                  <div>
+                    <span className="eyebrow">Strategic details</span>
+                    <strong>Territories</strong>
+                  </div>
+                  <button
+                    type="button"
+                    ref={navigatorTriggerRef}
+                    className="icon-button territory-list-trigger"
+                    onClick={() => dispatchNavigator('open')}
+                    aria-expanded="false"
+                    aria-controls="territory-navigator"
+                    aria-label="Territory list"
+                  >
+                    Browse <kbd>⌘/Ctrl K</kbd>
+                  </button>
+                </header>
+                <TerritorySelectionCard
+                  summary={territorySummary}
+                  onFocus={focusTerritorySummary}
+                />
+              </>
+            )}
+          </aside>
+        )}
+        <Minimap />
+      </div>
+      {compactLayout && (
+        <TerritoryNavigator
+          open={navigatorOpen}
+          onClose={closeNavigator}
+          presentation="sheet"
+          selectedSummary={
+            <TerritorySelectionCard
+              summary={territorySummary}
+              onFocus={focusTerritorySummary}
+            />
+          }
+        />
+      )}
     </>
   );
 }

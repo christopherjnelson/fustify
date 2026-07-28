@@ -124,7 +124,11 @@ async function selectTerritory(page: Page, territoryId: string) {
       timeout: 30_000,
     })
     .toBeGreaterThan(before);
-  await page.getByRole('button', { name: 'Close and view globe' }).click();
+  await page
+    .getByRole('button', {
+      name: /Close and view globe|Collapse territory list/,
+    })
+    .click();
   await waitForIdle(page);
 }
 

@@ -11,7 +11,6 @@ import {
 import { publishRouteConnection } from '../brand/routeConnectionStatus';
 import { z } from 'zod';
 import { GlobeScene } from '../components/GlobeScene';
-import { Minimap } from '../components/Minimap';
 import { TerritoryHud } from '../components/TerritoryHud';
 import { ControlLegend } from '../components/ControlLegend';
 import type { MatchState } from '../core/game/types';
@@ -1061,7 +1060,6 @@ export function MultiplayerGameScene({
         data-revision={revision}
       >
         <GlobeScene />
-        <Minimap />
         <ControlLegend />
         <TurnNotificationController />
         <TerritoryHud

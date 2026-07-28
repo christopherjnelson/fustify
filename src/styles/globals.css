@@ -2625,6 +2625,174 @@ select:focus-visible {
   pointer-events: none;
 }
 
+.territory-tools-panel {
+  min-height: 0;
+  overflow: hidden;
+  pointer-events: auto;
+  border: 1px solid rgba(155, 187, 219, 0.16);
+  border-radius: 14px;
+  background: rgba(9, 16, 29, 0.88);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(16px);
+}
+
+.territory-tools-panel.expanded {
+  height: 100%;
+}
+
+.territory-tools-heading {
+  display: flex;
+  min-height: 54px;
+  padding: 9px 10px 9px 13px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid rgba(143, 190, 220, 0.13);
+}
+
+.territory-tools-heading strong {
+  display: block;
+  color: #dceaf5;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.8rem;
+}
+
+.territory-tools-heading .eyebrow {
+  margin-bottom: 1px;
+  font-size: 0.51rem;
+}
+
+.territory-tools-heading .territory-list-trigger {
+  flex: 0 0 auto;
+}
+
+.territory-tools-panel > .territory-selection-card {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.territory-selection-card.empty {
+  padding: 16px 14px;
+}
+
+.territory-selection-card.empty h2 {
+  margin: 4px 0 5px;
+  font-size: 0.88rem;
+}
+
+.territory-selection-card.empty p {
+  margin: 0;
+  color: #8298af;
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
+.territory-selection-summary {
+  margin: 10px 0 12px;
+  padding: 10px 11px;
+}
+
+.territory-selection-summary .territory-title {
+  margin: 0;
+}
+
+.territory-selection-summary .color-swatch {
+  width: 26px;
+  height: 26px;
+}
+
+.territory-selection-summary h2 {
+  font-size: 0.78rem;
+}
+
+.territory-selection-summary small {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: #8298af;
+  font-size: 0.57rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.territory-navigator-region {
+  height: 100%;
+  min-height: 0;
+}
+
+.mobile-territory-control {
+  display: flex;
+  min-height: 54px;
+  margin: 10px 0;
+  padding: 9px 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(134, 181, 216, 0.16);
+  border-radius: 10px;
+  background: rgba(3, 10, 18, 0.62);
+}
+
+.mobile-territory-control > div {
+  min-width: 0;
+}
+
+.mobile-territory-control strong,
+.mobile-territory-control small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-territory-control strong {
+  color: #edf6ff;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.75rem;
+}
+
+.mobile-territory-control small {
+  margin-top: 2px;
+  color: #8298af;
+  font-size: 0.57rem;
+}
+
+@media (min-width: 901px) {
+  .gameplay-right-rail {
+    position: absolute;
+    z-index: 5;
+    inset: 16px 22px 18px auto;
+    display: grid;
+    width: 330px;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 12px;
+    pointer-events: none;
+  }
+
+  .branded-app-shell .gameplay-right-rail {
+    top: 84px;
+  }
+
+  .gameplay-right-rail .territory-tools-panel {
+    align-self: end;
+    max-height: 100%;
+  }
+
+  .gameplay-right-rail .territory-tools-panel.expanded {
+    align-self: stretch;
+  }
+
+  .gameplay-right-rail .minimap-panel {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    pointer-events: auto;
+  }
+}
+
 .hud {
   position: relative;
   width: 100%;
@@ -4176,7 +4344,8 @@ button:disabled {
 .territory-title,
 .seed-row,
 .metrics,
-.hud dl > div {
+.hud dl > div,
+.territory-selection-card dl > div {
   display: flex;
   align-items: center;
 }
@@ -5050,14 +5219,16 @@ h2 {
   box-shadow: 0 0 20px rgba(90, 160, 205, 0.18);
 }
 
-.hud dl {
+.hud dl,
+.territory-selection-card dl {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 7px 14px;
   margin: 0 0 18px;
 }
 
-.hud dl > div {
+.hud dl > div,
+.territory-selection-card dl > div {
   min-width: 0;
   justify-content: space-between;
   gap: 8px;
@@ -5066,7 +5237,9 @@ h2 {
 }
 
 .hud dt,
-.hud dd {
+.hud dd,
+.territory-selection-card dt,
+.territory-selection-card dd {
   overflow: hidden;
   margin: 0;
   font-size: 0.7rem;
@@ -5074,11 +5247,13 @@ h2 {
   white-space: nowrap;
 }
 
-.hud dt {
+.hud dt,
+.territory-selection-card dt {
   color: #70869c;
 }
 
-.hud dd {
+.hud dd,
+.territory-selection-card dd {
   color: #cbd9e7;
   font-weight: 600;
 }
@@ -5204,15 +5379,7 @@ h2 {
   font-size: 2.4rem;
 }
 
-@media (max-width: 680px) {
-  .hud {
-    top: 12px;
-    left: 12px;
-    width: calc(100vw - 24px);
-    max-height: 47vh;
-    padding: 15px;
-  }
-
+@media (max-width: 900px) {
   .territory-drawer {
     inset: auto 0 0;
     width: 100%;
@@ -5225,6 +5392,21 @@ h2 {
 
   .territory-navigator {
     padding: 16px;
+  }
+}
+
+@media (max-width: 680px) {
+  .left-hud-rail {
+    inset: 12px auto 12px 12px;
+    width: calc(100vw - 24px);
+  }
+
+  .hud {
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-height: 47vh;
+    padding: 15px;
   }
 
   .board-brand {
@@ -6834,6 +7016,7 @@ html.multiplayer-match-route .branded-app-content {
 .multiplayer-card,
 .setup-panel,
 .hud,
+.territory-tools-panel,
 .match-dock,
 .minimap-panel,
 .control-legend,
@@ -6861,6 +7044,7 @@ html.multiplayer-match-route .branded-app-content {
     .game-setup-shell,
     .setup-panel,
     .hud,
+    .territory-tools-panel,
     .handoff-card,
     .activity-panel,
     .victory-panel
@@ -6884,6 +7068,7 @@ html.multiplayer-match-route .branded-app-content {
     .multiplayer-card,
     .setup-panel,
     .hud,
+    .territory-tools-panel,
     .handoff-card
   )
   p {
@@ -7260,6 +7445,7 @@ html.multiplayer-match-route .branded-app-content {
 }
 
 .hud,
+.territory-tools-panel,
 .match-dock,
 .minimap-panel {
   border-color: var(--brand-border);
@@ -7276,11 +7462,13 @@ html.multiplayer-match-route .branded-app-content {
 }
 
 .activity-header,
+.territory-tools-heading,
 .minimap-heading {
   border-color: var(--brand-border);
 }
 
 .activity-header h2,
+.territory-tools-heading strong,
 .minimap-heading strong,
 .control-legend-content > strong {
   color: var(--brand-text-strong);

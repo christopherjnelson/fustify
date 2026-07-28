@@ -1,4 +1,4 @@
-import { createElement, createRef } from 'react';
+import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useGameStore } from '../state/useGameStore';
@@ -9,6 +9,8 @@ import {
   PausedBotStatus,
   PlayerViewModeSelector,
   ReinforcementPlacementControls,
+  TerritorySelectionCard,
+  type TerritorySummaryData,
 } from './TerritoryHud';
 import { PLAYER_VIEW_MODES, playerViewMode } from './playerViewModes';
 import { submitReinforcementPlacement } from './reinforcementPlacement';
@@ -95,11 +97,7 @@ describe('active-match HUD utilities', () => {
       const markup = renderToStaticMarkup(
         createElement(
           HudUtilityRow,
-          {
-            navigatorOpen: false,
-            navigatorTriggerRef: createRef<HTMLButtonElement>(),
-            onOpenNavigator: () => undefined,
-          },
+          {},
           createElement(
             'details',
             { className: 'game-menu' },
@@ -110,7 +108,7 @@ describe('active-match HUD utilities', () => {
 
       expect(markup).not.toMatch(/>\s*Debug\s*</);
       expect(markup).not.toContain('aria-pressed=');
-      expect(markup).toContain('Territory list');
+      expect(markup).not.toContain('Territory list');
       expect(markup).toContain('<summary>Game</summary>');
     },
   );
@@ -119,6 +117,65 @@ describe('active-match HUD utilities', () => {
     expect(useGameStore.getState().debugView).toBe(false);
     useGameStore.getState().toggleDebugView();
     expect(useGameStore.getState().debugView).toBe(true);
+  });
+});
+
+describe('territory selection presentation', () => {
+  const summary: TerritorySummaryData = {
+    name: 'Frost Coast',
+    statusLabel: 'Selected target',
+    ownerName: 'Azure Pact',
+    ownerColor: '#4da9df',
+    armyCount: 3,
+    continentName: 'North Reach',
+    connection: 'sea-route',
+    adjacentNames: ['Ember Crown', 'Stone Vale'],
+    seaRouteNames: ['Ember Crown'],
+    inspecting: true,
+  };
+
+  it('renders the compact empty prompt before a territory is selected', () => {
+    const markup = renderToStaticMarkup(
+      createElement(TerritorySelectionCard, {
+        summary: null,
+        onFocus: () => undefined,
+      }),
+    );
+
+    expect(markup).toContain('Select on the globe');
+    expect(markup).toContain('Choose a territory');
+    expect(markup).not.toContain('>Focus</button>');
+  });
+
+  it('preserves full selected territory details in the collapsed card', () => {
+    const markup = renderToStaticMarkup(
+      createElement(TerritorySelectionCard, {
+        summary,
+        onFocus: () => undefined,
+      }),
+    );
+
+    expect(markup).toContain('Selected target');
+    expect(markup).toContain('Frost Coast');
+    expect(markup).toContain('Azure Pact');
+    expect(markup).toContain('North Reach');
+    expect(markup).toContain('sea-route');
+    expect(markup).toContain('Ember Crown, Stone Vale');
+    expect(markup).toContain('>Focus</button>');
+  });
+
+  it('uses a compact pinned summary while the territory list is expanded', () => {
+    const markup = renderToStaticMarkup(
+      createElement(TerritorySelectionCard, {
+        summary,
+        compact: true,
+        onFocus: () => undefined,
+      }),
+    );
+
+    expect(markup).toContain('territory-selection-summary');
+    expect(markup).toContain('Azure Pact · 3 armies');
+    expect(markup).not.toContain('<dt>Adjacent</dt>');
   });
 });
 

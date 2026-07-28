@@ -27,6 +27,10 @@ test('Activity and gameplay controls share a collision-safe left rail', async ({
     const hudRect = rect('.hud');
     const activityRect = rect('.activity-panel');
     const minimapRect = rect('.minimap-panel');
+    const territoryElement = document.querySelector('.territory-tools-panel');
+    const territoryRect = territoryElement
+      ? territoryElement.getBoundingClientRect()
+      : null;
     const legendRect = rect('.control-legend');
     const list = document.querySelector('.event-log ol')!;
     return {
@@ -42,6 +46,9 @@ test('Activity and gameplay controls share a collision-safe left rail', async ({
       documentOverflow:
         document.documentElement.scrollHeight - window.innerHeight,
       overlapsMinimap: overlaps(activityRect, minimapRect),
+      overlapsTerritory: territoryRect
+        ? overlaps(activityRect, territoryRect)
+        : false,
       overlapsLegend: overlaps(activityRect, legendRect),
     };
   });
@@ -54,6 +61,7 @@ test('Activity and gameplay controls share a collision-safe left rail', async ({
   expect(layout.listScrollHeight).toBeGreaterThan(layout.listClientHeight);
   expect(layout.documentOverflow).toBeLessThanOrEqual(1);
   expect(layout.overlapsMinimap).toBe(false);
+  expect(layout.overlapsTerritory).toBe(false);
   expect(layout.overlapsLegend).toBe(false);
 
   await page.screenshot({

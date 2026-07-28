@@ -3,6 +3,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type KeyboardEvent,
 } from 'react';
 import {
@@ -35,9 +36,16 @@ const STATUS_SYMBOLS = {
 interface TerritoryNavigatorProps {
   open: boolean;
   onClose: () => void;
+  presentation: 'rail' | 'sheet';
+  selectedSummary?: ReactNode;
 }
 
-export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
+export function TerritoryNavigator({
+  open,
+  onClose,
+  presentation,
+  selectedSummary,
+}: TerritoryNavigatorProps) {
   const planet = useGameStore((state) => state.planet);
   const match = useGameStore((state) => state.match)!;
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
@@ -100,23 +108,31 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
       !['reinforce', 'attack', 'fortify'].includes(match.phase));
 
   useEffect(() => {
-    if (!open || !dialogRef.current) return;
+    if (!open) return;
+    if (presentation === 'rail') {
+      window.requestAnimationFrame(() => searchRef.current?.focus());
+      return;
+    }
+    if (!dialogRef.current) return;
     const dialog = dialogRef.current;
     if (!dialog.open) dialog.showModal();
     searchRef.current?.focus();
     return () => {
       if (dialog.open) dialog.close();
     };
-  }, [open]);
+  }, [open, presentation]);
 
   if (!open) return null;
 
-  const trapFocus = (event: KeyboardEvent<HTMLDialogElement>) => {
+  const handleKeyboard = (
+    event: KeyboardEvent<HTMLDialogElement | HTMLElement>,
+  ) => {
     if (event.key === CLOSE_DIALOG_SHORTCUT.key) {
       event.preventDefault();
       onClose();
       return;
     }
+    if (presentation !== 'sheet') return;
     if (event.key !== 'Tab') return;
     const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
       'button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])',
@@ -133,12 +149,144 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
     }
   };
 
+  const navigator = (
+    <section className="territory-navigator">
+      <div className="navigator-heading">
+        <div>
+          <span className="eyebrow">Find territory</span>
+          <h2 id="navigator-title">Territory navigator</h2>
+        </div>
+        <button
+          type="button"
+          className="drawer-close"
+          onClick={onClose}
+          aria-label="Close territory navigator"
+        >
+          ×
+        </button>
+      </div>
+
+      {selectedSummary}
+
+      <div className="territory-filter" aria-label="Territory ownership filter">
+        <button
+          type="button"
+          className={effectiveFilter === 'mine' ? 'active' : ''}
+          aria-pressed={effectiveFilter === 'mine'}
+          disabled={match.phase === 'game-over'}
+          onClick={() => setFilter('mine')}
+        >
+          My territories
+        </button>
+        <button
+          type="button"
+          className={effectiveFilter === 'all' ? 'active' : ''}
+          aria-pressed={effectiveFilter === 'all'}
+          onClick={() => setFilter('all')}
+        >
+          All territories
+        </button>
+      </div>
+
+      <label className="territory-search">
+        <span className="sr-only">Search territories</span>
+        <input
+          ref={searchRef}
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search territory, owner, continent"
+          aria-label="Search territories"
+        />
+      </label>
+
+      <div className="navigator-summary">
+        <div className="navigator-legend" aria-label="Territory status legend">
+          <span>◇ source</span>
+          <span>◎ target</span>
+          <span>◆ selected</span>
+          <span>≈ sea route</span>
+          <span>— invalid</span>
+        </div>
+        <span aria-live="polite" aria-atomic="true">
+          {filtered.length}{' '}
+          {filtered.length === 1 ? 'territory' : 'territories'}
+        </span>
+      </div>
+
+      <ul>
+        {filtered.map((item) => {
+          const status = STATUS_LABELS[item.status];
+          const route = item.seaRouteTarget ? ' Sea-route target.' : '';
+          const selected = item.status.startsWith('selected');
+          return (
+            <li key={item.id} className={item.status}>
+              <button
+                type="button"
+                onClick={() => {
+                  pauseFollowing();
+                  selectAndFocus(item.id);
+                  setSelectionAnnouncement(
+                    `${item.name} selected. Globe focus requested.`,
+                  );
+                }}
+                disabled={selectionUnavailable}
+                aria-label={`${item.name}. ${item.ownerName}, ${item.armyCount} armies, ${item.continentName}. ${status}.${route}`}
+                aria-current={selected ? 'true' : undefined}
+              >
+                <span className="navigator-status" aria-hidden="true">
+                  {STATUS_SYMBOLS[item.status]}
+                  {item.seaRouteTarget && ' ≈'}
+                </span>
+                <strong>{item.name}</strong>
+                <span>
+                  {item.ownerName} · {item.armyCount} armies
+                </span>
+                <small>
+                  {item.continentName} · {status}
+                  {route}
+                </small>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {filtered.length === 0 && <p>No territories match this search.</p>}
+
+      <div className="drawer-footer">
+        <span className="sr-only" aria-live="polite">
+          {selectionAnnouncement}
+        </span>
+        <button type="button" onClick={onClose}>
+          {presentation === 'sheet'
+            ? 'Close and view globe'
+            : 'Collapse territory list'}
+        </button>
+      </div>
+    </section>
+  );
+
+  if (presentation === 'rail') {
+    return (
+      <section
+        id="territory-navigator"
+        className="territory-navigator-region"
+        aria-labelledby="navigator-title"
+        onKeyDown={handleKeyboard}
+      >
+        {navigator}
+      </section>
+    );
+  }
+
   return (
     <dialog
       ref={dialogRef}
+      id="territory-navigator"
       className="territory-drawer"
       aria-labelledby="navigator-title"
-      onKeyDown={trapFocus}
+      aria-modal="true"
+      onKeyDown={handleKeyboard}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -147,122 +295,7 @@ export function TerritoryNavigator({ open, onClose }: TerritoryNavigatorProps) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section className="territory-navigator">
-        <div className="navigator-heading">
-          <div>
-            <span className="eyebrow">Find territory</span>
-            <h2 id="navigator-title">Territory navigator</h2>
-          </div>
-          <button
-            type="button"
-            className="drawer-close"
-            onClick={onClose}
-            aria-label="Close territory navigator"
-          >
-            ×
-          </button>
-        </div>
-
-        <div
-          className="territory-filter"
-          aria-label="Territory ownership filter"
-        >
-          <button
-            type="button"
-            className={effectiveFilter === 'mine' ? 'active' : ''}
-            aria-pressed={effectiveFilter === 'mine'}
-            disabled={match.phase === 'game-over'}
-            onClick={() => setFilter('mine')}
-          >
-            My territories
-          </button>
-          <button
-            type="button"
-            className={effectiveFilter === 'all' ? 'active' : ''}
-            aria-pressed={effectiveFilter === 'all'}
-            onClick={() => setFilter('all')}
-          >
-            All territories
-          </button>
-        </div>
-
-        <label className="territory-search">
-          <span className="sr-only">Search territories</span>
-          <input
-            ref={searchRef}
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search territory, owner, continent"
-            aria-label="Search territories"
-          />
-        </label>
-
-        <div className="navigator-summary">
-          <div
-            className="navigator-legend"
-            aria-label="Territory status legend"
-          >
-            <span>◇ source</span>
-            <span>◎ target</span>
-            <span>◆ selected</span>
-            <span>≈ sea route</span>
-            <span>— invalid</span>
-          </div>
-          <span aria-live="polite" aria-atomic="true">
-            {filtered.length}{' '}
-            {filtered.length === 1 ? 'territory' : 'territories'}
-          </span>
-        </div>
-
-        <ul>
-          {filtered.map((item) => {
-            const status = STATUS_LABELS[item.status];
-            const route = item.seaRouteTarget ? ' Sea-route target.' : '';
-            const selected = item.status.startsWith('selected');
-            return (
-              <li key={item.id} className={item.status}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    pauseFollowing();
-                    selectAndFocus(item.id);
-                    setSelectionAnnouncement(
-                      `${item.name} selected. Globe focus requested.`,
-                    );
-                  }}
-                  disabled={selectionUnavailable}
-                  aria-label={`${item.name}. ${item.ownerName}, ${item.armyCount} armies, ${item.continentName}. ${status}.${route}`}
-                  aria-current={selected ? 'true' : undefined}
-                >
-                  <span className="navigator-status" aria-hidden="true">
-                    {STATUS_SYMBOLS[item.status]}
-                    {item.seaRouteTarget && ' ≈'}
-                  </span>
-                  <strong>{item.name}</strong>
-                  <span>
-                    {item.ownerName} · {item.armyCount} armies
-                  </span>
-                  <small>
-                    {item.continentName} · {status}
-                    {route}
-                  </small>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        {filtered.length === 0 && <p>No territories match this search.</p>}
-
-        <div className="drawer-footer">
-          <span className="sr-only" aria-live="polite">
-            {selectionAnnouncement}
-          </span>
-          <button type="button" onClick={onClose}>
-            Close and view globe
-          </button>
-        </div>
-      </section>
+      {navigator}
     </dialog>
   );
 }

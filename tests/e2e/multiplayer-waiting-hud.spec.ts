@@ -60,7 +60,11 @@ async function chooseFromTerritoryList(page: Page, territoryName: string) {
       ),
     })
     .click();
-  await page.getByRole('button', { name: 'Close and view globe' }).click();
+  await page
+    .getByRole('button', {
+      name: /Close and view globe|Collapse territory list/,
+    })
+    .click();
 }
 
 async function closeRoom(page: Page, roomId: string) {

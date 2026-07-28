@@ -125,7 +125,11 @@ const scenarios: Array<{
     region: '.activity-panel',
     heading: /Activity/i,
   },
-  { name: 'fortification', region: '.hud', heading: /Crimson League/i },
+  {
+    name: 'fortification',
+    region: '.territory-tools-panel, .mobile-territory-control',
+    heading: /Boronugifion/i,
+  },
   {
     name: 'fortification-fixed',
     region: '.hud',
@@ -171,7 +175,7 @@ for (const scenario of scenarios) {
     await openScenario(page, scenario.name);
     if (scenario.name === 'navigator') {
       await page.getByRole('button', { name: /Territory list/i }).click();
-      await expect(page.getByRole('dialog')).toBeVisible();
+      await expect(page.locator('#territory-navigator')).toBeVisible();
     }
     if (scenario.name === 'attack-confirmation') {
       await page.getByRole('button', { name: 'End attack phase' }).click();
@@ -226,7 +230,7 @@ for (const scenario of scenarios) {
     await expect(page.getByText(scenario.heading).first()).toBeVisible();
     const region =
       scenario.name === 'navigator'
-        ? page.getByRole('dialog')
+        ? page.locator('#territory-navigator')
         : page.locator(scenario.region);
     await page.screenshot({
       path: reviewPath(testInfo, scenario.name),

@@ -28,6 +28,9 @@ async function layout(page: Page) {
       canvas: bounds('.globe-canvas'),
       hud: bounds('.hud'),
       minimap: bounds('.minimap-panel'),
+      territoryPanel: document.querySelector('.territory-tools-panel')
+        ? bounds('.territory-tools-panel')
+        : null,
       legend: bounds('.control-legend'),
     };
   });
@@ -45,6 +48,9 @@ test('desktop authoritative match fills the viewport and survives refresh', asyn
   );
   expect(before.canvas.height).toBeGreaterThan(700);
   expect(before.hud.left).toBeLessThan(30);
+  expect(before.territoryPanel).not.toBeNull();
+  expect(before.territoryPanel!.right).toBe(before.minimap.right);
+  expect(before.territoryPanel!.bottom).toBeLessThanOrEqual(before.minimap.top);
   expect(before.minimap.bottom).toBeGreaterThan(before.viewport.height * 0.75);
   expect(before.minimap.right).toBeLessThanOrEqual(before.viewport.width);
   expect(before.legend.bottom).toBeLessThanOrEqual(before.viewport.height);
@@ -64,10 +70,19 @@ test('mobile authoritative match keeps required controls in bounds', async ({
   expect(current.scene.height).toBeGreaterThanOrEqual(
     current.viewport.height * 0.98,
   );
-  for (const control of [current.hud, current.minimap, current.legend]) {
+  for (const [name, control] of Object.entries({
+    hud: current.hud,
+    minimap: current.minimap,
+    legend: current.legend,
+  })) {
     expect(control.left).toBeGreaterThanOrEqual(0);
-    expect(control.right).toBeLessThanOrEqual(current.viewport.width + 1);
+    expect(
+      control.right,
+      `${name} right edge must remain inside the viewport`,
+    ).toBeLessThanOrEqual(current.viewport.width + 1);
     expect(control.top).toBeGreaterThanOrEqual(0);
     expect(control.bottom).toBeLessThanOrEqual(current.scene.height + 1);
   }
+  expect(current.territoryPanel).toBeNull();
+  await expect(page.locator('.mobile-territory-control')).toBeVisible();
 });

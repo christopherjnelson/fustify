@@ -140,6 +140,14 @@ feedback covers another player's turn, invalid actions, conflicts, reconnecting,
 seat loss, and completion. Ambiguous failures refetch in `finally`-safe command
 handling so the UI cannot remain permanently pending.
 
+Local and authoritative matches share the same territory presentation. Above
+900px, selected-territory details and the non-modal searchable navigator occupy
+a bounded right rail above the minimap; the navigator expands upward and stays
+open while players compare or select territories. At 900px and below, the match
+HUD shows a compact territory row and opens the full details and navigator in a
+focus-trapped bottom sheet. Observer and waiting-seat selections remain
+inspection-only and never bypass command authority.
+
 Each active route subscribes only to its current match; the lobby subscribes
 only to its current room. Realtime is an invalidation hint, never the source of
 truth. Older/duplicate revisions are ignored. `SUBSCRIBED`, online, focus, and
