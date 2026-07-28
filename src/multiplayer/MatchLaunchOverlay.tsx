@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { FustifyLogo } from '../brand/FustifyLogo';
 import type { PlanetDefinition } from '../core/types/planet';
-import { ReadonlyMinimap } from './ReadonlyWorld';
+import { ReadonlyMinimap } from './ReadonlyMinimap';
 
 export function MatchLaunchOverlay({
   planet,

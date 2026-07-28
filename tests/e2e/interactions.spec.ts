@@ -831,6 +831,9 @@ test('keyboard shortcut opens and Escape closes the navigator', async ({
   page,
 }) => {
   await openScenario(page, 'navigator');
+  await expect(
+    page.getByRole('button', { name: /Territory list/i }),
+  ).toBeVisible();
   await page.keyboard.press('Control+K');
   await expect(territoryNavigator(page)).toBeVisible();
   await page.keyboard.press('Escape');

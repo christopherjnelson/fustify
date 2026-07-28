@@ -110,15 +110,27 @@ export const BUNDLE_BUDGETS: BundleBudgets = {
     },
     {
       id: 'local-game',
-      description: 'Local setup and local match at /local',
+      description: 'Local setup before active match controls load at /local',
       chunkNames: ['BrowserApp', 'App'],
       gzipBudget: 472_000,
     },
     {
+      id: 'local-active-match',
+      description: 'Local match after active controls load at /local',
+      chunkNames: ['BrowserApp', 'App', 'LocalActiveMatchSurface'],
+      gzipBudget: 496_000,
+    },
+    {
       id: 'multiplayer-entry',
-      description: 'Multiplayer lobby, room, and match at /multiplayer/*',
+      description: 'Multiplayer lobby and room before the match surface loads',
       chunkNames: ['BrowserApp', 'MultiplayerApp'],
       gzipBudget: 475_500,
+    },
+    {
+      id: 'multiplayer-match',
+      description: 'Multiplayer match after the authoritative surface loads',
+      chunkNames: ['BrowserApp', 'MultiplayerApp', 'MultiplayerGameScene'],
+      gzipBudget: 504_000,
     },
     {
       id: 'admin',

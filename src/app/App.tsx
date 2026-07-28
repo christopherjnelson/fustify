@@ -1,6 +1,5 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { GlobeScene } from '../components/GlobeScene';
-import { TerritoryHud } from '../components/TerritoryHud';
 import { HandoffScreen } from '../components/HandoffScreen';
 import { PregamePanel } from '../components/PregamePanel';
 import { WorldSetupPanel } from '../components/WorldSetupPanel';
@@ -11,6 +10,8 @@ import { useBotTurnRunner } from './useBotTurnRunner';
 import { BRAND } from '../branding';
 import { TurnNotificationController } from '../components/TurnNotificationController';
 import { ActionTrackingProvider } from '../components/ActionTracking';
+
+const LocalActiveMatchSurface = lazy(() => import('./LocalActiveMatchSurface'));
 
 export function App() {
   useBotTurnRunner();
@@ -32,7 +33,17 @@ export function App() {
         <TurnNotificationController />
         {mode === 'world-setup' && <WorldSetupPanel />}
         {mode === 'pregame' && <PregamePanel />}
-        {(mode === 'playing' || mode === 'game-over') && <TerritoryHud />}
+        {(mode === 'playing' || mode === 'game-over') && (
+          <Suspense
+            fallback={
+              <div className="sr-only" role="status">
+                Loading match controls…
+              </div>
+            }
+          >
+            <LocalActiveMatchSurface />
+          </Suspense>
+        )}
         {mode === 'handoff' && <HandoffScreen />}
       </main>
     </ActionTrackingProvider>

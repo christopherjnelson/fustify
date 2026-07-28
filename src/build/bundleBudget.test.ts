@@ -66,10 +66,24 @@ function manifest(): BundleManifest {
       name: 'App',
       isDynamicEntry: true,
       imports: ['index.html', '_GameSetup-eeee.js', '_BrowserApp-bbbb.js'],
+      dynamicImports: ['src/app/LocalActiveMatchSurface.tsx'],
+    },
+    'src/app/LocalActiveMatchSurface.tsx': {
+      file: 'assets/LocalActiveMatchSurface-active.js',
+      name: 'LocalActiveMatchSurface',
+      isDynamicEntry: true,
+      imports: ['index.html', '_GameSetup-eeee.js', '_BrowserApp-bbbb.js'],
     },
     'src/multiplayer/MultiplayerApp.tsx': {
       file: 'assets/MultiplayerApp-gggg.js',
       name: 'MultiplayerApp',
+      isDynamicEntry: true,
+      imports: ['index.html', '_GameSetup-eeee.js', '_BrowserApp-bbbb.js'],
+      dynamicImports: ['src/multiplayer/MultiplayerGameScene.tsx'],
+    },
+    'src/multiplayer/MultiplayerGameScene.tsx': {
+      file: 'assets/MultiplayerGameScene-match.js',
+      name: 'MultiplayerGameScene',
       isDynamicEntry: true,
       imports: ['index.html', '_GameSetup-eeee.js', '_BrowserApp-bbbb.js'],
     },
@@ -103,7 +117,9 @@ const sizes: AssetSizes = {
   'assets/HomeWorldPreview-home.js': { raw: 96, gzip: 48 },
   'assets/homeWorld.worker-wwww.js': { raw: 12_000, gzip: 1200 },
   'assets/App-ffff.js': { raw: 32, gzip: 16 },
+  'assets/LocalActiveMatchSurface-active.js': { raw: 48, gzip: 24 },
   'assets/MultiplayerApp-gggg.js': { raw: 64, gzip: 32 },
+  'assets/MultiplayerGameScene-match.js': { raw: 80, gzip: 40 },
   'assets/AdminApp-hhhh.js': { raw: 128, gzip: 64 },
   'assets/reportSource-iiii.js': { raw: 256, gzip: 128 },
   'assets/AuthCallbackPage-jjjj.js': { raw: 512, gzip: 256 },
@@ -260,15 +276,36 @@ describe('route isolation', () => {
 
   it('keeps the multiplayer chunk out of the local game route', () => {
     expect(files('local-game')).not.toContain('assets/MultiplayerApp-gggg.js');
+    expect(files('local-game')).not.toContain(
+      'assets/LocalActiveMatchSurface-active.js',
+    );
   });
 
   it('keeps the local game chunk out of the multiplayer route', () => {
     expect(files('multiplayer-entry')).not.toContain('assets/App-ffff.js');
+    expect(files('multiplayer-entry')).not.toContain(
+      'assets/MultiplayerGameScene-match.js',
+    );
   });
 
   it('loads gameplay only behind the account-gated route chunks', () => {
     expect(files('local-game')).toContain('assets/GameSetup-eeee.js');
     expect(files('multiplayer-entry')).toContain('assets/GameSetup-eeee.js');
+  });
+
+  it('bounds active local and multiplayer match surfaces separately', () => {
+    expect(files('local-active-match')).toEqual(
+      expect.arrayContaining([
+        'assets/App-ffff.js',
+        'assets/LocalActiveMatchSurface-active.js',
+      ]),
+    );
+    expect(files('multiplayer-match')).toEqual(
+      expect.arrayContaining([
+        'assets/MultiplayerApp-gggg.js',
+        'assets/MultiplayerGameScene-match.js',
+      ]),
+    );
   });
 });
 
@@ -335,7 +372,9 @@ describe('budget evaluation', () => {
       'homepage-preview',
       'auth-page',
       'local-game',
+      'local-active-match',
       'multiplayer-entry',
+      'multiplayer-match',
       'admin',
     ]);
   });

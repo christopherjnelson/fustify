@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { generatePlanet } from '../core/generation/generatePlanet';
 
-vi.mock('./ReadonlyWorld', () => ({
+vi.mock('./ReadonlyMinimap', () => ({
   ReadonlyMinimap: ({ className }: { className: string }) =>
     createElement('div', {
       className,

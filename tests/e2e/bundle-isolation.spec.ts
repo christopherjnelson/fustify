@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { installRegisteredAuthFixture } from './registeredAuthTestClient';
 
 // Browser-level proof that route code splitting actually holds. The manifest
 // tests in src/build/bundleBudget.test.ts prove the static graph; this proves
@@ -28,6 +29,11 @@ const GAMEPLAY_FINGERPRINTS = [
 const ADMIN_FINGERPRINTS = ['AdminDashboard', 'reportSource', 'reportFixtures'];
 const MULTIPLAYER_FINGERPRINTS = ['MultiplayerApp', 'multiplayerApi'];
 const LOCAL_GAME_FINGERPRINTS = ['app/App.tsx', 'useBotTurnRunner'];
+const ACTIVE_MATCH_FINGERPRINTS = [
+  'LocalActiveMatchSurface',
+  'MultiplayerGameScene',
+  'TerritoryHud',
+];
 const TEST_ONLY_FINGERPRINTS = ['visualScenarios', 'testFixtures'];
 const HOME_FORBIDDEN_FINGERPRINTS = [
   'GlobeScene',
@@ -129,6 +135,50 @@ test.describe('route chunk isolation', () => {
     expectAbsent(requested, GAMEPLAY_FINGERPRINTS, 'gameplay code');
     expectAbsent(requested, ADMIN_FINGERPRINTS, 'admin code');
     expectAbsent(requested, LOCAL_GAME_FINGERPRINTS, 'local game code');
+  });
+
+  test('local setup defers active-match controls', async ({ page }) => {
+    await installRegisteredAuthFixture(page);
+    const requested = recordRequests(page);
+    await page.goto('/local');
+    await expect(
+      page.getByRole('heading', { name: 'Choose your world' }),
+    ).toBeVisible();
+    await settle(page);
+
+    expect(matching(requested, ['app/App.tsx']).length).toBeGreaterThan(0);
+    expectAbsent(
+      requested,
+      ACTIVE_MATCH_FINGERPRINTS,
+      'active local match controls',
+    );
+  });
+
+  test('multiplayer lobby defers the renderer and match surface', async ({
+    page,
+  }) => {
+    await installRegisteredAuthFixture(page);
+    const requested = recordRequests(page);
+    await page.goto('/multiplayer');
+    await expect(
+      page.getByRole('heading', { name: 'Multiplayer' }),
+    ).toBeVisible();
+    await settle(page);
+
+    expect(matching(requested, ['MultiplayerApp']).length).toBeGreaterThan(0);
+    expectAbsent(
+      requested,
+      [
+        '/deps/three',
+        'three.js',
+        '@react-three',
+        'react-three',
+        'GlobeScene',
+        'ActionTracking',
+        ...ACTIVE_MATCH_FINGERPRINTS,
+      ],
+      'multiplayer match surface',
+    );
   });
 
   test('/admin loads no gameplay, auth shell, or multiplayer code', async ({

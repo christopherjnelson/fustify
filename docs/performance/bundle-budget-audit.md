@@ -1,5 +1,42 @@
 # Bundle budget audit
 
+## Route-surface split follow-up
+
+The current budgets supersede the historical final-budget table later in this
+document. The admin operations milestone raised the audited admin limit from
+94,000 to 166,000 bytes with its expanded authenticated console. The local and
+multiplayer limits were not raised when they began failing: the parent of the
+route-surface work already measured 473,429 and 481,706 bytes respectively.
+
+Active-match presentation is now loaded at the phase boundary. Local setup
+defers `TerritoryHud`; multiplayer lobby and room views defer the authoritative
+Three.js match surface. The SVG room minimap was also separated from the
+read-only Three.js globe so importing the minimap no longer imports the
+renderer.
+
+| Budget                   | Before split | After split |     Limit | Headroom |
+| ------------------------ | -----------: | ----------: | --------: | -------: |
+| `public-shell` gzip      |      153,333 |     153,388 |   158,000 |    4,612 |
+| `homepage-preview` gzip  |      454,347 |     454,694 |   470,000 |   15,306 |
+| `auth-page` gzip         |      145,182 |     145,171 |   150,000 |    4,829 |
+| `local-game` setup gzip  |      473,429 |     462,810 |   472,000 |    9,190 |
+| `local-active-match`     |            — |     476,498 |   496,000 |   19,502 |
+| `multiplayer-entry` gzip |      481,706 |     216,676 |   475,500 |  258,824 |
+| `multiplayer-match`      |            — |     484,709 |   504,000 |   19,291 |
+| `admin` gzip             |      159,905 |     161,755 |   166,000 |    4,245 |
+| Largest JS chunk, raw    |      904,133 |     898,113 | 1,080,000 |  181,887 |
+
+The two new eventual-state budgets use the existing measured-baseline plus
+approximately four-percent policy. Existing local and multiplayer entry limits
+remain unchanged. The eventual totals are measured as separate gzip assets,
+matching what browsers download after the lazy boundary rather than pretending
+split chunks compress as one file.
+
+Bundle-analysis mode now injects deterministic non-secret Supabase placeholders.
+Previously, a machine without `.env.local` could constant-fold the client
+configuration away and report a false pass roughly 55 KB below a configured
+build.
+
 ## Deferred homepage-preview follow-up
 
 The homepage generated-globe preview adds a sixth measured graph without
@@ -29,10 +66,10 @@ Audited commit: `73428e0a7d84140fb104918930bdb9118876e689`
 | Install          | `pnpm install --frozen-lockfile`                                          |
 | Build            | `pnpm bundle:check` → `tsc -b && vite build --mode bundle-analysis`       |
 
-Env files present: `.env.example` and `.env.local`, both defining only
-`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. Neither is read by the
-build; Vite loads `.env.local` in every mode, and neither variable affects
-chunking. There are no `.env.production*` or `.env.bundle-analysis*` files.
+At the historical audit, `.env.example` and `.env.local` defined
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. The follow-up above
+corrects the old assumption that those values could not affect chunking:
+constant folding could remove the client graph when configuration was absent.
 
 ## Reproducibility
 
@@ -390,7 +427,7 @@ with hardcoded paths and no exports). See the sections above and
   with no first-paint benefit, since the whole chunk is needed as soon as the
   globe renders.
 
-## Final budgets
+## Historical final budgets
 
 | Budget                   | Measured baseline | Budget    | Headroom |
 | ------------------------ | ----------------- | --------- | -------- |
@@ -422,7 +459,9 @@ Rationale:
   gameplay edit does not fail the build again. The increase is 5,000 bytes, not
   hundreds of kilobytes.
 
-Every number above was produced by two clean, byte-identical builds.
+Every number above was produced by two clean, byte-identical builds. This table
+records the original audit milestone; use the route-surface table at the top of
+this document for current limits and measurements.
 
 ## Ongoing bundle policy
 

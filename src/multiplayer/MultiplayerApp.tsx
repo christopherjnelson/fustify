@@ -6,13 +6,8 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from 'react';
-import { publishRouteConnection } from '../brand/routeConnectionStatus';
 import { z } from 'zod';
-import { GlobeScene } from '../components/GlobeScene';
-import { TerritoryHud } from '../components/TerritoryHud';
-import { ControlLegend } from '../components/ControlLegend';
 import type { MatchState } from '../core/game/types';
 import { resolveGeneratorVersion } from '../core/generation/constants';
 import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
@@ -49,7 +44,7 @@ import { useAccount } from '../auth/accountContext';
 import { MatchSynchronization } from './matchSynchronization';
 import { getSupabaseClient } from './supabaseClient';
 import { isMatchState } from './gameProtocol';
-import { ReadonlyMinimap } from './ReadonlyWorld';
+import { ReadonlyMinimap } from './ReadonlyMinimap';
 import { ClipboardCopyButton } from './RoomCodeCopyButton';
 import {
   isMatchLaunchPending,
@@ -57,8 +52,6 @@ import {
   shouldReplaceRoomSettingsDraft,
 } from './roomLobbyPresentation';
 import { generateRoomPreviewPlanet, withFreshRoomSeed } from './roomWorld';
-import { TurnNotificationController } from '../components/TurnNotificationController';
-import { ActionTrackingProvider } from '../components/ActionTracking';
 import {
   GameSetupShell,
   SetupSummary,
@@ -107,6 +100,7 @@ const RoomPublicationController = lazy(
 const MatchLaunchOverlay = lazy(() => import('./MatchLaunchOverlay'));
 const PostMatchActions = lazy(() => import('./PostMatchActions'));
 const WaitingRoomExitDialog = lazy(() => import('./WaitingRoomExitDialog'));
+const MultiplayerGameScene = lazy(() => import('./MultiplayerGameScene'));
 
 declare global {
   interface Window {
@@ -1030,51 +1024,6 @@ function authoritativeSnapshots(match: MultiplayerMatch, userId: string) {
   };
 }
 
-export function MultiplayerGameScene({
-  matchId,
-  revision,
-  connection = 'SUBSCRIBED',
-  renderPostMatchActions,
-  activityReactions,
-}: {
-  matchId: string;
-  revision: number;
-  connection?: string;
-  renderPostMatchActions?: (
-    reviewing: boolean,
-    onReviewingChange: (reviewing: boolean) => void,
-  ) => ReactNode;
-  activityReactions?: ActivityReactionController;
-}) {
-  useEffect(() => {
-    publishRouteConnection(connection);
-    return () => publishRouteConnection(null);
-  }, [connection]);
-
-  return (
-    <ActionTrackingProvider>
-      <main
-        className="app-shell mode-playing multiplayer-game-shell"
-        data-testid="multiplayer-match"
-        data-match-id={matchId}
-        data-revision={revision}
-      >
-        <GlobeScene />
-        <ControlLegend />
-        <TurnNotificationController />
-        <TerritoryHud
-          renderMultiplayerPostMatchActions={renderPostMatchActions}
-          activityReactions={activityReactions}
-        />
-        <div className="multiplayer-game-metadata" aria-hidden="true">
-          <span data-testid="match-id">{matchId}</span>
-          <span data-testid="match-revision">{revision}</span>
-        </div>
-      </main>
-    </ActionTrackingProvider>
-  );
-}
-
 function MatchView({
   matchId,
   userId,
@@ -1423,28 +1372,37 @@ function MatchView({
   }
 
   return (
-    <MultiplayerGameScene
-      matchId={match.id}
-      revision={match.revision}
-      connection={connection}
-      activityReactions={activityReactions}
-      renderPostMatchActions={
-        match.status === 'completed' && postMatch
-          ? (reviewing, onReviewingChange) => (
-              <Suspense fallback={null}>
-                <PostMatchActions
-                  reviewing={reviewing}
-                  isHost={postMatch.isHost}
-                  settings={postMatch.settings}
-                  createRoom={(settings) => createRoom(client, { settings })}
-                  onReviewingChange={onReviewingChange}
-                  navigate={navigate}
-                />
-              </Suspense>
-            )
-          : undefined
+    <Suspense
+      fallback={
+        <StatusScreen
+          title="Loading match"
+          message="Preparing the authoritative game view…"
+        />
       }
-    />
+    >
+      <MultiplayerGameScene
+        matchId={match.id}
+        revision={match.revision}
+        connection={connection}
+        activityReactions={activityReactions}
+        renderPostMatchActions={
+          match.status === 'completed' && postMatch
+            ? (reviewing, onReviewingChange) => (
+                <Suspense fallback={null}>
+                  <PostMatchActions
+                    reviewing={reviewing}
+                    isHost={postMatch.isHost}
+                    settings={postMatch.settings}
+                    createRoom={(settings) => createRoom(client, { settings })}
+                    onReviewingChange={onReviewingChange}
+                    navigate={navigate}
+                  />
+                </Suspense>
+              )
+            : undefined
+        }
+      />
+    </Suspense>
   );
 }
 

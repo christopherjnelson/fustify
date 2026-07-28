@@ -1,4 +1,4 @@
-import { MultiplayerGameScene } from '../multiplayer/MultiplayerApp';
+import { MultiplayerGameScene } from '../multiplayer/MultiplayerGameScene';
 import { PostMatchActions } from '../multiplayer/PostMatchActions';
 import type {
   MultiplayerRoomSettings,
