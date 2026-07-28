@@ -11,6 +11,60 @@ export async function installAdminAuthFixture(
   page: Page,
   fixture: AdminAuthFixture,
 ) {
+  await page.route('**/api/admin/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    const health = {
+      database_bytes: 10485760,
+      database_connections: 4,
+      registered_accounts: 14,
+      anonymous_accounts: 2,
+      banned_accounts: 0,
+      cleanup_candidates: 0,
+      stuck_launches: 0,
+      announcement_attention: 0,
+      thumbnail_objects: 3,
+      thumbnail_bytes: 245760,
+      orphan_thumbnails: 0,
+      cron_failures_24h: 0,
+      missing_profiles: 0,
+      inconsistent_rooms: 0,
+      incomplete_matches: 0,
+      latest_migration: '20260728042940',
+      expected_migration: '20260728042940',
+      migration_drift: false,
+      cache_hit_ratio: 0.99,
+      index_hit_ratio: 0.98,
+      largest_tables: [],
+      trends: {},
+    };
+    let body: unknown = { code: 'not_found' };
+    let status = 200;
+    if (pathname.endsWith('/overview')) body = { health, overview: null };
+    else if (pathname.endsWith('/metrics'))
+      body = {
+        generatedAt: '2026-07-28T04:00:00.000Z',
+        aggregates: { pg_stat_database_numbackends: 4 },
+      };
+    else if (pathname.endsWith('/accounts'))
+      body = { accounts: [], hasMore: false };
+    else if (pathname.endsWith('/rooms')) body = { rooms: [], hasMore: false };
+    else if (pathname.endsWith('/logs'))
+      body = { configured: false, entries: [] };
+    else if (pathname.endsWith('/maintenance'))
+      body = {
+        health,
+        announcements: [],
+        cleanupCandidates: [],
+        advisors: { configured: false, security: [], performance: [] },
+      };
+    else if (pathname.endsWith('/audit')) body = { entries: [] };
+    else status = 404;
+    await route.fulfill({
+      status,
+      contentType: 'application/json',
+      body: JSON.stringify(body),
+    });
+  });
   await page.addInitScript(
     ({ fixtureName }) => {
       type Listener = (event: string, session: unknown) => void;

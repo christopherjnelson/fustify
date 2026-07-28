@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { AdminReportSource } from './reportSource';
 import type { VerificationRun } from './reportContract';
 import type { BalanceStudyReport } from './balanceStudyContract';
@@ -8,9 +16,13 @@ import { AdminOperations } from './AdminOperations';
 import type { AdminConsoleSource } from './adminConsoleApi';
 import {
   AdminConsoleNavigation,
-  AdminConsolePanel,
   type AdminTab,
-} from './AdminConsolePanels';
+} from './adminConsoleNavigation';
+
+const AdminConsolePanel = lazy(async () => {
+  const module = await import('./AdminConsolePanels');
+  return { default: module.AdminConsolePanel };
+});
 
 function duration(ms?: number) {
   if (ms === undefined) return '—';
@@ -624,7 +636,15 @@ export function AdminDashboard({
             activeTab={activeTab}
             onChange={setActiveTab}
           />
-          <AdminConsolePanel activeTab={activeTab} source={consoleSource} />
+          <Suspense
+            fallback={
+              <div className="admin-state-card">
+                Loading administration section…
+              </div>
+            }
+          >
+            <AdminConsolePanel activeTab={activeTab} source={consoleSource} />
+          </Suspense>
         </>
       )}
       {(!consoleSource || activeTab === 'overview') && (

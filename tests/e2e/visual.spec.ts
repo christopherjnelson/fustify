@@ -377,6 +377,68 @@ for (const fixture of [
   });
 }
 
+for (const section of [
+  'accounts',
+  'rooms',
+  'logs',
+  'maintenance',
+  'audit',
+] as const) {
+  test(`visual review: admin-console-${section}`, async ({
+    page,
+  }, testInfo) => {
+    await page.goto(
+      '/admin?visual-review=1&admin-fixture=empty&admin-data=populated&admin-console=1',
+    );
+    await page.addStyleTag({
+      content: ':root { font-family: Arial, sans-serif !important; }',
+    });
+    await page
+      .getByRole('tab', {
+        name: section === 'audit' ? 'Audit' : new RegExp(section, 'i'),
+      })
+      .click();
+    const loadedContent = {
+      accounts: 'Northstar',
+      rooms: 'Atlas Prime',
+      logs: 'statement failed',
+      maintenance: 'Database size',
+      audit: 'Removed abandoned',
+    }[section];
+    await expect(page.getByText(loadedContent).first()).toBeVisible();
+    await expect(page.locator('.admin-operations')).toBeVisible();
+    await expect(page.locator('.admin-operations')).toHaveScreenshot(
+      `admin-console-${section}-ui.png`,
+      { timeout: 15_000 },
+    );
+    await page.screenshot({
+      path: reviewPath(testInfo, `admin-console-${section}`),
+      fullPage: true,
+    });
+  });
+}
+
+test('visual review: admin-console-confirmation-dialogs', async ({
+  page,
+}, testInfo) => {
+  await page.goto(
+    '/admin?visual-review=1&admin-fixture=empty&admin-data=populated&admin-console=1',
+  );
+  await page.addStyleTag({
+    content: ':root { font-family: Arial, sans-serif !important; }',
+  });
+  await page.getByRole('tab', { name: 'Accounts' }).click();
+  await page.getByRole('button', { name: 'Delete' }).first().click();
+  await page.getByLabel('Required reason').fill('Requested account removal');
+  await expect(page.getByRole('dialog')).toHaveScreenshot(
+    'admin-console-account-delete-dialog-ui.png',
+  );
+  await page.screenshot({
+    path: reviewPath(testInfo, 'admin-console-account-delete-dialog'),
+    fullPage: true,
+  });
+});
+
 for (const fixture of [
   'study-running',
   'study-warning',
@@ -456,6 +518,9 @@ test('visual review: admin-authorized-shell', async ({ page }, testInfo) => {
   await expect(page.getByRole('link', { name: 'Admin' })).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Authorized Room' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Operational health' }),
   ).toBeVisible();
   await expect(page.locator('.branded-app-shell')).toHaveScreenshot(
     'admin-authorized-shell-ui.png',

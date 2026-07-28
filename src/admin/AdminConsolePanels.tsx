@@ -15,27 +15,7 @@ import type {
   AdminRoom,
 } from './adminConsoleApi';
 import { accountMutationActions } from './adminAccountActions';
-
-export type AdminTab =
-  | 'overview'
-  | 'rooms'
-  | 'accounts'
-  | 'logs'
-  | 'maintenance'
-  | 'audit'
-  | 'verification'
-  | 'balance';
-
-const tabs: Array<[AdminTab, string]> = [
-  ['overview', 'Overview'],
-  ['rooms', 'Rooms'],
-  ['accounts', 'Accounts'],
-  ['logs', 'Logs'],
-  ['maintenance', 'Maintenance'],
-  ['audit', 'Audit'],
-  ['verification', 'Verification'],
-  ['balance', 'Balance Studies'],
-];
+import type { AdminTab } from './adminConsoleNavigation';
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat().format(value);
@@ -1218,30 +1198,6 @@ function Audit({ source }: { source: AdminConsoleSource }) {
         </ol>
       </State>
     </section>
-  );
-}
-
-export function AdminConsoleNavigation({
-  activeTab,
-  onChange,
-}: {
-  activeTab: AdminTab;
-  onChange: (tab: AdminTab) => void;
-}) {
-  return (
-    <nav className="admin-tabs" aria-label="Administration sections">
-      {tabs.map(([id, name]) => (
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === id}
-          key={id}
-          onClick={() => onChange(id)}
-        >
-          {name}
-        </button>
-      ))}
-    </nav>
   );
 }
 

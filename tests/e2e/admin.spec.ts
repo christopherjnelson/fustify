@@ -1,10 +1,14 @@
 import { expect, test } from '@playwright/test';
+import type { Route } from '@playwright/test';
 import { installAdminAuthFixture } from './adminTestClient';
 
 const adminPreview = (
   report = 'empty',
   data: 'populated' | 'empty' | 'error' | 'loading' = 'populated',
 ) => `/admin?visual-review=1&admin-fixture=${report}&admin-data=${data}`;
+
+const adminConsolePreview =
+  '/admin?visual-review=1&admin-fixture=empty&admin-data=populated&admin-console=1';
 
 test('signed-out admin route uses the normal account gate', async ({
   page,
@@ -110,7 +114,7 @@ test('confirmed admin loads the operational dashboard', async ({ page }) => {
   await expect(page.getByText('Authorized Room')).toBeVisible();
   await expect(page.getByText('Normalized v2')).toBeVisible();
   await expect(
-    page.getByText('Registered accounts').locator('..'),
+    page.getByText('Registered accounts').locator('..').last(),
   ).toContainText('14');
 });
 
@@ -133,6 +137,137 @@ test('operational dashboard has bounded loading, empty, and error states', async
     'Admin data could not be loaded',
   );
   await expect(page.getByRole('button', { name: 'Try Again' })).toBeVisible();
+});
+
+test('account identifiers reveal explicitly and moderation dialogs restore focus', async ({
+  page,
+}) => {
+  await page.goto(adminConsolePreview);
+  await page.getByRole('tab', { name: 'Accounts' }).click();
+  await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible();
+  await expect(page.getByText('n•••@example.test')).toBeVisible();
+  await expect(
+    page.getByText('a1000000-0000-4000-8000-000000000001'),
+  ).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Reveal' }).first().click();
+  await expect(page.getByText('Revealed account identifiers')).toBeVisible();
+  await expect(page.getByText(/northstar@example\.test/)).toBeVisible();
+
+  const banButton = page.getByRole('button', { name: 'Ban' }).first();
+  await banButton.click();
+  const dialog = page.getByRole('dialog', { name: /ban Northstar/i });
+  await expect(dialog.getByLabel('Required reason')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(banButton).toBeFocused();
+
+  await page.getByRole('button', { name: 'Delete' }).first().click();
+  const deleteDialog = page.getByRole('dialog', {
+    name: /soft delete Northstar/i,
+  });
+  await deleteDialog
+    .getByLabel('Required reason')
+    .fill('Requested account removal');
+  await expect(
+    deleteDialog.getByRole('button', { name: 'Confirm' }),
+  ).toBeDisabled();
+  await deleteDialog
+    .getByLabel('Type the account’s full email or UUID')
+    .fill('northstar@example.test');
+  await expect(
+    deleteDialog.getByRole('button', { name: 'Confirm' }),
+  ).toBeEnabled();
+});
+
+test('room lifecycle controls require exact confirmation and remain internally scrollable', async ({
+  page,
+}) => {
+  await page.goto(adminConsolePreview);
+  await page.getByRole('tab', { name: 'Rooms' }).click();
+  await expect(page.getByText('Stalled Launch')).toBeVisible();
+  await page.getByRole('button', { name: 'Force close' }).click();
+
+  const dialog = page.getByRole('dialog', {
+    name: /force close Stalled Launch/i,
+  });
+  await dialog
+    .getByLabel('Required reason')
+    .fill('Recover stuck launch safely');
+  await dialog.getByLabel('Type the room name').fill('Wrong room');
+  await expect(dialog.getByRole('button', { name: 'Confirm' })).toBeDisabled();
+  await dialog.getByLabel('Type the room name').fill('Stalled Launch');
+  await expect(dialog.getByRole('button', { name: 'Confirm' })).toBeEnabled();
+  const bounds = await dialog.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+    viewport: window.innerHeight,
+  }));
+  expect(bounds.clientHeight).toBeLessThanOrEqual(bounds.viewport);
+  expect(bounds.scrollHeight).toBeGreaterThanOrEqual(bounds.clientHeight);
+});
+
+test('logs, maintenance, and audit load only when selected', async ({
+  page,
+}) => {
+  await page.goto(adminConsolePreview);
+  await expect(page.getByText('statement failed for [id]')).toHaveCount(0);
+
+  await page.getByRole('tab', { name: 'Logs' }).click();
+  await expect(page.getByText('statement failed for [id]')).toBeVisible();
+  await expect(page.getByText('rate limit for [email]')).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Maintenance' }).click();
+  await expect(page.getByText('discord_upstream_error')).toBeVisible();
+  await page.getByRole('button', { name: 'Review retry' }).click();
+  const retry = page.getByRole('dialog', {
+    name: 'Retry Discord announcement',
+  });
+  await retry
+    .getByLabel('Required reason')
+    .fill('Verified no Discord delivery');
+  await retry.getByLabel('Type RETRY').fill('RETRY');
+  await expect(
+    retry.getByRole('button', { name: 'Retry announcement' }),
+  ).toBeEnabled();
+  await page.keyboard.press('Escape');
+  await page
+    .getByRole('button', { name: 'Review orphan thumbnail cleanup' })
+    .click();
+  const cleanup = page.getByRole('dialog', {
+    name: 'Delete orphan thumbnails',
+  });
+  await cleanup.getByLabel('Required reason').fill('Remove unreferenced files');
+  await cleanup.getByLabel('Type DELETE ORPHANS').fill('DELETE ORPHANS');
+  await expect(
+    cleanup.getByRole('button', { name: 'Delete orphan thumbnails' }),
+  ).toBeEnabled();
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('tab', { name: 'Audit' }).click();
+  await expect(page.getByText('Removed abandoned test lobby')).toBeVisible();
+});
+
+test('late account snapshots do not replace the selected section', async ({
+  page,
+}) => {
+  await installAdminAuthFixture(page, 'admin');
+  let pending: Route | undefined;
+  await page.route('**/api/admin/accounts**', async (route) => {
+    pending = route;
+  });
+  await page.goto('/admin');
+  await page.getByRole('tab', { name: 'Accounts' }).click();
+  await expect.poll(() => Boolean(pending)).toBe(true);
+  await page.getByRole('tab', { name: 'Logs' }).click();
+  await pending!.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ accounts: [], hasMore: false }),
+  });
+  await expect(
+    page.getByRole('heading', { name: 'Supabase logs' }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Accounts' })).toHaveCount(0);
 });
 
 test('admin navigation waits for authorization and clears on account changes', async ({

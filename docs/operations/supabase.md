@@ -34,6 +34,7 @@ Migration order:
 17. `20260725212915_discord_room_announcements.sql`
 18. `20260725231245_publish_immutable_public_lobbies.sql`
 19. `20260727055631_multiplayer_match_launch_state.sql`
+20. `20260728042940_expand_admin_operations.sql`
 
 The authority migration extends `matches`, creates append-only
 `match_commands`, adds member-scoped read RLS, removes browser execution of the
@@ -83,6 +84,15 @@ existing member-scoped room subscription, clears the lease when the canonical
 match is inserted, and supports token-matched failure cleanup plus a
 five-minute abandoned-launch retry.
 
+The expanded administration migration adds application-owned moderation,
+append-only privileged-action auditing, server-only room lifecycle functions,
+curated health and cleanup-candidate snapshots, safe Discord retry, and a
+nightly cleanup dry run. Browser roles have no table access or function
+execution for this surface. Its shared access check is also applied to
+registered-user mutation boundaries; the Node match-start service and
+`multiplayer-game` Edge Function independently reject blocked accounts so an
+already-issued JWT cannot retain Fustify write access.
+
 ## Secrets and browser configuration
 
 The browser uses only:
@@ -98,6 +108,32 @@ or database URL to a `VITE_` variable. Hosted Edge Functions receive
 automatically. `multiplayer-game` disables the legacy gateway JWT check in
 `config.toml` and explicitly verifies the bearer token with `auth.getUser()` so
 current asymmetric and legacy user JWTs share one controlled path.
+
+The Node administration API prefers `SUPABASE_SECRET_KEY`; a legacy
+`SUPABASE_SERVICE_ROLE_KEY` is accepted only as a migration fallback.
+`SUPABASE_MANAGEMENT_ACCESS_TOKEN` is optional and must be a server-only,
+fine-grained token with `analytics_logs_read` for the curated log feed. Set
+`SUPABASE_PROJECT_REF` explicitly in production. Keep
+`FUSTIFY_ADMIN_MUTATIONS_ENABLED=0` through initial read-only validation, then
+set it to `1` only after the remote grants, moderation enforcement, audit
+inserts, and synthetic-room smoke checks pass.
+
+The `/api/admin/*` routes verify the bearer token with Auth and then query the
+application-owned `user_roles` table on every request. They return
+`Cache-Control: no-store`, validate bounded inputs, and never expose join codes,
+raw log payloads, credentials, full identifiers without an audited reveal, or
+the analytics token. The log view uses the ClickHouse-backed Management API
+`analytics/endpoints/logs` endpoint and does not persist imported entries. The
+Metrics API is scraped server-side with the project secret and returns only
+selected aggregates. Host and droplet telemetry remain outside this console.
+
+Room cleanup remains deliberately non-destructive at first. The
+`admin-nightly-room-cleanup-dry-run` cron records only job health while the
+Maintenance section lists up to 100 eligible candidates. A room is eligible
+only when it is closed, memberless, older than 30 days, and has no match.
+Anything associated with match history is preserved indefinitely. Manual purge
+and announcement retry require a reason, confirmation, an idempotency key, and
+the mutation feature flag.
 
 `announce-public-room` also uses `verify_jwt=false`, but it is not public. It
 requires a dedicated secret in the `apikey` header and compares that value to
@@ -250,6 +286,18 @@ permit weakening grants or policies.
 ## Remote validation checklist
 
 - Migration history exactly matches Git.
+- `account_moderation` and `admin_action_audit` have RLS enabled and no browser
+  grants; the audit table grants `SELECT`/`INSERT` only to `service_role`.
+- Blocked, revoked, and soft-deleted accounts fail browser mutation RPCs,
+  Node match start, and Edge Function commands while active users still pass.
+- `/api/admin/*` rejects missing, ordinary, anonymous, blocked, and stale
+  sessions before touching privileged clients.
+- Account reveal and every mutation append an outcome with actor, target,
+  reason, request ID, and idempotency key; admin/self targeting is rejected.
+- Curated logs redact identifiers, network addresses, query values, tokens, and
+  payloads, and the Logs Explorer link opens the same project.
+- The nightly cleanup job remains dry-run until candidates have been reviewed;
+  matched rooms never appear in the candidate set.
 - `matches` and `match_commands` RLS are enabled.
 - `match_event_reactions` RLS is enabled and browser roles have `SELECT` only.
 - `profiles` RLS is enabled, authenticated users have `SELECT` only, and the

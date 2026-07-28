@@ -1,11 +1,9 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  AdminConsoleNavigation,
-  AdminConsolePanel,
-} from './AdminConsolePanels';
+import { AdminConsolePanel } from './AdminConsolePanels';
 import { accountMutationActions } from './adminAccountActions';
+import { AdminConsoleNavigation } from './adminConsoleNavigation';
 import { adminAccountSchema, type AdminConsoleSource } from './adminConsoleApi';
 
 function source(): AdminConsoleSource {

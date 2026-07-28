@@ -282,6 +282,41 @@
   gap: 0.5rem;
 }
 
+.admin-filter button,
+.admin-row-actions button,
+.admin-pagination button,
+.admin-disclosure button,
+.admin-maintenance-list button {
+  border: 1px solid var(--brand-border);
+  border-radius: 0.45rem;
+  background: var(--brand-panel-raised);
+  color: var(--brand-text);
+  padding: 0.48rem 0.68rem;
+}
+
+.admin-filter button:hover,
+.admin-filter button:focus-visible,
+.admin-row-actions button:hover,
+.admin-row-actions button:focus-visible,
+.admin-pagination button:hover,
+.admin-pagination button:focus-visible,
+.admin-disclosure button:hover,
+.admin-disclosure button:focus-visible,
+.admin-maintenance-list button:hover,
+.admin-maintenance-list button:focus-visible {
+  border-color: var(--brand-accent);
+  color: var(--brand-text-strong);
+}
+
+.admin-filter button:disabled,
+.admin-row-actions button:disabled,
+.admin-pagination button:disabled,
+.admin-disclosure button:disabled,
+.admin-maintenance-list button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .admin-filter label,
 .admin-modal label {
   display: grid;
