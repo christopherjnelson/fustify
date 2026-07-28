@@ -20,6 +20,7 @@ import { accountIdentity } from './accountIdentity';
 import { updateCurrentProfile } from './profileApi';
 import type { UserProfile } from './profileModel';
 import { validatedReturnPath } from './returnPath';
+import { UsernameField, type UsernameAvailability } from './UsernameField';
 
 type FormStatus =
   | { kind: 'idle' }
@@ -86,6 +87,8 @@ export default function AuthDialog({
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [status, setStatus] = useState<FormStatus>({ kind: 'idle' });
+  const [usernameAvailability, setUsernameAvailability] =
+    useState<UsernameAvailability>('unchecked');
   const [pendingSignupEmail, setPendingSignupEmail] = useState<string | null>(
     null,
   );
@@ -158,6 +161,15 @@ export default function AuthDialog({
     if (status.kind === 'busy') return;
     setStatus({ kind: 'busy' });
     try {
+      if (
+        (view === 'register' || view === 'edit-profile') &&
+        usernameAvailability === 'unavailable'
+      ) {
+        throw new AuthFlowError(
+          'invalid_form',
+          'Choose an available username.',
+        );
+      }
       if (view === 'register') {
         const registration = await registerWithEmail(client, {
           displayName,
@@ -202,7 +214,7 @@ export default function AuthDialog({
         setStatus({
           kind: 'success',
           message:
-            'Check your email in this browser to verify it, then choose a password and display name.',
+            'Check your email in this browser to verify it, then choose a password and username.',
         });
         return;
       }
@@ -375,12 +387,11 @@ export default function AuthDialog({
               onSubmit={(event) => void submit(event)}
             >
               {(view === 'register' || view === 'edit-profile') && (
-                <Field
-                  label="Display name"
+                <UsernameField
+                  client={client}
                   value={displayName}
                   onChange={setDisplayName}
-                  autoComplete="nickname"
-                  maxLength={40}
+                  onAvailabilityChange={setUsernameAvailability}
                 />
               )}
               {view === 'edit-profile' && (

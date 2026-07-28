@@ -245,6 +245,18 @@ export class SupabaseStartMatchRepository implements StartMatchRepository {
         code: 'account_required',
       } as const;
     }
+    const { data: profile, error: profileError } = await unrestrictedAdmin
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('user_id', authorized.actorUserId)
+      .maybeSingle();
+    if (profileError || profile?.onboarding_completed !== true) {
+      return {
+        ok: false,
+        status: 403,
+        code: 'account_required',
+      } as const;
+    }
     return authorized;
   }
 

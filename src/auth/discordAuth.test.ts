@@ -16,6 +16,7 @@ type ProfileRow = {
   user_id: string;
   display_name: string;
   avatar_url: string | null;
+  onboarding_completed: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -24,6 +25,7 @@ const profileRow: ProfileRow = {
   user_id: userId,
   display_name: 'Player One',
   avatar_url: 'https://cdn.example.test/player.png',
+  onboarding_completed: true,
   created_at: '2026-07-24T06:00:00.000Z',
   updated_at: '2026-07-24T06:00:00.000Z',
 };
@@ -399,7 +401,7 @@ describe('Discord authentication flows', () => {
     expect(fixture.rpc).not.toHaveBeenCalled();
   });
 
-  it('enriches only an exact generated legacy profile through the profile RPC', async () => {
+  it('leaves a generated legacy profile unchanged for explicit confirmation', async () => {
     const anonymousUser = user({ anonymous: true, providers: [] });
     const permanentUser = user({
       providers: ['discord'],
@@ -443,14 +445,11 @@ describe('Discord authentication flows', () => {
       'http://127.0.0.1:4173/auth/callback?code=oauth-code',
     );
 
-    expect(fixture.rpc).toHaveBeenCalledWith('update_own_profile', {
-      p_display_name: 'Discord Player',
-      p_avatar_url: 'https://cdn.example.test/discord.png',
-    });
+    expect(fixture.rpc).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       profile: {
-        displayName: 'Discord Player',
-        avatarUrl: 'https://cdn.example.test/discord.png',
+        displayName: 'MistyBadger-482',
+        avatarUrl: null,
       },
     });
   });
@@ -596,7 +595,7 @@ describe('Discord authentication flows', () => {
     expect(readDiscordAuthIntent()).toBeNull();
   });
 
-  it('exchanges a Discord PKCE code once and clears intent on completion', async () => {
+  it('exchanges a Discord PKCE code once and retains intent for profile confirmation', async () => {
     const discordUser = user({ providers: ['discord'] });
     const fixture = readyClient(discordUser);
     await signInWithDiscord(fixture.client, '/local');
@@ -605,7 +604,10 @@ describe('Discord authentication flows', () => {
       'http://127.0.0.1:4173/auth/callback?code=oauth-code',
     );
     expect(fixture.client.auth.exchangeCodeForSession).toHaveBeenCalledTimes(1);
-    expect(readDiscordAuthIntent()).toBeNull();
+    expect(readDiscordAuthIntent()).toEqual({
+      intent: 'discord-sign-in',
+      returnPath: '/local',
+    });
   });
 
   it('clears temporary Discord intent during normal sign-out', async () => {

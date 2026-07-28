@@ -18,12 +18,14 @@ const profileRow = {
   user_id: userId,
   display_name: 'Player One',
   avatar_url: null,
+  onboarding_completed: true,
   created_at: '2026-07-24T06:00:00.000Z',
   updated_at: '2026-07-24T06:00:00.000Z',
 };
 
 function accountClient(options: {
   anonymous?: boolean;
+  onboardingCompleted?: boolean;
   userId?: string;
   session?: boolean;
   verificationError?: Error;
@@ -48,7 +50,13 @@ function accountClient(options: {
     select: vi.fn(() => query),
     eq: vi.fn(() => query),
     maybeSingle: vi.fn(async () => ({
-      data: currentUser ? { ...profileRow, user_id: currentUser.id } : null,
+      data: currentUser
+        ? {
+            ...profileRow,
+            user_id: currentUser.id,
+            onboarding_completed: options.onboardingCompleted ?? true,
+          }
+        : null,
       error: null,
     })),
   };
@@ -140,6 +148,17 @@ describe('protected account state', () => {
     await expect(deriveAccountState(anonymous.client)).resolves.toMatchObject({
       status: 'legacy-anonymous',
       user: { id: userId, is_anonymous: true },
+    });
+  });
+
+  it('keeps a permanent account blocked until profile onboarding is complete', async () => {
+    const fixture = accountClient({ onboardingCompleted: false });
+    await expect(deriveAccountState(fixture.client)).resolves.toMatchObject({
+      status: 'onboarding-required',
+      account: {
+        userId,
+        profile: { onboardingCompleted: false },
+      },
     });
   });
 

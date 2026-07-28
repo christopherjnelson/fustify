@@ -319,9 +319,7 @@ describe('multiplayer errors', () => {
     );
     expect(
       multiplayerError(new Error('invalid_profile_display_name')).message,
-    ).toBe(
-      'Your profile display name is invalid. Edit your profile and try again.',
-    );
+    ).toBe('Your username is invalid. Edit your profile and try again.');
     expect(multiplayerError(new Error('public_room_unavailable')).message).toBe(
       'That public game is no longer available. Choose another game.',
     );

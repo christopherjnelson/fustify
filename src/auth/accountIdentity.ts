@@ -1,7 +1,10 @@
 import type { AccountState } from './accountState';
 
 export function accountIdentity(account: AccountState) {
-  if (account.status === 'registered-ready') {
+  if (
+    account.status === 'registered-ready' ||
+    account.status === 'onboarding-required'
+  ) {
     return {
       isAnonymous: false,
       user: account.account.user,

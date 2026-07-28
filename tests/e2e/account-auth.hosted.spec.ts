@@ -131,7 +131,7 @@ test.describe('hosted account boundary acceptance', () => {
         window.dispatchEvent(new Event('fustify:open-profile-editor')),
       );
       let edit = page.getByRole('dialog', { name: 'Edit profile' });
-      await edit.getByLabel('Display name').fill(updatedDisplayName);
+      await edit.getByLabel('Username').fill(updatedDisplayName);
       await edit.getByRole('button', { name: 'Save profile' }).click();
       await expect(edit.getByText('Profile updated.')).toBeVisible();
       profileRenamed = true;
@@ -158,7 +158,7 @@ test.describe('hosted account boundary acceptance', () => {
         window.dispatchEvent(new Event('fustify:open-profile-editor')),
       );
       edit = page.getByRole('dialog', { name: 'Edit profile' });
-      await edit.getByLabel('Display name').fill(originalDisplayName!);
+      await edit.getByLabel('Username').fill(originalDisplayName!);
       await edit.getByRole('button', { name: 'Save profile' }).click();
       await expect(edit.getByText('Profile updated.')).toBeVisible();
       profileRenamed = false;
@@ -192,7 +192,7 @@ test.describe('hosted account boundary acceptance', () => {
       const edit = page.getByRole('dialog', { name: 'Edit profile' });
       if (await edit.isVisible().catch(() => false)) {
         await edit
-          .getByLabel('Display name')
+          .getByLabel('Username')
           .fill(originalDisplayName)
           .catch(() => undefined);
         await edit

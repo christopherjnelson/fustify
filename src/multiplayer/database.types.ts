@@ -265,6 +265,7 @@ export type Database = {
           avatar_url: string | null;
           created_at: string;
           display_name: string;
+          onboarding_completed: boolean;
           updated_at: string;
           user_id: string;
         };
@@ -272,6 +273,7 @@ export type Database = {
           avatar_url?: string | null;
           created_at?: string;
           display_name: string;
+          onboarding_completed?: boolean;
           updated_at?: string;
           user_id: string;
         };
@@ -279,6 +281,7 @@ export type Database = {
           avatar_url?: string | null;
           created_at?: string;
           display_name?: string;
+          onboarding_completed?: boolean;
           updated_at?: string;
           user_id?: string;
         };
@@ -642,12 +645,30 @@ export type Database = {
         Args: never;
         Returns: boolean;
       };
+      complete_own_profile: {
+        Args: { p_avatar_url: string | null; p_display_name: string };
+        Returns: {
+          avatar_url: string | null;
+          created_at: string;
+          display_name: string;
+          onboarding_completed: boolean;
+          updated_at: string;
+          user_id: string;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'profiles';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       ensure_own_profile: {
         Args: never;
         Returns: {
           avatar_url: string | null;
           created_at: string;
           display_name: string;
+          onboarding_completed: boolean;
           updated_at: string;
           user_id: string;
         };
@@ -792,6 +813,7 @@ export type Database = {
           avatar_url: string | null;
           created_at: string;
           display_name: string;
+          onboarding_completed: boolean;
           updated_at: string;
           user_id: string;
         };
@@ -801,6 +823,13 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      username_options: {
+        Args: { p_candidate: string };
+        Returns: {
+          available: boolean;
+          suggestions: string[];
+        }[];
       };
       update_room_settings: {
         Args: {

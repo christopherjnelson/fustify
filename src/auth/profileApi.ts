@@ -4,20 +4,22 @@ import type { Database } from '../multiplayer/database.types';
 import {
   parseProfileUpdate,
   parseUserProfile,
+  profileDisplayNameSchema,
   type ProfileUpdate,
   type UserProfile,
 } from './profileModel';
 
 const PROFILE_COLUMNS =
-  'user_id, display_name, avatar_url, created_at, updated_at';
+  'user_id, display_name, avatar_url, onboarding_completed, created_at, updated_at';
 
 const PROFILE_ERROR_MESSAGES: Record<string, string> = {
   account_required: 'Create an account to customize your profile.',
   invalid_profile_avatar_url: 'Use a valid HTTPS avatar URL.',
   invalid_profile_display_name:
-    'Use a display name between 1 and 40 characters without control characters.',
+    'Use a username between 1 and 40 characters without control characters.',
   not_authenticated: 'Your account session is unavailable.',
   profile_unavailable: 'Your profile is temporarily unavailable.',
+  username_unavailable: 'That username is already taken.',
 };
 
 const SANITIZED_PROFILE_ERRORS = new Set([
@@ -168,4 +170,57 @@ export async function updateCurrentProfile(
     throw profileApiError(error ?? 'profile_unavailable');
   }
   return parseProfileResponse(data);
+}
+
+export async function completeCurrentProfile(
+  client: SupabaseClient<Database>,
+  update: ProfileUpdate,
+): Promise<UserProfile> {
+  let parsedUpdate: ProfileUpdate;
+  try {
+    parsedUpdate = parseProfileUpdate(update);
+  } catch (error) {
+    throw profileUpdateError(error);
+  }
+
+  const { data, error } = await runProfileRequest(
+    client.rpc('complete_own_profile', {
+      p_display_name: parsedUpdate.displayName,
+      p_avatar_url: parsedUpdate.avatarUrl,
+    }),
+  );
+  if (error || !data) {
+    throw profileApiError(error ?? 'profile_unavailable');
+  }
+  return parseProfileResponse(data);
+}
+
+const usernameOptionsRowSchema = z.object({
+  available: z.boolean(),
+  suggestions: z.array(profileDisplayNameSchema).max(3),
+});
+
+export type UsernameOptions = z.infer<typeof usernameOptionsRowSchema>;
+
+export async function fetchUsernameOptions(
+  client: SupabaseClient<Database>,
+  candidate: string,
+): Promise<UsernameOptions> {
+  let normalized: string;
+  try {
+    normalized = profileDisplayNameSchema.parse(candidate);
+  } catch (error) {
+    throw profileUpdateError(error);
+  }
+  const { data, error } = await runProfileRequest(
+    client.rpc('username_options', { p_candidate: normalized }).single(),
+  );
+  if (error || !data) {
+    throw profileApiError(error ?? 'profile_unavailable');
+  }
+  try {
+    return usernameOptionsRowSchema.parse(data);
+  } catch {
+    throw profileApiError('invalid_profile_response');
+  }
 }

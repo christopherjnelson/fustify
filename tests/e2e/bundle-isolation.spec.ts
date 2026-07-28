@@ -35,6 +35,7 @@ const ACTIVE_MATCH_FINGERPRINTS = [
   'TerritoryHud',
 ];
 const TEST_ONLY_FINGERPRINTS = ['visualScenarios', 'testFixtures'];
+const AUTH_COMPLETION_FINGERPRINTS = ['DiscordProfileCompletionPage'];
 const HOME_FORBIDDEN_FINGERPRINTS = [
   'GlobeScene',
   '/Planet.tsx',
@@ -152,6 +153,11 @@ test.describe('route chunk isolation', () => {
       ACTIVE_MATCH_FINGERPRINTS,
       'active local match controls',
     );
+    expectAbsent(
+      requested,
+      AUTH_COMPLETION_FINGERPRINTS,
+      'Discord profile confirmation',
+    );
   });
 
   test('multiplayer lobby defers the renderer and match surface', async ({
@@ -178,6 +184,11 @@ test.describe('route chunk isolation', () => {
         ...ACTIVE_MATCH_FINGERPRINTS,
       ],
       'multiplayer match surface',
+    );
+    expectAbsent(
+      requested,
+      AUTH_COMPLETION_FINGERPRINTS,
+      'Discord profile confirmation',
     );
   });
 
@@ -210,6 +221,26 @@ test.describe('route chunk isolation', () => {
     expect(
       matching(requested, ['BrowserApp', 'home/Home']),
       'the auth callback must not load the public browser shell',
+    ).toEqual([]);
+  });
+
+  test('/auth/complete-profile isolates onboarding from gameplay and the browser shell', async ({
+    page,
+  }) => {
+    const requested = recordRequests(page);
+    await page.goto('/auth/complete-profile');
+    await expect(
+      page.getByRole('heading', { name: 'Confirm your Discord profile' }),
+    ).toBeVisible();
+
+    expect(
+      matching(requested, AUTH_COMPLETION_FINGERPRINTS).length,
+    ).toBeGreaterThan(0);
+    expectAbsent(requested, GAMEPLAY_FINGERPRINTS, 'gameplay code');
+    expectAbsent(requested, ADMIN_FINGERPRINTS, 'admin code');
+    expect(
+      matching(requested, ['BrowserApp', 'home/Home']),
+      'profile confirmation must not load the public browser shell',
     ).toEqual([]);
   });
 

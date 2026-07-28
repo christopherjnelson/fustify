@@ -103,7 +103,15 @@ async function bootstrap() {
   }
 
   if (isAuth) {
-    if (window.location.pathname.startsWith('/auth/reset-password')) {
+    if (window.location.pathname.startsWith('/auth/complete-profile')) {
+      const { DiscordProfileCompletionPage } =
+        await import('./auth/DiscordProfileCompletionPage');
+      root.render(
+        <StrictMode>
+          <DiscordProfileCompletionPage />
+        </StrictMode>,
+      );
+    } else if (window.location.pathname.startsWith('/auth/reset-password')) {
       const { ResetPasswordPage } = await import('./auth/ResetPasswordPage');
       root.render(
         <StrictMode>

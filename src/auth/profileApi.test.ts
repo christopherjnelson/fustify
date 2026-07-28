@@ -2,8 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { Database } from '../multiplayer/database.types';
 import {
+  completeCurrentProfile,
   fetchCurrentProfile,
   fetchProfilesByUserIds,
+  fetchUsernameOptions,
   profileApiError,
   updateCurrentProfile,
 } from './profileApi';
@@ -14,6 +16,7 @@ const profileRow = {
   user_id: userId,
   display_name: 'Guest 1000',
   avatar_url: null,
+  onboarding_completed: true,
   created_at: '2026-07-24T06:00:00.000Z',
   updated_at: '2026-07-24T06:00:00.000Z',
 };
@@ -114,6 +117,52 @@ describe('profile API', () => {
     });
   });
 
+  it('completes onboarding through the dedicated profile RPC', async () => {
+    const rpc = vi.fn(async () => ({
+      data: {
+        ...profileRow,
+        display_name: 'Ready Player',
+        onboarding_completed: true,
+      },
+      error: null,
+    }));
+    const client = { rpc } as unknown as SupabaseClient<Database>;
+
+    await expect(
+      completeCurrentProfile(client, {
+        displayName: 'Ready Player',
+        avatarUrl: null,
+      }),
+    ).resolves.toMatchObject({
+      displayName: 'Ready Player',
+      onboardingCompleted: true,
+    });
+    expect(rpc).toHaveBeenCalledWith('complete_own_profile', {
+      p_display_name: 'Ready Player',
+      p_avatar_url: null,
+    });
+  });
+
+  it('returns bounded username availability suggestions', async () => {
+    const single = vi.fn(async () => ({
+      data: {
+        available: false,
+        suggestions: ['Player-2', 'Player-3', 'Player-4'],
+      },
+      error: null,
+    }));
+    const rpc = vi.fn(() => ({ single }));
+    const client = { rpc } as unknown as SupabaseClient<Database>;
+
+    await expect(fetchUsernameOptions(client, ' Player ')).resolves.toEqual({
+      available: false,
+      suggestions: ['Player-2', 'Player-3', 'Player-4'],
+    });
+    expect(rpc).toHaveBeenCalledWith('username_options', {
+      p_candidate: 'Player',
+    });
+  });
+
   it('sanitizes database and validation failures', async () => {
     const rpc = vi.fn(async () => ({
       data: null,
@@ -132,7 +181,7 @@ describe('profile API', () => {
         displayName: '',
         avatarUrl: null,
       }),
-    ).rejects.toThrow('Use a display name between 1 and 40 characters');
+    ).rejects.toThrow('Use a username between 1 and 40 characters');
     expect(
       profileApiError(new Error('invalid_profile_avatar_url')).message,
     ).toBe('Use a valid HTTPS avatar URL.');
