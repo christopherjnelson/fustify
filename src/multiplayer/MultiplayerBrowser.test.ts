@@ -10,6 +10,7 @@ const profile = {
   userId: '10000000-0000-4000-8000-000000000001',
   displayName: 'Host',
   avatarUrl: null,
+  onboardingCompleted: true,
   createdAt: '2026-07-25T00:00:00.000Z',
   updatedAt: '2026-07-25T00:00:00.000Z',
 };

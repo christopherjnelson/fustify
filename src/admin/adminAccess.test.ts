@@ -13,6 +13,7 @@ function registered(userId: string): ProtectedAccountState {
         userId,
         displayName: userId,
         avatarUrl: null,
+        onboardingCompleted: true,
         createdAt: '2026-07-25T00:00:00.000Z',
         updatedAt: '2026-07-25T00:00:00.000Z',
       },

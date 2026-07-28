@@ -23,7 +23,7 @@ export const MULTIPLAYER_ERRORS: Record<string, string> = {
     'The authoritative match state is unavailable. Reconnect and try again.',
   invalid_event_reaction: 'That Activity reaction is not available.',
   invalid_profile_display_name:
-    'Your profile display name is invalid. Edit your profile and try again.',
+    'Your username is invalid. Edit your profile and try again.',
   invalid_room_name: 'Use a game name between 1 and 60 characters.',
   invalid_public_room_configuration:
     'Review and save valid room settings before opening the public lobby.',

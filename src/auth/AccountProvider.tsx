@@ -33,6 +33,15 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     return controller.subscribe(setState);
   }, [controller]);
 
+  useEffect(() => {
+    if (
+      state.status === 'onboarding-required' &&
+      !window.location.pathname.startsWith('/auth/complete-profile')
+    ) {
+      window.location.replace('/auth/complete-profile');
+    }
+  }, [state.status]);
+
   const value = useMemo(
     () => ({ client, controller, state }),
     [client, controller, state],

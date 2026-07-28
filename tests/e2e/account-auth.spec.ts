@@ -37,6 +37,7 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
         display_name:
           fixtureName === 'guest' ? 'MistyBadger-482' : 'Player One',
         avatar_url: null,
+        onboarding_completed: fixtureName !== 'guest',
         created_at: '2026-07-24T06:00:00.000Z',
         updated_at: '2026-07-24T06:00:00.000Z',
       };
@@ -48,6 +49,15 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
       const discordLinked =
         window.sessionStorage.getItem('fustify-auth-test-discord-linked') ===
         '1';
+      const storedDiscordIntent = window.sessionStorage.getItem(
+        'fustify.auth.discord',
+      );
+      const persistedDiscordIntent = storedDiscordIntent
+        ? (JSON.parse(storedDiscordIntent) as { intent?: string })
+        : null;
+      const persistedOnboarding = window.sessionStorage.getItem(
+        'fustify-auth-test-onboarding-completed',
+      );
       let user =
         explicitlySignedOut ||
         ((fixtureName === 'signed-out' || fixtureName === 'slow-signed-out') &&
@@ -66,10 +76,37 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
               identities: [
                 ...(fixtureName === 'guest' && !registeredInBrowser
                   ? []
-                  : [{ provider: 'email' }]),
-                ...(discordLinked ? [{ provider: 'discord' }] : []),
+                  : discordLinked &&
+                      persistedDiscordIntent?.intent !== 'discord-link'
+                    ? []
+                    : [{ provider: 'email' }]),
+                ...(discordLinked
+                  ? [
+                      {
+                        provider: 'discord',
+                        identity_data: {
+                          email: 'discord@example.test',
+                          full_name: 'redwurm',
+                          name: 'redwurm#0',
+                          avatar_url:
+                            'https://cdn.discordapp.com/avatars/fixture/avatar.png',
+                        },
+                      },
+                    ]
+                  : []),
               ],
             };
+      if (persistedOnboarding !== null) {
+        profile = {
+          ...profile,
+          onboarding_completed: persistedOnboarding === '1',
+          display_name:
+            window.sessionStorage.getItem('fustify-auth-test-username') ??
+            profile.display_name,
+          avatar_url:
+            window.sessionStorage.getItem('fustify-auth-test-avatar') || null,
+        };
+      }
       let tokenIsAnonymous =
         (fixtureName === 'guest' && !registeredInBrowser) ||
         fixtureName === 'stale-registered';
@@ -239,6 +276,29 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
           }
           return { data: { provider: 'discord', url: 'mocked' }, error: null };
         },
+        unlinkIdentity: async (identity: { provider: string }) => {
+          calls.push({ method: 'unlinkIdentity', payload: identity });
+          window.sessionStorage.setItem(
+            'fustify-auth-test-unlink-count',
+            String(
+              Number(
+                window.sessionStorage.getItem(
+                  'fustify-auth-test-unlink-count',
+                ) ?? '0',
+              ) + 1,
+            ),
+          );
+          if (user) {
+            user = {
+              ...user,
+              identities: user.identities.filter(
+                ({ provider }) => provider !== identity.provider,
+              ),
+            };
+          }
+          window.sessionStorage.removeItem('fustify-auth-test-discord-linked');
+          return { data: { user }, error: null };
+        },
         signInAnonymously: async () => {
           calls.push({ method: 'signInAnonymously' });
           throw new Error('home must not create an anonymous user');
@@ -267,16 +327,47 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
               ) + 1,
             ),
           );
+          const storedDiscordIntent = window.sessionStorage.getItem(
+            'fustify.auth.discord',
+          );
+          const discordIntent = storedDiscordIntent
+            ? (JSON.parse(storedDiscordIntent) as { intent?: string })
+            : null;
+          const discordIdentity = {
+            provider: 'discord',
+            identity_data: {
+              email: 'discord@example.test',
+              full_name: 'redwurm',
+              name: 'redwurm#0',
+              avatar_url:
+                'https://cdn.discordapp.com/avatars/fixture/avatar.png',
+            },
+          };
           user = {
             id: userId,
             is_anonymous: false,
             email: 'player@example.test',
             email_confirmed_at: '2026-07-24T08:00:00.000Z',
             user_metadata: {},
-            identities: window.sessionStorage.getItem('fustify.auth.discord')
-              ? [{ provider: 'email' }, { provider: 'discord' }]
+            identities: discordIntent
+              ? [
+                  ...(discordIntent.intent === 'discord-link'
+                    ? [{ provider: 'email' }]
+                    : []),
+                  discordIdentity,
+                ]
               : [{ provider: 'email' }],
           };
+          if (
+            discordIntent?.intent === 'discord-sign-in' ||
+            discordIntent?.intent === 'legacy-discord-upgrade'
+          ) {
+            profile = { ...profile, onboarding_completed: false };
+            window.sessionStorage.setItem(
+              'fustify-auth-test-onboarding-completed',
+              '0',
+            );
+          }
           tokenIsAnonymous = false;
           window.sessionStorage.setItem('fustify-auth-test-registered', '1');
           if (user.identities.some(({ provider }) => provider === 'discord')) {
@@ -351,47 +442,117 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
       const client = {
         auth,
         from: () => query,
-        rpc: async (method: string, payload?: Record<string, string>) => {
+        rpc: (method: string, payload?: Record<string, string | null>) => {
           calls.push({ method, payload });
-          if (method === 'ensure_own_profile') {
-            if (fixtureName === 'missing-profile-error') {
+          if (method === 'username_options') {
+            const candidate = payload?.p_candidate ?? '';
+            const unavailable =
+              candidate.toLowerCase() ===
+              (
+                window.sessionStorage.getItem(
+                  'fustify-auth-test-taken-username',
+                ) ?? ''
+              ).toLowerCase();
+            return {
+              single: async () => ({
+                data: {
+                  available: !unavailable,
+                  suggestions: unavailable
+                    ? [`${candidate}-2`, `${candidate}-3`, `${candidate}-4`]
+                    : [`${candidate}-2`, `${candidate}-3`, `${candidate}-4`],
+                },
+                error: null,
+              }),
+            };
+          }
+          return (async () => {
+            if (method === 'ensure_own_profile') {
+              if (fixtureName === 'missing-profile-error') {
+                return {
+                  data: null,
+                  error: { code: 'P0001', message: 'profile_unavailable' },
+                };
+              }
+              profileExists = true;
+              return { data: profile, error: null };
+            }
+            if (
+              testState.rejectRoomActions &&
+              (method === 'create_room' || method === 'join_room')
+            ) {
               return {
                 data: null,
-                error: { code: 'P0001', message: 'profile_unavailable' },
+                error: { code: 'P0001', message: 'account_required' },
               };
             }
-            profileExists = true;
+            if (
+              (method === 'update_own_profile' ||
+                method === 'complete_own_profile') &&
+              payload
+            ) {
+              profile = {
+                ...profile,
+                display_name: payload.p_display_name,
+                avatar_url: payload.p_avatar_url || null,
+                onboarding_completed: true,
+                updated_at: '2026-07-24T09:00:00.000Z',
+              };
+            }
+            if (method === 'create_room' || method === 'join_room') {
+              return {
+                data: {
+                  id: '30000000-0000-4000-8000-000000000003',
+                  join_code: 'ABCD1234',
+                  status: 'waiting',
+                  visibility: 'private',
+                },
+                error: null,
+              };
+            }
             return { data: profile, error: null };
-          }
-          if (
-            testState.rejectRoomActions &&
-            (method === 'create_room' || method === 'join_room')
-          ) {
-            return {
-              data: null,
-              error: { code: 'P0001', message: 'account_required' },
-            };
-          }
-          if (method === 'update_own_profile' && payload) {
+          })();
+        },
+        functions: {
+          invoke: async (
+            method: string,
+            options: { body: Record<string, unknown> },
+          ) => {
+            calls.push({
+              method: `functions:${method}`,
+              payload: options.body,
+            });
             profile = {
               ...profile,
-              display_name: payload.p_display_name,
-              avatar_url: payload.p_avatar_url || null,
+              display_name: String(options.body.username),
+              avatar_url:
+                options.body.avatarChoice === 'none'
+                  ? null
+                  : options.body.avatarChoice === 'custom'
+                    ? String(options.body.customAvatarUrl)
+                    : options.body.avatarChoice === 'discord'
+                      ? 'https://example.supabase.co/storage/v1/object/public/profile-avatars/fixture/avatar.png'
+                      : profile.avatar_url,
+              onboarding_completed: true,
               updated_at: '2026-07-24T09:00:00.000Z',
             };
-          }
-          if (method === 'create_room' || method === 'join_room') {
-            return {
-              data: {
-                id: '30000000-0000-4000-8000-000000000003',
-                join_code: 'ABCD1234',
-                status: 'waiting',
-                visibility: 'private',
-              },
-              error: null,
-            };
-          }
-          return { data: profile, error: null };
+            window.sessionStorage.setItem(
+              'fustify-auth-test-onboarding-completed',
+              '1',
+            );
+            window.sessionStorage.setItem(
+              'fustify-auth-test-username',
+              profile.display_name,
+            );
+            if (profile.avatar_url) {
+              window.sessionStorage.setItem(
+                'fustify-auth-test-avatar',
+                profile.avatar_url,
+              );
+            } else {
+              window.sessionStorage.removeItem('fustify-auth-test-avatar');
+            }
+            return { data: { profile }, error: null };
+          },
         },
         channel: (...payload: unknown[]) => {
           calls.push({ method: 'channel', payload });
@@ -428,7 +589,8 @@ async function called(page: Page, method: string) {
     if (
       (expected !== 'exchangeCodeForSession' &&
         expected !== 'refreshSession' &&
-        expected !== 'verifyOtp') ||
+        expected !== 'verifyOtp' &&
+        expected !== 'unlinkIdentity') ||
       current.length > 0
     ) {
       return current;
@@ -439,7 +601,9 @@ async function called(page: Page, method: string) {
           ? 'fustify-auth-test-exchange-count'
           : expected === 'refreshSession'
             ? 'fustify-auth-test-refresh-count'
-            : 'fustify-auth-test-verify-count',
+            : expected === 'verifyOtp'
+              ? 'fustify-auth-test-verify-count'
+              : 'fustify-auth-test-unlink-count',
       ) ?? '0',
     );
     return Array.from({ length: persisted }, () => ({ method: expected }));
@@ -452,10 +616,7 @@ async function protectedResources(page: Page) {
       .getEntriesByType('resource')
       .map((entry) => entry.name)
       .filter(
-        (name) =>
-          name.includes('/app/App') ||
-          name.includes('MultiplayerApp') ||
-          name.includes('three'),
+        (name) => name.includes('/app/App') || name.includes('MultiplayerApp'),
       ),
   );
 }
@@ -540,9 +701,7 @@ test('signed-out home registration, login, and recovery stay in the Auth layer',
         .map((entry) => entry.name)
         .filter(
           (name) =>
-            name.includes('/app/App') ||
-            name.includes('MultiplayerApp') ||
-            name.includes('three'),
+            name.includes('/app/App') || name.includes('MultiplayerApp'),
         ),
     ),
   ).toEqual([]);
@@ -554,9 +713,10 @@ test('signed-out home registration, login, and recovery stay in the Auth layer',
     .getByRole('button', { name: 'Create account' })
     .click();
   const register = page.getByRole('dialog', { name: 'Create account' });
-  await expect(register.getByLabel('Display name')).toBeFocused();
+  await expect(register.getByLabel('Username')).toBeFocused();
   await capture(page, testInfo.project.name, 'account-register-dialog');
-  await register.getByLabel('Display name').fill('Player One');
+  await register.getByLabel('Username').fill('Player One');
+  await expect(register.getByText('Username available.')).toBeVisible();
   await register.getByLabel('Email').fill('player@example.test');
   await register.getByLabel('Password', { exact: true }).fill('correct horse');
   await register.getByLabel('Confirm password').fill('correct horse');
@@ -587,7 +747,7 @@ test('signup resend is single-request and enforces the visible cooldown', async 
     .getByRole('button', { name: 'Create account' })
     .click();
   const register = page.getByRole('dialog', { name: 'Create account' });
-  await register.getByLabel('Display name').fill('Player One');
+  await register.getByLabel('Username').fill('Player One');
   await register.getByLabel('Email').fill('player@example.test');
   await register.getByLabel('Password', { exact: true }).fill('correct horse');
   await register.getByLabel('Confirm password').fill('correct horse');
@@ -669,12 +829,13 @@ test('registered account can edit its profile and sign out', async ({
   await expect(
     edit.getByRole('heading', { name: 'Edit profile' }),
   ).toBeVisible();
-  await expect(edit.getByLabel('Display name')).toBeVisible();
+  await expect(edit.getByLabel('Username')).toBeVisible();
   await expect(
     edit.getByRole('button', { name: 'Save profile' }),
   ).toBeVisible();
   await capture(page, testInfo.project.name, 'account-edit-profile-dialog');
-  await edit.getByLabel('Display name').fill('Renamed Player');
+  await edit.getByLabel('Username').fill('Renamed Player');
+  await expect(edit.getByText('Username available.')).toBeVisible();
   await edit.getByRole('button', { name: 'Save profile' }).click();
   await expect
     .poll(async () => (await called(page, 'update_own_profile')).length)
@@ -712,7 +873,7 @@ test('shared profile dialog stays viewport-bound and restores focus on protected
       );
     }
     const edit = await expectViewportSafeDialog(page, 'Edit profile');
-    await expect(edit.getByLabel('Display name')).toBeFocused();
+    await expect(edit.getByLabel('Username')).toBeFocused();
     await capture(page, testInfo.project.name, captureName);
     await page.keyboard.press('Escape');
     await expect(edit).toHaveCount(0);
@@ -732,7 +893,9 @@ test('registered protected routes render the branded shell and button hierarchy 
 
   const shell = page.locator('.branded-app-shell');
   await expect(shell).toBeVisible();
-  await expect(page.locator('.branded-app-header .fustify-logo')).toBeVisible();
+  await expect(
+    page.locator('.branded-app-header .branded-app-mark'),
+  ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Fustify home' }),
   ).toHaveAttribute('href', '/');
@@ -816,7 +979,7 @@ test('registered home-to-multiplayer navigation keeps one ready account without 
   );
   expect(headings).not.toContain('Account required');
   expect(await called(page, 'onAuthStateChange')).toHaveLength(listenerCount);
-  expect(await called(page, 'getSession')).toHaveLength(sessionCheckCount);
+  expect(await called(page, 'getSession')).toHaveLength(sessionCheckCount + 1);
 });
 
 test('slow verification renders only checking and does not import protected code', async ({
@@ -891,7 +1054,7 @@ test('profile identity updates before create and room RPC payload has no alias s
     window.dispatchEvent(new Event('fustify:open-profile-editor')),
   );
   const edit = page.getByRole('dialog', { name: 'Edit profile' });
-  await edit.getByLabel('Display name').fill('Renamed Player');
+  await edit.getByLabel('Username').fill('Renamed Player');
   await edit.getByRole('button', { name: 'Save profile' }).click();
   await expect(edit.getByText('Profile updated.')).toBeVisible();
   await edit.getByRole('button', { name: 'Close account dialog' }).click();
@@ -1061,7 +1224,7 @@ test('signed-out gameplay choices and direct protected URLs authenticate before 
       performance
         .getEntriesByType('resource')
         .map((entry) => entry.name)
-        .filter((name) => name.includes('/app/App') || name.includes('three')),
+        .filter((name) => name.includes('/app/App')),
     ),
   ).toEqual([]);
   await localGate.getByLabel('Email').fill('player@example.test');
@@ -1088,9 +1251,7 @@ test('signed-out gameplay choices and direct protected URLs authenticate before 
       performance
         .getEntriesByType('resource')
         .map((entry) => entry.name)
-        .filter(
-          (name) => name.includes('MultiplayerApp') || name.includes('three'),
-        ),
+        .filter((name) => name.includes('MultiplayerApp')),
     ),
   ).toEqual([]);
   const roomGate = page.getByRole('dialog', { name: 'Sign in' });
@@ -1139,9 +1300,7 @@ test('stale upgraded sessions refresh once before loading protected gameplay', a
       performance
         .getEntriesByType('resource')
         .map((entry) => entry.name)
-        .filter(
-          (name) => name.includes('MultiplayerApp') || name.includes('three'),
-        ),
+        .filter((name) => name.includes('MultiplayerApp')),
     ),
   ).toEqual([]);
   await page.evaluate(() => {
@@ -1168,7 +1327,7 @@ test('stale upgraded sessions refresh once before loading protected gameplay', a
       performance
         .getEntriesByType('resource')
         .map((entry) => entry.name)
-        .filter((name) => name.includes('/app/App') || name.includes('three')),
+        .filter((name) => name.includes('/app/App')),
     ),
   ).toEqual([]);
   await page.evaluate(() => {
@@ -1365,7 +1524,7 @@ test('Discord remains a secondary signed-out option while email/password stays a
   expect(await called(page, 'signInAnonymously')).toHaveLength(0);
 });
 
-test('Discord manual linking returns to the same registered profile and updates account status', async ({
+test('Discord manual linking confirms the existing profile before returning', async ({
   page,
 }, testInfo) => {
   await installAuthFixture(page, 'registered');
@@ -1388,6 +1547,14 @@ test('Discord manual linking returns to the same registered profile and updates 
   ]);
   await page.goto('/auth/callback?code=mocked-discord-code');
 
+  await expect(page).toHaveURL(/\/auth\/complete-profile$/);
+  await expect(
+    page.getByRole('heading', { name: 'Confirm your Discord profile' }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Username')).toHaveValue('Player One');
+  await expect(page.getByLabel('Email')).toHaveValue('player@example.test');
+  await expect(page.getByLabel('Email')).toHaveAttribute('readonly', '');
+  await page.getByRole('button', { name: 'Confirm profile' }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator('.account-identity strong')).toHaveText(
     'Player One',
@@ -1449,7 +1616,7 @@ test('Discord legacy conversion offers both methods and keeps gameplay blocked b
   expect(await protectedResources(page)).toEqual([]);
 });
 
-test('Discord signed-out callback becomes registered-ready before protected gameplay loads', async ({
+test('Discord signed-out callback requires profile confirmation before protected gameplay loads', async ({
   page,
 }) => {
   await installAuthFixture(page, 'signed-out');
@@ -1460,6 +1627,11 @@ test('Discord signed-out callback becomes registered-ready before protected game
     .click();
   await page.goto('/auth/callback?code=mocked-discord-code');
 
+  await expect(page).toHaveURL(/\/auth\/complete-profile$/);
+  await expect(page.getByLabel('Username')).toHaveValue('redwurm');
+  await expect(page.getByLabel('Use Discord avatar')).toBeChecked();
+  expect(await protectedResources(page)).toEqual([]);
+  await page.getByRole('button', { name: 'Confirm profile' }).click();
   await expect(page).toHaveURL(/\/multiplayer$/);
   await expect(
     page.getByRole('heading', { name: 'Multiplayer' }),
@@ -1467,9 +1639,46 @@ test('Discord signed-out callback becomes registered-ready before protected game
   await expect(
     page.getByRole('heading', { name: 'Account required' }),
   ).toHaveCount(0);
-  await expect(page.locator('.account-identity strong')).toHaveText(
-    'Player One',
-  );
+  await expect(page.locator('.account-identity strong')).toHaveText('redwurm');
   expect(await called(page, 'exchangeCodeForSession')).toHaveLength(1);
   expect(await called(page, 'signInAnonymously')).toHaveLength(0);
+});
+
+test('Discord profile confirmation offers available username recommendations', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'signed-out');
+  await page.goto('/multiplayer');
+  await page
+    .getByRole('dialog', { name: 'Sign in' })
+    .getByRole('button', { name: 'Continue with Discord' })
+    .click();
+  await page.evaluate(() =>
+    window.sessionStorage.setItem(
+      'fustify-auth-test-taken-username',
+      'redwurm',
+    ),
+  );
+  await page.goto('/auth/callback?code=mocked-discord-code');
+  await expect(page.getByText('That username is already taken.')).toBeVisible();
+  await page.getByRole('button', { name: 'redwurm-2' }).click();
+  await expect(page.getByLabel('Username')).toHaveValue('redwurm-2');
+  await expect(page.getByText('Username available.')).toBeVisible();
+});
+
+test('cancelling an existing-account Discord link disconnects the identity', async ({
+  page,
+}) => {
+  await installAuthFixture(page, 'registered');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Connect Discord' }).click();
+  await page.goto('/auth/callback?code=mocked-discord-code');
+  await page
+    .getByRole('button', { name: 'Cancel and disconnect Discord' })
+    .click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(await called(page, 'unlinkIdentity')).toHaveLength(1);
+  await expect(
+    page.getByRole('button', { name: 'Connect Discord' }),
+  ).toBeVisible();
 });

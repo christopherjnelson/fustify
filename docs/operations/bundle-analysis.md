@@ -26,17 +26,18 @@ Budget definitions live in `src/build/bundleBudget.ts` and are unit tested in
 `src/build/bundleBudget.test.ts`. Browser-level route isolation is enforced by
 `tests/e2e/bundle-isolation.spec.ts`.
 
-| Budget                                  |           Limit |
-| --------------------------------------- | --------------: |
-| `public-shell` initial JavaScript, gzip |   158,000 bytes |
-| `homepage-preview` loaded JS, gzip      |   470,000 bytes |
-| `auth-page` initial JavaScript, gzip    |   150,000 bytes |
-| `local-game` setup JavaScript, gzip     |   472,000 bytes |
-| `local-active-match` loaded JS, gzip    |   496,000 bytes |
-| `multiplayer-entry` lobby/room JS, gzip |   475,500 bytes |
-| `multiplayer-match` loaded JS, gzip     |   504,000 bytes |
-| `admin` initial JavaScript, gzip        |   166,000 bytes |
-| Largest JavaScript chunk, raw           | 1,080,000 bytes |
+| Budget                                             |           Limit |
+| -------------------------------------------------- | --------------: |
+| `public-shell` initial JavaScript, gzip            |   158,000 bytes |
+| `homepage-preview` loaded JS, gzip                 |   470,000 bytes |
+| `auth-page` initial JavaScript, gzip               |   150,000 bytes |
+| `auth-profile-completion` initial JavaScript, gzip |   150,000 bytes |
+| `local-game` setup JavaScript, gzip                |   472,000 bytes |
+| `local-active-match` loaded JS, gzip               |   496,000 bytes |
+| `multiplayer-entry` lobby/room JS, gzip            |   475,500 bytes |
+| `multiplayer-match` loaded JS, gzip                |   504,000 bytes |
+| `admin` initial JavaScript, gzip                   |   166,000 bytes |
+| Largest JavaScript chunk, raw                      | 1,080,000 bytes |
 
 The check uses Node's gzip implementation, whose byte count is slightly more
 conservative than Vite's displayed gzip estimate, and it depends on the Node

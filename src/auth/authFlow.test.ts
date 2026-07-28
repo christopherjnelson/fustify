@@ -21,6 +21,7 @@ const profileRow = {
   user_id: userId,
   display_name: 'MistyBadger-482',
   avatar_url: null,
+  onboarding_completed: true,
   created_at: '2026-07-24T06:00:00.000Z',
   updated_at: '2026-07-24T06:00:00.000Z',
 };

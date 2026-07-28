@@ -116,6 +116,14 @@ Deno.serve(async (request) => {
     ) {
       throw new Error('account_blocked');
     }
+    const { data: actorProfile, error: actorProfileError } = await admin
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('user_id', actorUserId)
+      .maybeSingle();
+    if (actorProfileError || actorProfile?.onboarding_completed !== true) {
+      throw new Error('account_required');
+    }
     const body = (await request.json()) as Record<string, unknown>;
     if (body.operation !== 'command') throw new Error('invalid_request');
     if (

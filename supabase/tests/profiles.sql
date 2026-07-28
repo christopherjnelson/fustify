@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(48);
+select extensions.plan(60);
 
 select extensions.ok(
   (
@@ -30,6 +30,61 @@ select extensions.hasnt_column(
   'profiles',
   'is_admin',
   'profiles does not expose an administrator flag'
+);
+select extensions.has_column(
+  'public',
+  'profiles',
+  'onboarding_completed',
+  'profiles records authoritative onboarding completion'
+);
+select extensions.ok(
+  exists (
+    select 1
+    from pg_indexes
+    where schemaname = 'public'
+      and indexname = 'profiles_completed_display_name_unique'
+      and indexdef ilike '%lower(display_name)%'
+  ),
+  'completed usernames have a case-insensitive unique index'
+);
+select extensions.ok(
+  has_function_privilege('anon', 'public.username_options(text)', 'EXECUTE')
+    and has_function_privilege(
+      'authenticated',
+      'public.username_options(text)',
+      'EXECUTE'
+    )
+    and not has_function_privilege(
+      'anon',
+      'public.complete_own_profile(text,text)',
+      'EXECUTE'
+    )
+    and has_function_privilege(
+      'authenticated',
+      'public.complete_own_profile(text,text)',
+      'EXECUTE'
+    ),
+  'username lookup and completion functions have narrow grants'
+);
+select extensions.ok(
+  exists (
+    select 1
+    from storage.buckets
+    where id = 'profile-avatars'
+      and public
+      and file_size_limit = 2097152
+      and allowed_mime_types = array[
+        'image/png', 'image/jpeg', 'image/webp', 'image/gif'
+      ]
+  )
+    and not exists (
+      select 1
+      from pg_policies
+      where schemaname = 'storage'
+        and tablename = 'objects'
+        and coalesce(qual, '') like '%profile-avatars%'
+    ),
+  'profile avatar bucket is public-read with no browser write policy'
 );
 select extensions.hasnt_column(
   'public',
@@ -145,6 +200,24 @@ select extensions.is(
   ),
   3,
   'new anonymous and permanent auth users each receive one profile'
+);
+select extensions.is(
+  (
+    select onboarding_completed
+    from public.profiles
+    where user_id = '91000000-0000-4000-8000-000000000001'
+  ),
+  false,
+  'anonymous profiles begin with onboarding incomplete'
+);
+select extensions.is(
+  (
+    select onboarding_completed
+    from public.profiles
+    where user_id = '92000000-0000-4000-8000-000000000002'
+  ),
+  false,
+  'Discord-only profiles require explicit onboarding confirmation'
 );
 select extensions.is(
   (
@@ -385,11 +458,36 @@ select set_config(
 );
 set local role authenticated;
 select extensions.lives_ok(
-  $$select public.update_own_profile(
+  $$select public.complete_own_profile(
     '  Player One  ',
     'https://cdn.example.com/avatar.png'
   )$$,
-  'authenticated user can update safe fields through the controlled RPC'
+  'authenticated user can complete onboarding through the controlled RPC'
+);
+select extensions.is(
+  (
+    select onboarding_completed
+    from public.profiles
+    where user_id = '91000000-0000-4000-8000-000000000001'
+  ),
+  true,
+  'profile completion marks onboarding complete'
+);
+select extensions.ok(
+  profile_private.current_user_is_registered(),
+  'completed registered profile passes the trusted capability helper'
+);
+select extensions.is(
+  (
+    select available
+    from public.username_options('player one')
+  ),
+  true,
+  'username availability excludes the authenticated caller own username'
+);
+select extensions.lives_ok(
+  $$select public.update_own_profile('Player One', null)$$,
+  'completed user retains ordinary profile editing'
 );
 select extensions.is(
   (
@@ -501,6 +599,28 @@ select extensions.throws_ok(
 select extensions.lives_ok(
   $$select public.update_own_profile('Player One', null)$$,
   'avatar URL may be cleared'
+);
+
+reset role;
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"92000000-0000-4000-8000-000000000002","is_anonymous":false}',
+  true
+);
+set local role authenticated;
+select extensions.throws_ok(
+  $$select public.complete_own_profile('player one', null)$$,
+  'P0001',
+  'username_unavailable',
+  'case-insensitive username conflicts fail safely at completion'
+);
+select extensions.is(
+  (
+    select suggestions
+    from public.username_options('Player One')
+  ),
+  array['Player One-2', 'Player One-3', 'Player One-4'],
+  'taken usernames return three deterministic available suggestions'
 );
 
 reset role;

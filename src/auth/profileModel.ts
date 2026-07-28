@@ -42,6 +42,7 @@ export const profileRowSchema = z
     user_id: z.uuid(),
     display_name: profileDisplayNameSchema,
     avatar_url: profileAvatarUrlSchema,
+    onboarding_completed: z.boolean(),
     created_at: z.iso.datetime({ offset: true }),
     updated_at: z.iso.datetime({ offset: true }),
   })
@@ -51,6 +52,7 @@ export type UserProfile = {
   userId: string;
   displayName: string;
   avatarUrl: string | null;
+  onboardingCompleted: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -61,6 +63,7 @@ export function parseUserProfile(value: unknown): UserProfile {
     userId: row.user_id,
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
+    onboardingCompleted: row.onboarding_completed,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

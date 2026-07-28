@@ -31,6 +31,7 @@ function manifest(): BundleManifest {
         'src/admin/AdminApp.tsx',
         'src/admin/reportSource.ts',
         'src/auth/AuthCallbackPage.tsx',
+        'src/auth/DiscordProfileCompletionPage.tsx',
       ],
     },
     '_BrowserApp-bbbb.js': {
@@ -105,6 +106,12 @@ function manifest(): BundleManifest {
       isDynamicEntry: true,
       imports: ['index.html', '_authFlow-cccc.js'],
     },
+    'src/auth/DiscordProfileCompletionPage.tsx': {
+      file: 'assets/DiscordProfileCompletionPage-profile.js',
+      name: 'DiscordProfileCompletionPage',
+      isDynamicEntry: true,
+      imports: ['index.html', '_authFlow-cccc.js'],
+    },
   };
 }
 
@@ -123,6 +130,10 @@ const sizes: AssetSizes = {
   'assets/AdminApp-hhhh.js': { raw: 128, gzip: 64 },
   'assets/reportSource-iiii.js': { raw: 256, gzip: 128 },
   'assets/AuthCallbackPage-jjjj.js': { raw: 512, gzip: 256 },
+  'assets/DiscordProfileCompletionPage-profile.js': {
+    raw: 768,
+    gzip: 384,
+  },
 };
 
 describe('manifest traversal', () => {
@@ -371,6 +382,7 @@ describe('budget evaluation', () => {
       'public-shell',
       'homepage-preview',
       'auth-page',
+      'auth-profile-completion',
       'local-game',
       'local-active-match',
       'multiplayer-entry',

@@ -12,6 +12,7 @@ import {
   readDiscordAuthIntent,
   type AuthCallbackResult,
 } from './authFlow';
+import { UsernameField, type UsernameAvailability } from './UsernameField';
 
 function removeCallbackSecrets(href: string) {
   const url = new URL(href);
@@ -50,6 +51,8 @@ export function AuthCallbackPage() {
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
+  const [usernameAvailability, setUsernameAvailability] =
+    useState<UsernameAvailability>('unchecked');
   const [invitationComplete, setInvitationComplete] = useState(false);
   const started = useRef(false);
   const returnPath =
@@ -70,7 +73,7 @@ export function AuthCallbackPage() {
           return;
         }
         if (callbackResult.kind === 'discord-completion') {
-          window.location.replace(callbackResult.intent.returnPath);
+          window.location.replace('/auth/complete-profile');
           return;
         }
         setDisplayName(callbackResult.user.user_metadata.display_name ?? '');
@@ -96,6 +99,12 @@ export function AuthCallbackPage() {
     setError(null);
     try {
       if (result.kind === 'guest-upgrade-completion') {
+        if (usernameAvailability === 'unavailable') {
+          throw new AuthFlowError(
+            'invalid_form',
+            'Choose an available username.',
+          );
+        }
         await completeGuestUpgrade(client, {
           expectedUserId: result.intent.expectedUserId,
           displayName,
@@ -141,22 +150,18 @@ export function AuthCallbackPage() {
             <h1>Finish creating your account</h1>
             <p>
               Your verified email is attached to the same guest identity. Add a
-              password and choose your display name.
+              password and choose your username.
             </p>
             <form
               className="auth-form"
               onSubmit={(event) => void finish(event)}
             >
-              <label className="auth-field">
-                <span>Display name</span>
-                <input
-                  value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
-                  maxLength={40}
-                  autoComplete="nickname"
-                  required
-                />
-              </label>
+              <UsernameField
+                client={client!}
+                value={displayName}
+                onChange={setDisplayName}
+                onAvailabilityChange={setUsernameAvailability}
+              />
               <label className="auth-field">
                 <span>Password</span>
                 <input

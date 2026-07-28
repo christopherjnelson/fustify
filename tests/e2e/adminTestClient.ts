@@ -102,6 +102,7 @@ export async function installAdminAuthFixture(
         user_id: userId,
         display_name: userId === firstUserId ? 'First Player' : 'Second Player',
         avatar_url: null,
+        onboarding_completed: true,
         created_at: '2026-07-25T12:00:00.000Z',
         updated_at: '2026-07-25T12:00:00.000Z',
       });

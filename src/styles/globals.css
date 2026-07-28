@@ -1013,6 +1013,103 @@ html.game-route .protected-route-shell {
   box-shadow: 0 0 0 3px rgba(55, 145, 185, 0.16);
 }
 
+.auth-readonly-field input {
+  color: var(--brand-steel);
+  background: color-mix(in srgb, var(--brand-panel-raised) 72%, transparent);
+  cursor: not-allowed;
+}
+
+.auth-username-field {
+  display: grid;
+  gap: 6px;
+}
+
+.auth-username-status,
+.auth-field-note {
+  margin: 0;
+  color: var(--brand-steel);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.auth-username-status-available {
+  color: #9edfc3;
+}
+
+.auth-username-status-unavailable {
+  color: #f0b5ac;
+}
+
+.auth-username-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand-steel);
+  font-size: 0.72rem;
+}
+
+.auth-username-suggestions button {
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--brand-text);
+  background: var(--brand-panel-raised);
+}
+
+.auth-profile-completion-card {
+  width: min(600px, 100%);
+}
+
+.auth-avatar-options {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+}
+
+.auth-avatar-options legend {
+  padding: 0 5px;
+  color: var(--brand-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.auth-avatar-options > label:not(.auth-field) {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 9px;
+  color: var(--brand-text);
+  font-size: 0.78rem;
+}
+
+.auth-avatar-options img,
+.auth-avatar-preview-placeholder {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--brand-border);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.auth-avatar-preview-placeholder {
+  display: inline-grid;
+  place-items: center;
+  color: var(--brand-page);
+  background: var(--brand-accent);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.auth-secondary-action {
+  width: 100%;
+  margin-top: 12px;
+  color: var(--brand-text) !important;
+  background: var(--brand-panel-raised) !important;
+}
+
 .auth-dialog-nav {
   display: flex;
   margin-top: 15px;

@@ -2,15 +2,10 @@ import type { EmailOtpType, SupabaseClient, User } from '@supabase/supabase-js';
 import { z } from 'zod';
 import type { Database } from '../multiplayer/database.types';
 import {
+  completeCurrentProfile,
   fetchOwnProfileForVerifiedUser,
-  updateCurrentProfile,
 } from './profileApi';
-import { isGeneratedGuestDisplayName } from './guestName';
-import {
-  profileAvatarUrlSchema,
-  profileDisplayNameSchema,
-  type UserProfile,
-} from './profileModel';
+import { profileDisplayNameSchema, type UserProfile } from './profileModel';
 import { validatedReturnPath } from './returnPath';
 import {
   ensureRegisteredSessionReady,
@@ -92,6 +87,7 @@ export class AuthFlowError extends Error {
       | 'session_refresh_failed'
       | 'legacy_conversion_failed'
       | 'profile_unavailable'
+      | 'username_unavailable'
       | 'original_browser_required'
       | 'recovery_session_required'
       | 'invalid_email_link'
@@ -204,6 +200,16 @@ function discordAuthError(error: unknown): AuthFlowError {
 
 export function authFlowError(error: unknown): AuthFlowError {
   if (error instanceof AuthFlowError) return error;
+  if (
+    /username_unavailable|username is already taken|username.*taken/iu.test(
+      errorText(error),
+    )
+  ) {
+    return new AuthFlowError(
+      'username_unavailable',
+      'That username is already taken.',
+    );
+  }
   return new AuthFlowError(
     'request_failed',
     isRateLimit(error)
@@ -249,7 +255,7 @@ export function validateRegistration(input: {
   } catch {
     throw new AuthFlowError(
       'invalid_form',
-      'Use a display name between 1 and 40 characters.',
+      'Use a username between 1 and 40 characters.',
     );
   }
   return {
@@ -676,68 +682,6 @@ function callbackDiscordError(
   );
 }
 
-function discordPresentationMetadata(user: User): Record<string, unknown>[] {
-  const discordIdentity = user.identities?.find(
-    (identity) => identity.provider === 'discord',
-  );
-  return [
-    ...(discordIdentity?.identity_data ? [discordIdentity.identity_data] : []),
-    user.user_metadata,
-  ];
-}
-
-function discordMetadataDisplayName(user: User): string | null {
-  for (const metadata of discordPresentationMetadata(user)) {
-    for (const key of [
-      'display_name',
-      'global_name',
-      'full_name',
-      'name',
-      'username',
-      'user_name',
-      'preferred_username',
-    ]) {
-      const value = metadata[key];
-      if (typeof value !== 'string') continue;
-      const parsed = profileDisplayNameSchema.safeParse(value);
-      if (parsed.success) return parsed.data;
-    }
-  }
-  return null;
-}
-
-function discordMetadataAvatarUrl(user: User): string | null {
-  for (const metadata of discordPresentationMetadata(user)) {
-    for (const key of ['avatar_url', 'picture']) {
-      const value = metadata[key];
-      if (typeof value !== 'string') continue;
-      const parsed = profileAvatarUrlSchema.safeParse(value);
-      if (parsed.success) return parsed.data;
-    }
-  }
-  return null;
-}
-
-async function enrichLegacyDiscordProfile(
-  client: SupabaseClient<Database>,
-  user: User,
-  profile: UserProfile,
-): Promise<UserProfile> {
-  const displayName = isGeneratedGuestDisplayName(profile.displayName)
-    ? (discordMetadataDisplayName(user) ?? profile.displayName)
-    : profile.displayName;
-  const avatarUrl =
-    profile.avatarUrl ?? discordMetadataAvatarUrl(user) ?? profile.avatarUrl;
-  if (displayName === profile.displayName && avatarUrl === profile.avatarUrl) {
-    return profile;
-  }
-  try {
-    return await updateCurrentProfile(client, { displayName, avatarUrl });
-  } catch {
-    return profile;
-  }
-}
-
 export async function completeAuthCallback(
   client: SupabaseClient<Database>,
   href: string,
@@ -893,14 +837,6 @@ export async function completeAuthCallback(
         'Discord connected, but your Fustify profile is temporarily unavailable. Please try again.',
       );
     }
-    if (discordIntent.intent === 'legacy-discord-upgrade') {
-      profile = await enrichLegacyDiscordProfile(
-        client,
-        prepared.user,
-        profile,
-      );
-    }
-    clearDiscordAuthIntent();
     return {
       kind: 'discord-completion',
       user: prepared.user,
@@ -951,7 +887,7 @@ export async function completeGuestUpgrade(
   } catch {
     throw new AuthFlowError(
       'invalid_form',
-      'Use a display name between 1 and 40 characters.',
+      'Use a username between 1 and 40 characters.',
     );
   }
   const password = validatePasswordPair(input.password, input.confirmPassword);
@@ -989,7 +925,7 @@ export async function completeGuestUpgrade(
     );
   }
 
-  const profile = await updateCurrentProfile(client, {
+  const profile = await completeCurrentProfile(client, {
     displayName,
     avatarUrl: null,
   });

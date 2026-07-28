@@ -35,6 +35,7 @@ Migration order:
 18. `20260725231245_publish_immutable_public_lobbies.sql`
 19. `20260727055631_multiplayer_match_launch_state.sql`
 20. `20260728042940_expand_admin_operations.sql`
+21. `20260728203358_unique_usernames_discord_onboarding.sql`
 
 The authority migration extends `matches`, creates append-only
 `match_commands`, adds member-scoped read RLS, removes browser execution of the
@@ -92,6 +93,25 @@ execution for this surface. Its shared access check is also applied to
 registered-user mutation boundaries; the Node match-start service and
 `multiplayer-game` Edge Function independently reject blocked accounts so an
 already-issued JWT cannot retain Fustify write access.
+
+The username/onboarding migration keeps the deployed `display_name` column and
+RPC parameter names for compatibility, but treats that value as the Fustify
+username. Completed profiles have trimmed, case-insensitive uniqueness.
+`username_options` exposes availability and three bounded alternatives to
+browser roles, while `complete_own_profile` and the partial unique index remain
+authoritative against races. Existing permanent profiles are complete;
+anonymous profiles and new Discord-first profiles remain incomplete until the
+confirmation flow succeeds. Registered gameplay checks now require that
+completion flag in the browser, database, Node API, and Edge Function.
+
+`profile-avatars` is a public-read, image-only bucket with a 2 MiB object limit
+and no browser write policy. The authenticated `complete-discord-profile` Edge
+Function is the only avatar importer: it accepts the avatar URL from the
+caller's verified Discord identity metadata, fetches only allowlisted Discord
+CDN hosts with bounded raster responses, and writes the fixed
+`<user-id>/avatar.<extension>` object path. A failed copy preserves the
+validated Discord CDN URL. Custom HTTPS URLs remain external and are never
+fetched by Fustify.
 
 ## Secrets and browser configuration
 
@@ -221,10 +241,20 @@ pnpm exec supabase functions deploy announce-public-room \
 pnpm supabase:db:push
 pnpm exec supabase functions deploy multiplayer-game \
   --project-ref qwmsybhpjnfjiyxcspwj --no-verify-jwt --use-api
+pnpm exec supabase functions deploy complete-discord-profile \
+  --project-ref qwmsybhpjnfjiyxcspwj --use-api
 pnpm supabase:types
 ```
 
 Do not use `--prune`, reset, or dashboard-only DDL.
+
+For the username/Discord rollout, first rerun the case-insensitive collision
+query and stop if it returns any row. Apply the migration, regenerate types,
+deploy `complete-discord-profile`, and only then deploy the frontend. Smoke-test
+new Discord signup, anonymous-to-Discord upgrade, existing-account link and
+cancel, avatar copy and CDN fallback, onboarding resume, and a competing
+username update. Do not apply this migration to production merely to validate
+it; use an isolated Supabase development branch when one is available.
 
 ## Security model
 

@@ -83,6 +83,13 @@ const suites: SuiteDefinition[] = [
     fullOnly: true,
   },
   {
+    id: 'auth-interaction',
+    displayName: 'Playwright account authentication',
+    category: 'interaction',
+    command: 'pnpm test:e2e:auth',
+    fullOnly: true,
+  },
+  {
     id: 'visual',
     displayName: 'Visual comparisons',
     category: 'visual',

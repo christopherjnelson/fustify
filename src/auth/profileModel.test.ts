@@ -10,6 +10,7 @@ const profileRow = {
   user_id: '10000000-0000-4000-8000-000000000001',
   display_name: 'Guest 1000',
   avatar_url: null,
+  onboarding_completed: true,
   created_at: '2026-07-24T06:00:00.000Z',
   updated_at: '2026-07-24T06:00:00.000Z',
 };
@@ -20,6 +21,7 @@ describe('profile model', () => {
       userId: profileRow.user_id,
       displayName: 'Guest 1000',
       avatarUrl: null,
+      onboardingCompleted: true,
       createdAt: profileRow.created_at,
       updatedAt: profileRow.updated_at,
     });

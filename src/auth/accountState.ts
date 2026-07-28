@@ -27,6 +27,10 @@ export type ProtectedAccountState =
       user: User;
       profile: UserProfile;
     }
+  | {
+      status: 'onboarding-required';
+      account: RegisteredAccount;
+    }
   | { status: 'registered-ready'; account: RegisteredAccount }
   | { status: 'error'; message: string };
 
@@ -44,6 +48,7 @@ type Listener = (state: ProtectedAccountState) => void;
 
 function stateUserId(state: ProtectedAccountState): string | null {
   if (state.status === 'registered-ready') return state.account.userId;
+  if (state.status === 'onboarding-required') return state.account.userId;
   if (state.status === 'legacy-anonymous') return state.user.id;
   return null;
 }
@@ -53,6 +58,7 @@ function sameProfile(left: UserProfile, right: UserProfile): boolean {
     left.userId === right.userId &&
     left.displayName === right.displayName &&
     left.avatarUrl === right.avatarUrl &&
+    left.onboardingCompleted === right.onboardingCompleted &&
     left.updatedAt === right.updatedAt
   );
 }
@@ -77,6 +83,7 @@ export function safeProtectedAccountState(
         ? (value as ProtectedAccountState)
         : { status: 'error', message: UNKNOWN_ACCOUNT_STATE_MESSAGE };
     case 'registered-ready':
+    case 'onboarding-required':
       return 'account' in value
         ? (value as ProtectedAccountState)
         : { status: 'error', message: UNKNOWN_ACCOUNT_STATE_MESSAGE };
@@ -120,15 +127,15 @@ export async function deriveAccountState(
     if (prepared.status === 'legacy-anonymous') {
       return { status: 'legacy-anonymous', user: prepared.user, profile };
     }
-    return {
-      status: 'registered-ready',
-      account: {
-        user: prepared.user,
-        userId: prepared.user.id,
-        email: prepared.user.email ?? null,
-        profile,
-      },
+    const account = {
+      user: prepared.user,
+      userId: prepared.user.id,
+      email: prepared.user.email ?? null,
+      profile,
     };
+    return profile.onboardingCompleted
+      ? { status: 'registered-ready', account }
+      : { status: 'onboarding-required', account };
   } catch (profileError) {
     return {
       status: 'error',
@@ -207,6 +214,18 @@ export class AccountController {
       });
     } else if (this.state.status === 'legacy-anonymous') {
       this.publish({ ...this.state, profile });
+    } else if (this.state.status === 'onboarding-required') {
+      this.publish(
+        profile.onboardingCompleted
+          ? {
+              status: 'registered-ready',
+              account: { ...this.state.account, profile },
+            }
+          : {
+              status: 'onboarding-required',
+              account: { ...this.state.account, profile },
+            },
+      );
     }
   }
 
@@ -215,6 +234,15 @@ export class AccountController {
     if (
       this.state.status === 'registered-ready' &&
       safe.status === 'registered-ready' &&
+      this.state.account.userId === safe.account.userId &&
+      this.state.account.email === safe.account.email &&
+      sameProfile(this.state.account.profile, safe.account.profile)
+    ) {
+      return;
+    }
+    if (
+      this.state.status === 'onboarding-required' &&
+      safe.status === 'onboarding-required' &&
       this.state.account.userId === safe.account.userId &&
       this.state.account.email === safe.account.email &&
       sameProfile(this.state.account.profile, safe.account.profile)
@@ -241,7 +269,9 @@ export class AccountController {
       this.authSubscription = data.subscription;
     }
     void this.verify({
-      preserveRegistered: this.state.status === 'registered-ready',
+      preserveRegistered:
+        this.state.status === 'registered-ready' ||
+        this.state.status === 'onboarding-required',
     });
   }
 
@@ -277,7 +307,8 @@ export class AccountController {
     }
     void this.verify({
       preserveRegistered:
-        this.state.status === 'registered-ready' &&
+        (this.state.status === 'registered-ready' ||
+          this.state.status === 'onboarding-required') &&
         currentUserId === eventUserId,
       expectedUserId:
         currentUserId === eventUserId
