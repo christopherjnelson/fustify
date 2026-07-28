@@ -1,4 +1,5 @@
 import { once } from 'node:events';
+import { SupabaseAdminConsole } from './adminService.ts';
 import { createApiServer } from './httpServer.ts';
 import {
   MatchStartError,
@@ -28,7 +29,9 @@ function createMatchStartService() {
     const repository = new SupabaseStartMatchRepository({
       url: requiredEnvironment('SUPABASE_URL'),
       publishableKey: requiredEnvironment('SUPABASE_PUBLISHABLE_KEY'),
-      serviceRoleKey: requiredEnvironment('SUPABASE_SERVICE_ROLE_KEY'),
+      serviceRoleKey:
+        process.env.SUPABASE_SECRET_KEY?.trim() ||
+        requiredEnvironment('SUPABASE_SERVICE_ROLE_KEY'),
     });
     return new MatchStartService(repository, runAuthoritativeInitializer);
   } catch (error) {
@@ -47,8 +50,39 @@ function createMatchStartService() {
   }
 }
 
+function createAdminConsole() {
+  try {
+    const url = requiredEnvironment('SUPABASE_URL');
+    return new SupabaseAdminConsole({
+      url,
+      publishableKey: requiredEnvironment('SUPABASE_PUBLISHABLE_KEY'),
+      secretKey:
+        process.env.SUPABASE_SECRET_KEY?.trim() ||
+        requiredEnvironment('SUPABASE_SERVICE_ROLE_KEY'),
+      projectRef:
+        process.env.SUPABASE_PROJECT_REF?.trim() ||
+        new URL(url).hostname.split('.')[0]!,
+      managementAccessToken:
+        process.env.SUPABASE_MANAGEMENT_ACCESS_TOKEN?.trim() || undefined,
+      expectedMigration:
+        process.env.FUSTIFY_EXPECTED_SUPABASE_MIGRATION?.trim() ||
+        '20260728042940',
+      mutationsEnabled: process.env.FUSTIFY_ADMIN_MUTATIONS_ENABLED === '1',
+    });
+  } catch (error) {
+    if (
+      process.env.FUSTIFY_API_ALLOW_INCOMPLETE_CONFIGURATION === '1' &&
+      error instanceof MissingEnvironmentError
+    ) {
+      console.warn(`Fustify administration unavailable: ${error.message}.`);
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 const service = createMatchStartService();
-const server = createApiServer(service);
+const server = createApiServer(service, createAdminConsole());
 const port = resolveFustifyApiPort(process.env.FUSTIFY_API_PORT);
 
 server.listen(port, '127.0.0.1');
