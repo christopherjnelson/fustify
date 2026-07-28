@@ -3,7 +3,9 @@ import { AccountProvider } from '../auth/AccountProvider';
 import { AccountRequiredGate } from '../auth/AccountControl';
 import { useAccount } from '../auth/accountContext';
 import type { AdminDashboardSource } from './adminApi';
+import type { AdminConsoleSource } from './adminConsoleApi';
 import { supabaseAdminDashboardSource } from './adminApi';
+import { serverAdminConsoleSource } from './adminConsoleApi';
 import { AdminAccessProvider } from './adminAccess';
 import { useAdminAccess } from './adminAccessContext';
 import { AdminDashboard } from './AdminDashboard';
@@ -50,6 +52,10 @@ function AuthorizedAdmin({
     () => (client ? supabaseAdminDashboardSource(client) : null),
     [client],
   );
+  const consoleSource = useMemo(
+    () => (client ? serverAdminConsoleSource(client) : null),
+    [client],
+  );
 
   if (access.status === 'checking') {
     return (
@@ -79,7 +85,8 @@ function AuthorizedAdmin({
   if (
     access.status !== 'allowed' ||
     account.status !== 'registered-ready' ||
-    !source
+    !source ||
+    !consoleSource
   ) {
     return (
       <AdminState
@@ -93,6 +100,7 @@ function AuthorizedAdmin({
   return (
     <AdminDashboard
       operationsSource={source}
+      consoleSource={consoleSource}
       source={verificationSource}
       dataAvailable={verificationDataAvailable}
     />
@@ -140,14 +148,17 @@ export function AdminApp({
 
 export function AdminFixtureApp({
   operationsSource,
+  consoleSource,
   verificationSource,
 }: {
   operationsSource: AdminDashboardSource;
+  consoleSource?: AdminConsoleSource;
   verificationSource: AdminReportSource;
 }) {
   return (
     <AdminDashboard
       operationsSource={operationsSource}
+      consoleSource={consoleSource}
       source={verificationSource}
       fixture
     />

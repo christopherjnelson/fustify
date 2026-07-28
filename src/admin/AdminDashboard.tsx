@@ -5,6 +5,12 @@ import type { BalanceStudyReport } from './balanceStudyContract';
 import { classifyStudyRunner } from './studyLiveness';
 import type { AdminDashboardSource } from './adminApi';
 import { AdminOperations } from './AdminOperations';
+import type { AdminConsoleSource } from './adminConsoleApi';
+import {
+  AdminConsoleNavigation,
+  AdminConsolePanel,
+  type AdminTab,
+} from './AdminConsolePanels';
 
 function duration(ms?: number) {
   if (ms === undefined) return '—';
@@ -500,11 +506,13 @@ function BalanceStudies({
 
 export function AdminDashboard({
   operationsSource,
+  consoleSource,
   source,
   dataAvailable = true,
   fixture = false,
 }: {
   operationsSource: AdminDashboardSource;
+  consoleSource?: AdminConsoleSource;
   source: AdminReportSource;
   dataAvailable?: boolean;
   fixture?: boolean;
@@ -519,6 +527,7 @@ export function AdminDashboard({
   const [study, setStudy] = useState<BalanceStudyReport | null>(null);
   const [recentStudies, setRecentStudies] = useState<BalanceStudyReport[]>([]);
   const [operationsRefreshToken, setOperationsRefreshToken] = useState(0);
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const fetching = useRef(false);
   const refresh = useCallback(async () => {
     if (fetching.current) return;
@@ -609,11 +618,22 @@ export function AdminDashboard({
           </button>
         </div>
       </header>
-      <AdminOperations
-        source={operationsSource}
-        fixture={fixture}
-        refreshToken={operationsRefreshToken}
-      />
+      {consoleSource && (
+        <>
+          <AdminConsoleNavigation
+            activeTab={activeTab}
+            onChange={setActiveTab}
+          />
+          <AdminConsolePanel activeTab={activeTab} source={consoleSource} />
+        </>
+      )}
+      {(!consoleSource || activeTab === 'overview') && (
+        <AdminOperations
+          source={operationsSource}
+          fixture={fixture}
+          refreshToken={operationsRefreshToken}
+        />
+      )}
       {!dataAvailable && (
         <section className="admin-notice" aria-labelledby="unavailable">
           <h2 id="unavailable">Developer diagnostics unavailable</h2>
@@ -624,329 +644,339 @@ export function AdminDashboard({
           </p>
         </section>
       )}
-      {dataAvailable && (
-        <div className="admin-diagnostics">
-          <div className="admin-section-heading">
-            <div>
-              <p className="admin-eyebrow">Developer diagnostics</p>
-              <h2>Verification and balance studies</h2>
-              <p>
-                Existing local reports remain isolated from production
-                operational data.
-              </p>
+      {dataAvailable &&
+        (!consoleSource ||
+          activeTab === 'verification' ||
+          activeTab === 'balance') && (
+          <div className="admin-diagnostics">
+            <div className="admin-section-heading">
+              <div>
+                <p className="admin-eyebrow">Developer diagnostics</p>
+                <h2>Verification and balance studies</h2>
+                <p>
+                  Existing local reports remain isolated from production
+                  operational data.
+                </p>
+              </div>
             </div>
-          </div>
-          {error && (
-            <div className="admin-error" role="alert">
-              Refresh failed: {error}. The last valid report remains displayed.
-            </div>
-          )}
-          <BalanceStudies
-            study={study}
-            recent={recentStudies}
-            onSelect={(id) =>
-              void source
-                .getStudy(id)
-                .then(setStudy)
-                .catch((reason) =>
-                  setError(
-                    reason instanceof Error ? reason.message : String(reason),
-                  ),
-                )
-            }
-            checkedAt={lastFetch}
-          />
-          {loading && !run && (
-            <p className="admin-empty" aria-live="polite">
-              Loading verification reports…
-            </p>
-          )}
-          {!loading && !run && (
-            <section className="admin-empty">
-              <h2>No report available</h2>
-              <p>
-                Run <code>pnpm verify:report</code> to create the first local
-                report.
+            {error && (
+              <div className="admin-error" role="alert">
+                Refresh failed: {error}. The last valid report remains
+                displayed.
+              </div>
+            )}
+            <BalanceStudies
+              study={study}
+              recent={recentStudies}
+              onSelect={(id) =>
+                void source
+                  .getStudy(id)
+                  .then(setStudy)
+                  .catch((reason) =>
+                    setError(
+                      reason instanceof Error ? reason.message : String(reason),
+                    ),
+                  )
+              }
+              checkedAt={lastFetch}
+            />
+            {loading && !run && (
+              <p className="admin-empty" aria-live="polite">
+                Loading verification reports…
               </p>
-            </section>
-          )}
-          {run && (
-            <>
-              <section
-                className={`admin-current status-${run.status}`}
-                aria-labelledby="current-run"
-              >
-                <div>
-                  <p className="status-label" role="status" aria-live="polite">
-                    {stale ? 'Stale / incomplete' : label(run.status)}
-                  </p>
-                  <h2 id="current-run">
-                    {viewingLatest ? 'Current run' : 'Historical run'}
-                  </h2>
-                  <p>
-                    {run.profile} profile · {run.totals.completed} of{' '}
-                    {run.totals.suites} suites complete · {duration(elapsed)}
-                  </p>
-                </div>
-                <dl className="run-metadata">
-                  <div>
-                    <dt>Branch</dt>
-                    <dd>{run.repository.branch}</dd>
-                  </div>
-                  <div>
-                    <dt>Commit</dt>
-                    <dd>
-                      <code>{run.repository.shortCommit}</code>{' '}
-                      {run.repository.commitSubject}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Worktree</dt>
-                    <dd>
-                      {(run.repository.worktreeCleanAtEnd ??
-                      run.repository.worktreeCleanAtStart)
-                        ? 'Clean'
-                        : 'Dirty'}{' '}
-                      at {run.completedAt ? 'completion' : 'start'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Started</dt>
-                    <dd>{timestamp(run.startedAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>Completed</dt>
-                    <dd>{timestamp(run.completedAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>Updated</dt>
-                    <dd>{timestamp(run.updatedAt)}</dd>
-                  </div>
-                </dl>
-                {stale && (
-                  <p className="stale-warning">
-                    This running report has not updated for over 30 seconds and
-                    may have been abandoned.
-                  </p>
-                )}
+            )}
+            {!loading && !run && (
+              <section className="admin-empty">
+                <h2>No report available</h2>
+                <p>
+                  Run <code>pnpm verify:report</code> to create the first local
+                  report.
+                </p>
               </section>
-              <section aria-labelledby="suites">
-                <h2 id="suites">Suites</h2>
-                <div className="suite-grid">
-                  {run.suites.map((suite) => (
-                    <article
-                      className={`suite-card status-${suite.status}`}
-                      key={suite.id}
+            )}
+            {run && (
+              <>
+                <section
+                  className={`admin-current status-${run.status}`}
+                  aria-labelledby="current-run"
+                >
+                  <div>
+                    <p
+                      className="status-label"
+                      role="status"
+                      aria-live="polite"
                     >
-                      <header>
-                        <h3>{suite.displayName}</h3>
-                        <span>{label(suite.status)}</span>
-                      </header>
-                      <p>{suite.summary ?? 'Awaiting execution.'}</p>
-                      <dl>
-                        <div>
-                          <dt>Duration</dt>
-                          <dd>{duration(suite.durationMs)}</dd>
-                        </div>
-                        {suite.counts?.total !== undefined && (
-                          <div>
-                            <dt>Results</dt>
-                            <dd>
-                              {suite.counts.passed ?? 0} passed /{' '}
-                              {suite.counts.total} total
-                            </dd>
-                          </div>
-                        )}
-                      </dl>
-                      <code className="suite-command">{suite.command}</code>
-                      {suite.failureExcerpt && (
-                        <details>
-                          <summary>Failure details</summary>
-                          <pre>{suite.failureExcerpt}</pre>
-                        </details>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              </section>
-              {run.coverage && (
-                <section aria-labelledby="coverage">
-                  <h2 id="coverage">Coverage</h2>
-                  <div className="coverage-grid">
-                    {Object.entries(run.coverage).map(([name, metric]) => (
-                      <article key={name}>
-                        <h3>{label(name)}</h3>
-                        <strong>{metric.percent.toFixed(2)}%</strong>
-                        <span>
-                          {metric.covered} / {metric.total}
-                        </span>
-                      </article>
-                    ))}
+                      {stale ? 'Stale / incomplete' : label(run.status)}
+                    </p>
+                    <h2 id="current-run">
+                      {viewingLatest ? 'Current run' : 'Historical run'}
+                    </h2>
+                    <p>
+                      {run.profile} profile · {run.totals.completed} of{' '}
+                      {run.totals.suites} suites complete · {duration(elapsed)}
+                    </p>
                   </div>
+                  <dl className="run-metadata">
+                    <div>
+                      <dt>Branch</dt>
+                      <dd>{run.repository.branch}</dd>
+                    </div>
+                    <div>
+                      <dt>Commit</dt>
+                      <dd>
+                        <code>{run.repository.shortCommit}</code>{' '}
+                        {run.repository.commitSubject}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Worktree</dt>
+                      <dd>
+                        {(run.repository.worktreeCleanAtEnd ??
+                        run.repository.worktreeCleanAtStart)
+                          ? 'Clean'
+                          : 'Dirty'}{' '}
+                        at {run.completedAt ? 'completion' : 'start'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Started</dt>
+                      <dd>{timestamp(run.startedAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>Completed</dt>
+                      <dd>{timestamp(run.completedAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>Updated</dt>
+                      <dd>{timestamp(run.updatedAt)}</dd>
+                    </div>
+                  </dl>
+                  {stale && (
+                    <p className="stale-warning">
+                      This running report has not updated for over 30 seconds
+                      and may have been abandoned.
+                    </p>
+                  )}
                 </section>
-              )}
-              {!!run.simulations?.length && (
-                <section aria-labelledby="simulations">
-                  <h2 id="simulations">Simulations</h2>
-                  <div className="simulation-grid">
-                    {run.simulations.map((simulation) => (
-                      <article key={simulation.label}>
-                        <h3>{simulation.label}</h3>
-                        <p>
-                          {simulation.passed ? 'Passed' : 'Failed'} ·{' '}
-                          {simulation.gamesCompleted ??
-                            simulation.configurations ??
-                            '—'}{' '}
-                          completed
-                        </p>
+                <section aria-labelledby="suites">
+                  <h2 id="suites">Suites</h2>
+                  <div className="suite-grid">
+                    {run.suites.map((suite) => (
+                      <article
+                        className={`suite-card status-${suite.status}`}
+                        key={suite.id}
+                      >
+                        <header>
+                          <h3>{suite.displayName}</h3>
+                          <span>{label(suite.status)}</span>
+                        </header>
+                        <p>{suite.summary ?? 'Awaiting execution.'}</p>
                         <dl>
                           <div>
-                            <dt>Outcomes</dt>
-                            <dd>
-                              {simulation.outcomes
-                                ? Object.entries(simulation.outcomes)
-                                    .map(
-                                      ([key, value]) =>
-                                        `${label(key)} ${value}`,
-                                    )
-                                    .join(' · ')
-                                : '—'}
-                            </dd>
+                            <dt>Duration</dt>
+                            <dd>{duration(suite.durationMs)}</dd>
                           </div>
-                          <div>
-                            <dt>Turns</dt>
-                            <dd>
-                              Mean {simulation.meanTurns ?? '—'} · Median{' '}
-                              {simulation.medianTurns ?? '—'} · p95{' '}
-                              {simulation.p95Turns ?? '—'} · p99{' '}
-                              {simulation.p99Turns ?? '—'}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt>Integrity</dt>
-                            <dd>
-                              {simulation.invariantFailures ?? '—'} invariant
-                              failures · {simulation.engineErrors ?? '—'} engine
-                              errors
-                            </dd>
-                          </div>
-                          <div>
-                            <dt>Throughput</dt>
-                            <dd>
-                              {simulation.gamesPerSecond?.toFixed(2) ?? '—'}{' '}
-                              games/s
-                            </dd>
-                          </div>
+                          {suite.counts?.total !== undefined && (
+                            <div>
+                              <dt>Results</dt>
+                              <dd>
+                                {suite.counts.passed ?? 0} passed /{' '}
+                                {suite.counts.total} total
+                              </dd>
+                            </div>
+                          )}
                         </dl>
-                        {simulation.winDistribution && (
-                          <div className="win-bars">
-                            {Object.entries(simulation.winDistribution).map(
-                              ([player, ratio]) => (
-                                <div key={player}>
-                                  <span>
-                                    {player} {(ratio * 100).toFixed(1)}%
-                                  </span>
-                                  <i
-                                    style={{
-                                      width: `${Math.min(100, ratio * 100)}%`,
-                                    }}
-                                  />
-                                </div>
-                              ),
-                            )}
-                          </div>
+                        <code className="suite-command">{suite.command}</code>
+                        {suite.failureExcerpt && (
+                          <details>
+                            <summary>Failure details</summary>
+                            <pre>{suite.failureExcerpt}</pre>
+                          </details>
                         )}
                       </article>
                     ))}
                   </div>
                 </section>
-              )}
-              {!!run.failures.length && (
-                <section aria-labelledby="failures">
-                  <h2 id="failures">Failures and reproduction</h2>
-                  {run.failures.map((failure, index) => (
-                    <article
-                      className="failure-card"
-                      key={`${failure.suiteId}-${index}`}
-                    >
-                      <h3>
-                        {failure.suiteId}: {failure.message}
-                      </h3>
-                      {failure.excerpt && <pre>{failure.excerpt}</pre>}
-                      {failure.reproduction && (
-                        <>
+                {run.coverage && (
+                  <section aria-labelledby="coverage">
+                    <h2 id="coverage">Coverage</h2>
+                    <div className="coverage-grid">
+                      {Object.entries(run.coverage).map(([name, metric]) => (
+                        <article key={name}>
+                          <h3>{label(name)}</h3>
+                          <strong>{metric.percent.toFixed(2)}%</strong>
+                          <span>
+                            {metric.covered} / {metric.total}
+                          </span>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {!!run.simulations?.length && (
+                  <section aria-labelledby="simulations">
+                    <h2 id="simulations">Simulations</h2>
+                    <div className="simulation-grid">
+                      {run.simulations.map((simulation) => (
+                        <article key={simulation.label}>
+                          <h3>{simulation.label}</h3>
+                          <p>
+                            {simulation.passed ? 'Passed' : 'Failed'} ·{' '}
+                            {simulation.gamesCompleted ??
+                              simulation.configurations ??
+                              '—'}{' '}
+                            completed
+                          </p>
                           <dl>
                             <div>
-                              <dt>Seed</dt>
-                              <dd>{failure.reproduction.seed ?? '—'}</dd>
+                              <dt>Outcomes</dt>
+                              <dd>
+                                {simulation.outcomes
+                                  ? Object.entries(simulation.outcomes)
+                                      .map(
+                                        ([key, value]) =>
+                                          `${label(key)} ${value}`,
+                                      )
+                                      .join(' · ')
+                                  : '—'}
+                              </dd>
                             </div>
                             <div>
-                              <dt>Trace</dt>
-                              <dd>{failure.reproduction.traceRef ?? '—'}</dd>
+                              <dt>Turns</dt>
+                              <dd>
+                                Mean {simulation.meanTurns ?? '—'} · Median{' '}
+                                {simulation.medianTurns ?? '—'} · p95{' '}
+                                {simulation.p95Turns ?? '—'} · p99{' '}
+                                {simulation.p99Turns ?? '—'}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Integrity</dt>
+                              <dd>
+                                {simulation.invariantFailures ?? '—'} invariant
+                                failures · {simulation.engineErrors ?? '—'}{' '}
+                                engine errors
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Throughput</dt>
+                              <dd>
+                                {simulation.gamesPerSecond?.toFixed(2) ?? '—'}{' '}
+                                games/s
+                              </dd>
                             </div>
                           </dl>
-                          <label>
-                            Reproduction command
-                            <textarea
-                              readOnly
-                              value={failure.reproduction.command}
-                              onFocus={(event) => event.currentTarget.select()}
-                            />
-                          </label>
-                        </>
-                      )}
-                    </article>
+                          {simulation.winDistribution && (
+                            <div className="win-bars">
+                              {Object.entries(simulation.winDistribution).map(
+                                ([player, ratio]) => (
+                                  <div key={player}>
+                                    <span>
+                                      {player} {(ratio * 100).toFixed(1)}%
+                                    </span>
+                                    <i
+                                      style={{
+                                        width: `${Math.min(100, ratio * 100)}%`,
+                                      }}
+                                    />
+                                  </div>
+                                ),
+                              )}
+                            </div>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {!!run.failures.length && (
+                  <section aria-labelledby="failures">
+                    <h2 id="failures">Failures and reproduction</h2>
+                    {run.failures.map((failure, index) => (
+                      <article
+                        className="failure-card"
+                        key={`${failure.suiteId}-${index}`}
+                      >
+                        <h3>
+                          {failure.suiteId}: {failure.message}
+                        </h3>
+                        {failure.excerpt && <pre>{failure.excerpt}</pre>}
+                        {failure.reproduction && (
+                          <>
+                            <dl>
+                              <div>
+                                <dt>Seed</dt>
+                                <dd>{failure.reproduction.seed ?? '—'}</dd>
+                              </div>
+                              <div>
+                                <dt>Trace</dt>
+                                <dd>{failure.reproduction.traceRef ?? '—'}</dd>
+                              </div>
+                            </dl>
+                            <label>
+                              Reproduction command
+                              <textarea
+                                readOnly
+                                value={failure.reproduction.command}
+                                onFocus={(event) =>
+                                  event.currentTarget.select()
+                                }
+                              />
+                            </label>
+                          </>
+                        )}
+                      </article>
+                    ))}
+                  </section>
+                )}
+              </>
+            )}
+            <section aria-labelledby="recent">
+              <h2 id="recent">Recent runs</h2>
+              {recent.length ? (
+                <div className="recent-list">
+                  {recent.map((item) => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      aria-pressed={!viewingLatest && selected?.id === item.id}
+                      onClick={async () => {
+                        const next = await source.getRun(item.id);
+                        setViewingLatest(false);
+                        setSelected(next);
+                      }}
+                    >
+                      <strong>{label(item.status)}</strong>
+                      <span>{timestamp(item.startedAt)}</span>
+                      <span>
+                        {item.profile} · {item.repository.branch} ·{' '}
+                        {item.repository.shortCommit}
+                      </span>
+                      <span>
+                        {duration(item.totals.durationMs)} ·{' '}
+                        {item.totals.failed} failed
+                      </span>
+                    </button>
                   ))}
-                </section>
+                </div>
+              ) : (
+                <p>No retained history.</p>
               )}
-            </>
-          )}
-          <section aria-labelledby="recent">
-            <h2 id="recent">Recent runs</h2>
-            {recent.length ? (
-              <div className="recent-list">
-                {recent.map((item) => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    aria-pressed={!viewingLatest && selected?.id === item.id}
-                    onClick={async () => {
-                      const next = await source.getRun(item.id);
-                      setViewingLatest(false);
-                      setSelected(next);
-                    }}
-                  >
-                    <strong>{label(item.status)}</strong>
-                    <span>{timestamp(item.startedAt)}</span>
-                    <span>
-                      {item.profile} · {item.repository.branch} ·{' '}
-                      {item.repository.shortCommit}
-                    </span>
-                    <span>
-                      {duration(item.totals.durationMs)} · {item.totals.failed}{' '}
-                      failed
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p>No retained history.</p>
-            )}
-            {!viewingLatest && (
-              <button
-                type="button"
-                className="latest-button"
-                onClick={() => {
-                  setViewingLatest(true);
-                  setSelected(latest);
-                }}
-              >
-                Return to Latest
-              </button>
-            )}
-          </section>
-        </div>
-      )}
+              {!viewingLatest && (
+                <button
+                  type="button"
+                  className="latest-button"
+                  onClick={() => {
+                    setViewingLatest(true);
+                    setSelected(latest);
+                  }}
+                >
+                  Return to Latest
+                </button>
+              )}
+            </section>
+          </div>
+        )}
     </main>
   );
 }

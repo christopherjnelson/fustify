@@ -61,11 +61,13 @@ async function bootstrap() {
         );
         return;
       }
-      const [{ fixtureAdminReportSource }, { fixtureAdminDashboardSource }] =
-        await Promise.all([
-          import('./admin/fixtureReportSource'),
-          import('./admin/adminFixtures'),
-        ]);
+      const [
+        { fixtureAdminReportSource },
+        { fixtureAdminConsoleSource, fixtureAdminDashboardSource },
+      ] = await Promise.all([
+        import('./admin/fixtureReportSource'),
+        import('./admin/adminFixtures'),
+      ]);
       const reportFixture = parameters.get('admin-fixture') ?? 'empty';
       const dataFixture = parameters.get('admin-data');
       root.render(
@@ -78,6 +80,11 @@ async function bootstrap() {
                 ? dataFixture
                 : 'populated',
             )}
+            consoleSource={
+              parameters.get('admin-console') === '1'
+                ? fixtureAdminConsoleSource()
+                : undefined
+            }
             verificationSource={fixtureAdminReportSource(reportFixture)}
           />
         </StrictMode>,
