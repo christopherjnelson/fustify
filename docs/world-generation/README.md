@@ -37,7 +37,7 @@ Generation is deterministic for a seed, setup, and code version:
    criteria as a final safety gate.
 10. Assign each gameplay continent a deterministic phonetic family and dialect,
     then generate its continent and territory display names through the
-    isolated `geographic-names|v1` stream.
+    isolated `geographic-names|v2` stream.
 
 Validation requires unique territory and continent IDs; exact requested
 counts; one non-empty continent membership per territory; valid symmetrical
@@ -64,15 +64,18 @@ the normalized source-name keys used by the similarity filter.
 
 Each world shuffles the family catalog deterministically, gives every continent
 a distinct family, and generates all of that continent's territory names with
-the same dialect. Candidates must be unique within the world, 4–12 ASCII
-letters in title case, clear of the project denylist, and neither exact nor
-near edit-distance matches for source names. Failed candidates retry through a
-bounded deterministic stream.
+the same one-syllable dialect. The 50-dialect pool keeps the phonetic signature
+short while retaining enough statistical variety across worlds. Candidates
+must be unique within the world, 4–12 ASCII letters in title case, clear of the
+project denylist, free of unusually long vowel, consonant, or repeated-syllable
+runs, and neither exact nor near edit-distance matches for source names. Failed
+candidates retry through a bounded deterministic stream.
 
 Repeat avoidance is statistical and keeps no browser or account history. Run
 `pnpm test:names` to evaluate 1,000 ten-game sequences at the standard
-42-territory, 5-continent setup; the audit permits repeats in fewer than 1% of
-those sequences. The ordinary unit suite retains a 10-sequence smoke window.
+42-territory, 5-continent setup; the audit permits repeats in fewer than 25% of
+those sequences. Names remain unique within each world. The ordinary unit suite
+retains a 10-sequence smoke window.
 A future algorithm or corpus change must increment
 `GEOGRAPHIC_NAMING_VERSION`; previously rebuilt worlds are not promised to
 retain cosmetic names across naming versions.

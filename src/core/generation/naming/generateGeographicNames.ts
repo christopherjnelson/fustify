@@ -5,7 +5,7 @@ import {
 import { SOURCE_PLACE_NAME_KEYS } from './sourceNameKeys.ts';
 import { createSeededRandom, type SeededRandom } from '../seededRandom.ts';
 
-export const GEOGRAPHIC_NAMING_VERSION = 1;
+export const GEOGRAPHIC_NAMING_VERSION = 2;
 
 const MIN_NAME_LENGTH = 4;
 const MAX_NAME_LENGTH = 12;
@@ -43,10 +43,25 @@ const DIALECT_SYLLABLES = [
   'ne',
   'ni',
   'no',
+  'pa',
+  'pe',
+  'pi',
+  'po',
   'ra',
   'ri',
+  'sa',
+  'se',
+  'si',
+  'so',
+  'ta',
+  'te',
+  'ti',
+  'to',
+  'va',
+  've',
+  'vi',
+  'vo',
 ] as const;
-const DIALECT_COUNT = DIALECT_SYLLABLES.length ** 2;
 
 const BLOCKED_FRAGMENTS = [
   'anal',
@@ -119,7 +134,9 @@ export function isAcceptableGeographicName(
     key.length > MAX_NAME_LENGTH ||
     !/^[A-Z][a-z]+$/.test(value) ||
     /(.)\1\1/.test(key) ||
-    /[^aeiouy]{5}/.test(key) ||
+    /(..)\1\1/.test(key) ||
+    /[aeiouy]{3}/.test(key) ||
+    /[^aeiouy]{4}/.test(key) ||
     BLOCKED_FRAGMENTS.some((fragment) => key.includes(fragment)) ||
     existingNames.has(key)
   ) {
@@ -219,12 +236,9 @@ export function generateGeographicNames(
   const dialects = families.map((_, continentIndex) =>
     createSeededRandom(
       `${rootSeed}|continent-${continentIndex}|dialect`,
-    ).integer(0, DIALECT_COUNT - 1),
+    ).integer(0, DIALECT_SYLLABLES.length - 1),
   );
-  const signatures = dialects.map(
-    (dialect) =>
-      `${DIALECT_SYLLABLES[Math.floor(dialect / DIALECT_SYLLABLES.length)]}${DIALECT_SYLLABLES[dialect % DIALECT_SYLLABLES.length]}`,
-  );
+  const signatures = dialects.map((dialect) => DIALECT_SYLLABLES[dialect]);
   const used = new Set<string>();
   const continentNames = families.map((family, continentIndex) =>
     generateUniqueName(

@@ -128,7 +128,7 @@ const scenarios: Array<{
   {
     name: 'fortification',
     region: '.territory-tools-panel, .mobile-territory-control',
-    heading: /Boronugifion/i,
+    heading: /Norololvaor/i,
   },
   {
     name: 'fortification-fixed',
