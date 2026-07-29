@@ -31,11 +31,6 @@ async function appendActionAndReadBeam(
         };
         beam: ActionBeamDetail;
       }>((resolve) => {
-        let action!: {
-          actingPlayerId: string;
-          sourceTerritoryId: string;
-          targetTerritoryId: string;
-        };
         window.addEventListener(
           'fustify:action-beam',
           (event) =>
@@ -45,7 +40,7 @@ async function appendActionAndReadBeam(
             }),
           { once: true },
         );
-        action = window.__WORLDSEED_VISUAL__!.appendActionEventBatch(
+        const action = window.__WORLDSEED_VISUAL__!.appendActionEventBatch(
           actionAudience,
           actionKind,
         );
