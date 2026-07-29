@@ -18,22 +18,33 @@ export function BotPacingSelector({
   context: 'setup' | 'game-menu';
 }) {
   const [mode, setMode] = useBotPacingPreference();
+  const selectedIndex = BOT_PACING_OPTIONS.findIndex(
+    (option) => option.mode === mode,
+  );
+  const selectedOption = BOT_PACING_OPTIONS[selectedIndex]!;
 
   return (
     <fieldset className={`bot-pacing-selector bot-pacing-${context}`}>
       <legend>Bot pacing</legend>
-      {BOT_PACING_OPTIONS.map((option) => (
-        <label key={option.mode}>
-          <input
-            type="radio"
-            name={`bot-pacing-${context}`}
-            value={option.mode}
-            checked={mode === option.mode}
-            onChange={() => setMode(option.mode)}
-          />
-          <span>{option.label}</span>
-        </label>
-      ))}
+      <input
+        type="range"
+        name={`bot-pacing-${context}`}
+        min={0}
+        max={BOT_PACING_OPTIONS.length - 1}
+        step={1}
+        value={selectedIndex}
+        aria-label="Bot pacing"
+        aria-valuetext={selectedOption.label}
+        onChange={(event) => {
+          const option = BOT_PACING_OPTIONS[Number(event.currentTarget.value)];
+          if (option) setMode(option.mode);
+        }}
+      />
+      <div className="bot-pacing-labels" aria-hidden="true">
+        {BOT_PACING_OPTIONS.map((option) => (
+          <span key={option.mode}>{option.label}</span>
+        ))}
+      </div>
     </fieldset>
   );
 }

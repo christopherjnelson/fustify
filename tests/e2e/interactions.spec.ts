@@ -242,8 +242,15 @@ test('local bot playback pauses safely and resumes with the selected pacing', as
   );
   await page.getByRole('button', { name: 'Start Game' }).click();
   const setupPacing = page.getByRole('group', { name: 'Bot pacing' });
-  await expect(setupPacing.getByLabel('Fast · 1 second')).toBeChecked();
-  await setupPacing.getByLabel('Deliberate · 5 seconds').check();
+  const setupPacingSlider = setupPacing.getByRole('slider', {
+    name: 'Bot pacing',
+  });
+  await expect(setupPacingSlider).toHaveValue('1');
+  await expect(setupPacingSlider).toHaveAttribute(
+    'aria-valuetext',
+    'Fast · 1 second',
+  );
+  await setupPacingSlider.fill('2');
   await page
     .getByLabel(/Crimson League controller/i)
     .selectOption('heuristic-bot');
@@ -275,7 +282,14 @@ test('local bot playback pauses safely and resumes with the selected pacing', as
   };
   await openGameMenu();
   const menuPacing = page.getByRole('group', { name: 'Bot pacing' });
-  await expect(menuPacing.getByLabel('Deliberate · 5 seconds')).toBeChecked();
+  const menuPacingSlider = menuPacing.getByRole('slider', {
+    name: 'Bot pacing',
+  });
+  await expect(menuPacingSlider).toHaveValue('2');
+  await expect(menuPacingSlider).toHaveAttribute(
+    'aria-valuetext',
+    'Deliberate · 5 seconds',
+  );
   const beforeDeliberateAction = await savedEventCount();
   await page.getByRole('button', { name: 'Pause Bots' }).click();
   const pausedStatus = page.getByTestId('bot-turn-status');
@@ -299,7 +313,7 @@ test('local bot playback pauses safely and resumes with the selected pacing', as
   await closeTerritoryNavigator(page).click();
 
   await openGameMenu();
-  await menuPacing.getByLabel('Fast · 1 second').click();
+  await menuPacingSlider.fill('1');
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -322,8 +336,8 @@ test('local bot playback pauses safely and resumes with the selected pacing', as
   await openGameMenu();
   await page
     .getByRole('group', { name: 'Bot pacing' })
-    .getByLabel('Instant')
-    .click();
+    .getByRole('slider', { name: 'Bot pacing' })
+    .fill('0');
   await expect(
     page.getByRole('heading', { name: /Pass the device to Azure Pact/i }),
   ).toBeVisible({ timeout: 30_000 });

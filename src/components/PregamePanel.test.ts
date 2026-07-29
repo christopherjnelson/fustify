@@ -28,9 +28,9 @@ describe('local pregame presentation', () => {
     expect(markup).toContain('Instant');
     expect(markup).toContain('Fast · 1 second');
     expect(markup).toContain('Deliberate · 5 seconds');
-    expect(markup).toMatch(
-      /name="bot-pacing-setup"[^>]*checked=""[^>]*value="fast"/,
-    );
+    expect(markup).toContain('<input type="range" min="0" max="2" step="1"');
+    expect(markup).toContain('name="bot-pacing-setup" value="1"');
+    expect(markup).toContain('aria-valuetext="Fast · 1 second"');
     expect(markup).not.toContain('no territories assigned');
     expect(markup).not.toContain('Add Seat');
   });

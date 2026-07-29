@@ -86,9 +86,11 @@ describe('active-match HUD utilities', () => {
     expect(markup).toContain('Instant');
     expect(markup).toContain('Fast · 1 second');
     expect(markup).toContain('Deliberate · 5 seconds');
-    expect(markup).toMatch(
-      /name="bot-pacing-game-menu"[^>]*checked=""[^>]*value="fast"/,
+    expect(markup).toContain(
+      '<input type="range" min="0" max="2" step="1"',
     );
+    expect(markup).toContain('name="bot-pacing-game-menu" value="1"');
+    expect(markup).toContain('aria-valuetext="Fast · 1 second"');
   });
 
   it.each(['local', 'authoritative multiplayer'])(

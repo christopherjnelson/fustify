@@ -3697,23 +3697,31 @@ select:focus-visible {
   font-weight: 700;
 }
 
-.bot-pacing-selector label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #dce9f4;
-  cursor: pointer;
-  font-size: 0.63rem;
-}
-
 .bot-pacing-selector input {
+  width: 100%;
   margin: 0;
   accent-color: var(--brand-accent);
 }
 
+.bot-pacing-labels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  color: #dce9f4;
+  font-size: 0.6rem;
+  line-height: 1.25;
+}
+
+.bot-pacing-labels span:nth-child(2) {
+  text-align: center;
+}
+
+.bot-pacing-labels span:last-child {
+  text-align: right;
+}
+
 .bot-pacing-setup {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   padding: 8px;
   border: 1px solid rgba(153, 190, 224, 0.14);
@@ -3728,7 +3736,7 @@ select:focus-visible {
 
 .bot-pacing-game-menu {
   display: grid;
-  gap: 7px;
+  gap: 6px;
   padding: 7px 8px;
 }
 
