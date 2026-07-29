@@ -10,6 +10,50 @@ function territoryNavigator(page: Page) {
   return page.locator('#territory-navigator');
 }
 
+type ActionBeamDetail = {
+  actingPlayerId: string | null;
+  kind: string;
+  visible: boolean;
+};
+
+async function appendActionAndReadBeam(
+  page: Page,
+  audience: 'other' | 'self',
+  kind: 'combat' | 'reinforcement' | 'fortification' = 'combat',
+) {
+  return page.evaluate(
+    ({ actionAudience, actionKind }) =>
+      new Promise<{
+        action: {
+          actingPlayerId: string;
+          sourceTerritoryId: string;
+          targetTerritoryId: string;
+        };
+        beam: ActionBeamDetail;
+      }>((resolve) => {
+        let action!: {
+          actingPlayerId: string;
+          sourceTerritoryId: string;
+          targetTerritoryId: string;
+        };
+        window.addEventListener(
+          'fustify:action-beam',
+          (event) =>
+            resolve({
+              action,
+              beam: (event as CustomEvent<ActionBeamDetail>).detail,
+            }),
+          { once: true },
+        );
+        action = window.__WORLDSEED_VISUAL__!.appendActionEventBatch(
+          actionAudience,
+          actionKind,
+        );
+      }),
+    { actionAudience: audience, actionKind: kind },
+  );
+}
+
 function closeTerritoryNavigator(page: Page) {
   return territoryNavigator(page).getByRole('button', {
     name: /Close and view globe|Collapse territory list/i,
@@ -1496,57 +1540,36 @@ test('other-player action cues remain visible while Follow Action is opt-in and 
   ).toHaveAttribute('aria-pressed', 'false');
 });
 
-test('globe action beams skip self actions while retaining minimap cues', async ({
+test('combat beams skip self actions while retaining minimap cues', async ({
   page,
 }) => {
   await openScenario(page, 'action-follow');
-  const selfBeam = await page.evaluate(
-    () =>
-      new Promise<{ actingPlayerId: string | null; visible: boolean }>(
-        (resolve) => {
-          window.addEventListener(
-            'fustify:action-beam',
-            (event) =>
-              resolve(
-                (
-                  event as CustomEvent<{
-                    actingPlayerId: string | null;
-                    visible: boolean;
-                  }>
-                ).detail,
-              ),
-            { once: true },
-          );
-          window.__WORLDSEED_VISUAL__!.appendActionEventBatch('self');
-        },
-      ),
-  );
-  expect(selfBeam.visible).toBe(false);
+  const self = await appendActionAndReadBeam(page, 'self');
+  expect(self.beam.kind).toBe('combat');
+  expect(self.beam.visible).toBe(false);
   await expect(page.getByTestId('minimap-action-cue')).toBeVisible();
 
-  const otherBeam = await page.evaluate(
-    () =>
-      new Promise<{ actingPlayerId: string | null; visible: boolean }>(
-        (resolve) => {
-          window.addEventListener(
-            'fustify:action-beam',
-            (event) =>
-              resolve(
-                (
-                  event as CustomEvent<{
-                    actingPlayerId: string | null;
-                    visible: boolean;
-                  }>
-                ).detail,
-              ),
-            { once: true },
-          );
-          window.__WORLDSEED_VISUAL__!.appendActionEventBatch('other');
-        },
-      ),
-  );
-  expect(otherBeam.visible).toBe(true);
-  expect(otherBeam.actingPlayerId).not.toBe(selfBeam.actingPlayerId);
+  const other = await appendActionAndReadBeam(page, 'other');
+  expect(other.beam.kind).toBe('combat');
+  expect(other.beam.visible).toBe(true);
+  expect(other.beam.actingPlayerId).not.toBe(self.beam.actingPlayerId);
+});
+
+test('non-combat actions retain minimap cues without globe beams', async ({
+  page,
+}) => {
+  await openScenario(page, 'action-follow');
+  for (const kind of ['reinforcement', 'fortification'] as const) {
+    const result = await appendActionAndReadBeam(page, 'other', kind);
+    expect(result.beam.kind).toBe(kind);
+    expect(result.beam.visible).toBe(false);
+    const minimapCue = page.getByTestId('minimap-action-cue');
+    await expect(minimapCue).toBeVisible();
+    await expect(minimapCue).toHaveAttribute(
+      'data-target-territory-id',
+      result.action.targetTerritoryId,
+    );
+  }
 });
 
 test('reduced motion uses a static action beacon and immediate follow focus', async ({

@@ -7,6 +7,7 @@ import { useGameStore } from '../state/useGameStore';
 
 export interface ActionTrackingValue {
   cue: ActionCue | null;
+  beamCue: ActionCue | null;
   followState: FollowActionState;
   enableFollowing: () => void;
   disableFollowing: () => void;
@@ -16,6 +17,7 @@ export interface ActionTrackingValue {
 
 const DEFAULT_VALUE: ActionTrackingValue = {
   cue: null,
+  beamCue: null,
   followState: 'off',
   enableFollowing: () => undefined,
   disableFollowing: () => undefined,

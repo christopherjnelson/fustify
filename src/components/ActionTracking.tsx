@@ -40,10 +40,12 @@ export function ActionTrackingProvider({ children }: { children: ReactNode }) {
     state: 'off',
   });
   const [activeCue, setActiveCue] = useState<ActionCue | null>(null);
+  const [activeBeamCue, setActiveBeamCue] = useState<ActionCue | null>(null);
   const trackingRef = useRef<ActionEventTracking | null>(null);
   const followState =
     followSession.matchId === matchId ? followSession.state : 'off';
   const cue = activeCue?.matchId === matchId ? activeCue : null;
+  const beamCue = activeBeamCue?.matchId === matchId ? activeBeamCue : null;
 
   const enableFollowing = useCallback(() => {
     if (matchId === null) return;
@@ -92,6 +94,7 @@ export function ActionTrackingProvider({ children }: { children: ReactNode }) {
     if (reconciliation.cue === null) return;
 
     setActiveCue(reconciliation.cue);
+    setActiveBeamCue(reconciliation.beamCue);
     if (followState !== 'following') return;
     const territory = planet.territories.find(
       (candidate) => candidate.id === reconciliation.cue?.targetTerritoryId,
@@ -119,9 +122,23 @@ export function ActionTrackingProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timeout);
   }, [cue]);
 
+  useEffect(() => {
+    if (beamCue === null) return;
+    const timeout = window.setTimeout(() => {
+      setActiveBeamCue((current) =>
+        current?.sequence === beamCue.sequence &&
+        current.matchId === beamCue.matchId
+          ? null
+          : current,
+      );
+    }, ACTION_CUE_DURATION_MS);
+    return () => window.clearTimeout(timeout);
+  }, [beamCue]);
+
   const value = useMemo<ActionTrackingValue>(
     () => ({
       cue,
+      beamCue,
       followState,
       enableFollowing,
       disableFollowing,
@@ -129,6 +146,7 @@ export function ActionTrackingProvider({ children }: { children: ReactNode }) {
       requestManualFocus,
     }),
     [
+      beamCue,
       cue,
       disableFollowing,
       enableFollowing,

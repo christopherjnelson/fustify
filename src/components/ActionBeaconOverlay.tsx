@@ -138,7 +138,7 @@ function emptyBeamResources(): BeamResources {
 }
 
 export function ActionBeaconOverlay({ planet }: { planet: PlanetDefinition }) {
-  const { cue } = useActionTracking();
+  const { beamCue, cue } = useActionTracking();
   const configuredPlayers = useGameStore((state) => state.matchSetup.players);
   const ownMultiplayerPlayerId = useGameStore(
     (state) => state.multiplayerSession?.ownPlayerId ?? null,
@@ -157,10 +157,10 @@ export function ActionBeaconOverlay({ planet }: { planet: PlanetDefinition }) {
     [],
   );
   const resources = useMemo(() => {
-    if (!cue) return emptyBeamResources();
+    if (!beamCue) return emptyBeamResources();
     if (
       !shouldShowActionBeam(
-        cue.actingPlayerId,
+        beamCue.actingPlayerId,
         ownMultiplayerPlayerId,
         configuredPlayers,
       )
@@ -168,14 +168,14 @@ export function ActionBeaconOverlay({ planet }: { planet: PlanetDefinition }) {
       return emptyBeamResources();
     }
     const target = planet.territories.find(
-      (territory) => territory.id === cue.targetTerritoryId,
+      (territory) => territory.id === beamCue.targetTerritoryId,
     );
     if (!target) return emptyBeamResources();
     return createBeam(
       target.center,
-      actionBeamPlayerColor(cue.actingPlayerId, configuredPlayers),
+      actionBeamPlayerColor(beamCue.actingPlayerId, configuredPlayers),
     );
-  }, [configuredPlayers, cue, ownMultiplayerPlayerId, planet]);
+  }, [beamCue, configuredPlayers, ownMultiplayerPlayerId, planet]);
 
   useEffect(() => {
     if (!import.meta.env.DEV || !cue) return;
@@ -183,12 +183,13 @@ export function ActionBeaconOverlay({ planet }: { planet: PlanetDefinition }) {
       new CustomEvent('fustify:action-beam', {
         detail: {
           actingPlayerId: cue.actingPlayerId,
+          kind: beamCue?.kind ?? cue.kind,
           sequence: cue.sequence,
           visible: resources.group.children.length > 0,
         },
       }),
     );
-  }, [cue, resources]);
+  }, [beamCue, cue, resources]);
 
   useEffect(() => {
     startedAt.current = null;

@@ -124,11 +124,11 @@ belongs to the specified match; legacy events without canonical IDs remain
 visible but are not reactable.
 
 The client also derives presentation-only action cues from newly appended
-canonical event IDs. Reinforcement, combat/capture, capture movement, and
-fortification briefly raise a player-colored beam from their destination on
-other participants' globes while the acting participant does not see a
-redundant self-action beam. The minimap retains its directional source and
-destination cue.
+canonical event IDs. Combat briefly raises a player-colored beam from its
+destination on other participants' globes while the acting participant does not
+see a redundant self-action beam. Reinforcement, combat/capture, capture
+movement, and fortification retain their directional minimap source and
+destination cues without raising additional globe beams.
 Players may opt into Follow Action for future events; direct globe, minimap,
 navigator, or Activity focus input pauses it until explicitly resumed. Following
 never changes the canonical snapshot, revision, Activity ordering, selection, or

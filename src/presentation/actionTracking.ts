@@ -30,6 +30,7 @@ export interface ActionEventTracking {
 export interface ActionEventReconciliation {
   tracking: ActionEventTracking;
   cue: ActionCue | null;
+  beamCue: ActionCue | null;
 }
 
 export function transitionFollowAction(
@@ -94,6 +95,7 @@ export function reconcileActionEvents(
     return {
       tracking: { matchId, eventIds, sequence: 0 },
       cue: null,
+      beamCue: null,
     };
   }
 
@@ -104,15 +106,20 @@ export function reconcileActionEvents(
     return {
       tracking: { ...previous, eventIds },
       cue: null,
+      beamCue: null,
     };
   }
 
   const appendedEvents = events.slice(previous.eventIds.length);
   const nextSequence = previous.sequence + 1;
   let cue: ActionCue | null = null;
+  let beamCue: ActionCue | null = null;
   for (let index = appendedEvents.length - 1; index >= 0; index -= 1) {
-    cue = actionCueFromEvent(matchId, appendedEvents[index]!, nextSequence);
-    if (cue !== null) break;
+    const event = appendedEvents[index]!;
+    const eventCue = actionCueFromEvent(matchId, event, nextSequence);
+    if (cue === null && eventCue !== null) cue = eventCue;
+    if (beamCue === null && event.type === 'combat') beamCue = eventCue;
+    if (cue !== null && beamCue !== null) break;
   }
 
   return {
@@ -122,6 +129,7 @@ export function reconcileActionEvents(
       sequence: cue === null ? previous.sequence : nextSequence,
     },
     cue,
+    beamCue,
   };
 }
 

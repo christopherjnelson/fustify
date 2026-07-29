@@ -753,7 +753,10 @@ declare global {
       save: () => void;
       prepareAttack: (type: 'land-border' | 'sea-route') => void;
       appendActivityEvents: (count?: number) => void;
-      appendActionEventBatch: (audience?: 'other' | 'self') => {
+      appendActionEventBatch: (
+        audience?: 'other' | 'self',
+        kind?: 'combat' | 'reinforcement' | 'fortification',
+      ) => {
         actingPlayerId: string;
         sourceTerritoryId: string;
         targetTerritoryId: string;
@@ -861,7 +864,7 @@ window.__WORLDSEED_VISUAL__ = {
     }
     useGameStore.setState({ match: { ...match, events } });
   },
-  appendActionEventBatch: (audience = 'other') => {
+  appendActionEventBatch: (audience = 'other', kind = 'combat') => {
     const store = useGameStore.getState();
     const match = store.match!;
     const actingPlayerId =
@@ -870,7 +873,7 @@ window.__WORLDSEED_VISUAL__ = {
         : (store.matchSetup.players.find(
             (player) => player.controllerType === 'heuristic-bot',
           )?.id ?? match.activePlayerId);
-    const target = store.planet.territories
+    const combatTarget = store.planet.territories
       .filter(
         (territory) =>
           match.territories[territory.id]!.ownerId !== actingPlayerId &&
@@ -891,12 +894,23 @@ window.__WORLDSEED_VISUAL__ = {
         return Math.abs(leftDistance - 80) - Math.abs(rightDistance - 80);
       })[0]!;
     const sourceTerritoryId =
-      target.adjacentTerritoryIds.find(
+      combatTarget.adjacentTerritoryIds.find(
         (territoryId) =>
           match.territories[territoryId]!.ownerId === actingPlayerId,
       ) ??
-      store.planet.territories.find((territory) => territory.id !== target.id)!
-        .id;
+      store.planet.territories.find(
+        (territory) => territory.id !== combatTarget.id,
+      )!.id;
+    const targetTerritoryId =
+      kind === 'reinforcement'
+        ? sourceTerritoryId
+        : kind === 'fortification'
+          ? (store.planet.territories.find(
+              (territory) =>
+                territory.id !== sourceTerritoryId &&
+                match.territories[territory.id]!.ownerId === actingPlayerId,
+            )?.id ?? sourceTerritoryId)
+          : combatTarget.id;
     const events = [...match.events];
     const append = (
       type: MatchState['events'][number]['type'],
@@ -911,37 +925,57 @@ window.__WORLDSEED_VISUAL__ = {
         ),
       );
     };
-    append('combat', {
-      playerId: actingPlayerId,
-      actingPlayerId,
-      defenderPlayerId: match.territories[target.id]!.ownerId,
-      territoryId: target.id,
-      sourceTerritoryId,
-      targetTerritoryId: target.id,
-      primaryTerritoryId: target.id,
-      attackerLosses: 0,
-      defenderLosses: 1,
-    });
-    append('territory-captured', {
-      playerId: actingPlayerId,
-      actingPlayerId,
-      previousOwnerId: match.territories[target.id]!.ownerId,
-      territoryId: target.id,
-      sourceTerritoryId,
-      targetTerritoryId: target.id,
-      primaryTerritoryId: target.id,
-    });
-    append('player-eliminated', {
-      playerId: Object.keys(match.players).find(
-        (playerId) => playerId !== actingPlayerId,
-      ),
-      actingPlayerId,
-      eliminatedPlayerId: Object.keys(match.players).find(
-        (playerId) => playerId !== actingPlayerId,
-      ),
-    });
+    if (kind === 'reinforcement') {
+      append('armies-placed', {
+        playerId: actingPlayerId,
+        actingPlayerId,
+        territoryId: targetTerritoryId,
+        primaryTerritoryId: targetTerritoryId,
+        armyCount: 1,
+      });
+    } else if (kind === 'fortification') {
+      append('fortification-completed', {
+        playerId: actingPlayerId,
+        actingPlayerId,
+        territoryId: targetTerritoryId,
+        sourceTerritoryId,
+        targetTerritoryId,
+        primaryTerritoryId: targetTerritoryId,
+        armyCount: 1,
+      });
+    } else {
+      append('combat', {
+        playerId: actingPlayerId,
+        actingPlayerId,
+        defenderPlayerId: match.territories[combatTarget.id]!.ownerId,
+        territoryId: combatTarget.id,
+        sourceTerritoryId,
+        targetTerritoryId: combatTarget.id,
+        primaryTerritoryId: combatTarget.id,
+        attackerLosses: 0,
+        defenderLosses: 1,
+      });
+      append('territory-captured', {
+        playerId: actingPlayerId,
+        actingPlayerId,
+        previousOwnerId: match.territories[combatTarget.id]!.ownerId,
+        territoryId: combatTarget.id,
+        sourceTerritoryId,
+        targetTerritoryId: combatTarget.id,
+        primaryTerritoryId: combatTarget.id,
+      });
+      append('player-eliminated', {
+        playerId: Object.keys(match.players).find(
+          (playerId) => playerId !== actingPlayerId,
+        ),
+        actingPlayerId,
+        eliminatedPlayerId: Object.keys(match.players).find(
+          (playerId) => playerId !== actingPlayerId,
+        ),
+      });
+    }
     useGameStore.setState({ match: { ...match, events } });
-    return { actingPlayerId, sourceTerritoryId, targetTerritoryId: target.id };
+    return { actingPlayerId, sourceTerritoryId, targetTerritoryId };
   },
   changeActionTrackingMatch: () => {
     const match = useGameStore.getState().match;
