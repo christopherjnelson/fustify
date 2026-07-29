@@ -278,7 +278,7 @@ test('local bot playback pauses safely and resumes with the selected pacing', as
         (element) => (element as HTMLDetailsElement).open,
       ))
     )
-      await page.getByText('Game', { exact: true }).click();
+      await page.getByLabel('Settings').click();
   };
   await openGameMenu();
   const menuPacing = page.getByRole('group', { name: 'Bot pacing' });
@@ -321,7 +321,7 @@ test('local bot playback pauses safely and resumes with the selected pacing', as
       ),
     )
     .toBe('fast');
-  await page.getByText('Game', { exact: true }).click();
+  await page.getByLabel('Settings').click();
   await page.waitForTimeout(350);
   expect(await savedEventCount()).toBe(beforeDeliberateAction);
 

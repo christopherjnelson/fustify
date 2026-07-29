@@ -9,6 +9,7 @@ import {
   PausedBotStatus,
   PlayerViewModeSelector,
   ReinforcementPlacementControls,
+  SettingsMenuSummary,
   TerritorySelectionCard,
   type TerritorySummaryData,
 } from './TerritoryHud';
@@ -86,9 +87,7 @@ describe('active-match HUD utilities', () => {
     expect(markup).toContain('Instant');
     expect(markup).toContain('Fast · 1 second');
     expect(markup).toContain('Deliberate · 5 seconds');
-    expect(markup).toContain(
-      '<input type="range" min="0" max="2" step="1"',
-    );
+    expect(markup).toContain('<input type="range" min="0" max="2" step="1"');
     expect(markup).toContain('name="bot-pacing-game-menu" value="1"');
     expect(markup).toContain('aria-valuetext="Fast · 1 second"');
   });
@@ -103,7 +102,7 @@ describe('active-match HUD utilities', () => {
           createElement(
             'details',
             { className: 'game-menu' },
-            createElement('summary', null, 'Game'),
+            createElement(SettingsMenuSummary),
           ),
         ),
       );
@@ -111,7 +110,11 @@ describe('active-match HUD utilities', () => {
       expect(markup).not.toMatch(/>\s*Debug\s*</);
       expect(markup).not.toContain('aria-pressed=');
       expect(markup).not.toContain('Territory list');
-      expect(markup).toContain('<summary>Game</summary>');
+      expect(markup).toContain(
+        '<summary aria-label="Settings" title="Settings">',
+      );
+      expect(markup).toContain('<svg viewBox="0 0 24 24" aria-hidden="true"');
+      expect(markup).not.toContain('>Game</summary>');
     },
   );
 

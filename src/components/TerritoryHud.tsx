@@ -78,6 +78,17 @@ export function BotPlaybackMenuAction({
   );
 }
 
+export function SettingsMenuSummary() {
+  return (
+    <summary aria-label="Settings" title="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4A2 2 0 0 0 4 9.9l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    </summary>
+  );
+}
+
 export function PausedBotStatus({
   activePlayerName,
   onResume,
@@ -1083,7 +1094,7 @@ export function TerritoryHud({
 
           <HudUtilityRow>
             <details className="game-menu">
-              <summary>Game</summary>
+              <SettingsMenuSummary />
               <div>
                 <TurnSoundToggle />
                 {hasLocalBots && <BotPacingSelector context="game-menu" />}

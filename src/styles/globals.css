@@ -3648,7 +3648,11 @@ select:focus-visible {
 }
 
 .game-menu summary {
-  padding: 7px 9px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
   color: #9fb3c5;
   border: 1px solid rgba(139, 177, 209, 0.16);
   border-radius: 7px;
@@ -3657,6 +3661,16 @@ select:focus-visible {
   font-size: 0.64rem;
   font-weight: 700;
   list-style: none;
+}
+
+.game-menu summary svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
 }
 
 .game-menu > div {
