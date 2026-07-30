@@ -124,7 +124,7 @@ const publicRoomSchema = z.object({
   room_state: z.enum(['waiting', 'full']),
   room_seed: z.string().trim().min(1).max(64),
   territory_count: z.number().int().min(12).max(48),
-  continent_count: z.number().int().min(2).max(5),
+  continent_count: z.number().int().min(2).max(6),
   assignment_mode: z.enum(['random', 'player-draft']),
   thumbnail_path: z.string().nullable(),
   thumbnail_version: z.number().int().nonnegative(),

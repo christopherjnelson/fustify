@@ -223,6 +223,41 @@ describe('public room Discord announcement delivery', () => {
     expect(outbound).not.toHaveBeenCalled();
   });
 
+  it('accepts six-continent rooms and rejects values above the supported cap', async () => {
+    const accepted = storeFixture({
+      room: { ...room, continentCount: 6 },
+    });
+    const acceptedOutbound = vi.fn<typeof fetch>(async () =>
+      Response.json({ id: '123456789012345678' }),
+    );
+
+    const acceptedResponse = await handleAnnouncementRequest(
+      request(),
+      dependencies(accepted.store, acceptedOutbound),
+    );
+
+    expect(acceptedResponse.status).toBe(200);
+    expect(accepted.state.status).toBe('sent');
+    expect(acceptedOutbound).toHaveBeenCalledTimes(1);
+
+    const rejected = storeFixture({
+      room: { ...room, continentCount: 7 },
+    });
+    const rejectedOutbound = vi.fn<typeof fetch>();
+
+    const rejectedResponse = await handleAnnouncementRequest(
+      request(),
+      dependencies(rejected.store, rejectedOutbound),
+    );
+
+    expect(rejectedResponse.status).toBe(502);
+    expect(rejected.state).toMatchObject({
+      status: 'failed',
+      error: 'invalid_room_configuration',
+    });
+    expect(rejectedOutbound).not.toHaveBeenCalled();
+  });
+
   it('uses wait=true, disables mentions, and marks a confirmed Discord message sent', async () => {
     const fixture = storeFixture();
     const outbound = vi.fn<typeof fetch>(async () =>

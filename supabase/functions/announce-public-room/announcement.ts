@@ -175,7 +175,7 @@ function hasValidLockedSettings(room: AnnouncementRoom): boolean {
     room.territoryCount <= 48 &&
     Number.isInteger(room.continentCount) &&
     room.continentCount >= 2 &&
-    room.continentCount <= 5 &&
+    room.continentCount <= 6 &&
     room.continentCount <= room.territoryCount &&
     room.assignmentMode === 'random' &&
     Number.isInteger(room.maxSeats) &&

@@ -195,7 +195,7 @@ describe('public multiplayer discovery', () => {
         room_state: 'waiting',
         room_seed: 'atlas-prime-271',
         territory_count: 42,
-        continent_count: 5,
+        continent_count: 6,
         assignment_mode: 'random',
         thumbnail_path: '10000000-0000-4000-8000-000000000001/world.webp',
         thumbnail_version: 3,
