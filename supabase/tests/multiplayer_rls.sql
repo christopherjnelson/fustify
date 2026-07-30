@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(25);
+select extensions.plan(26);
 
 insert into auth.users (id, aud, role, is_anonymous, raw_app_meta_data, raw_user_meta_data)
 values
@@ -39,15 +39,24 @@ select extensions.is(
 );
 select extensions.is(
   (select continent_count from public.rooms limit 1),
-  5,
-  'new room defaults to five continents'
+  6,
+  'new room defaults to six continents'
 );
 select extensions.lives_ok(
   $$select public.update_room_settings(
     (select room_id from test_rooms where label = 'primary'),
-    'host-settings', 42, 5, 'random', 5
+    'host-settings', 42, 6, 'random', 5
   )$$,
   'host can update supported room settings'
+);
+select extensions.throws_ok(
+  $$select public.update_room_settings(
+    (select room_id from test_rooms where label = 'primary'),
+    'unsupported-seven', 42, 7, 'random', 5
+  )$$,
+  'P0001',
+  'invalid_settings',
+  'room settings reject more than six continents'
 );
 select extensions.is(
   (select seed from public.rooms limit 1),

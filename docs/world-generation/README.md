@@ -1,8 +1,9 @@
 # World-generation quality
 
-The version-4 normalized geometry prototype is documented separately in
+The version-4 normalized geometry generator is documented separately in
 [`normalized-generator-v2.md`](normalized-generator-v2.md).
-It is opt-in and does not change the production generator described below.
+It is the current public v2 generator and remains unchanged by the
+six-continent creation-default update.
 
 Fustify's default world remains 42 territories, 6 gameplay continents, and 4
 seats. Territory and rendered-area equality are not generation goals. A valid

@@ -80,9 +80,7 @@ export function SeedControls() {
         </label>
       </div>
       <p className="setup-guidance">
-        Recommended world: 42 territories and 5 continents. New worlds are
-        temporarily capped at 5 continents while 6-continent generation is
-        investigated.
+        Recommended world: 42 territories and 6 continents.
       </p>
       {(warning || error) && (
         <p

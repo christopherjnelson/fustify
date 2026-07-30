@@ -805,7 +805,7 @@ function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
                     <input
                       type="number"
                       min={2}
-                      max={5}
+                      max={6}
                       value={settings.continent_count}
                       disabled={!settingsEditable || busy !== null}
                       onChange={(event) => {

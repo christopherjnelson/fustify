@@ -29,7 +29,7 @@ test('mobile lobby keeps room controls visible without horizontal clipping', asy
   try {
     await expect(page.getByTestId('room-code')).toBeVisible();
     await expect(page.getByTestId('seat-0')).toBeVisible();
-    await expect(page.getByLabel('Continents')).toHaveAttribute('max', '5');
+    await expect(page.getByLabel('Continents')).toHaveAttribute('max', '6');
     await expect(
       page.getByRole('spinbutton', { name: 'Seats' }),
     ).toHaveAttribute('max', '5');

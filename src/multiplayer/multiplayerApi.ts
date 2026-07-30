@@ -70,7 +70,7 @@ export function isPermanentMatchReadError(
 export const multiplayerRoomSettingsSchema = z.object({
   seed: z.string().trim().min(1).max(64),
   territoryCount: z.number().int().min(12).max(48),
-  continentCount: z.number().int().min(2).max(5),
+  continentCount: z.number().int().min(2).max(6),
   assignmentMode: z.literal('random'),
   maxSeats: z.number().int().min(2).max(5),
 });
@@ -104,7 +104,7 @@ export interface CreateRoomOptions {
 
 const DEFAULT_ROOM_SETTINGS = {
   territoryCount: 42,
-  continentCount: 5,
+  continentCount: 6,
   assignmentMode: 'random',
   maxSeats: 5,
 } as const;

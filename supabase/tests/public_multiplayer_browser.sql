@@ -103,7 +103,7 @@ set local role authenticated;
 select extensions.lives_ok(
   $$select public.update_room_settings(
     (select room_id from browser_test_rooms where label = 'primary'),
-    'locked-public-world', 18, 3, 'random', 3, 'Final Atlas'
+    'locked-public-world', 18, 6, 'random', 3, 'Final Atlas'
   )$$,
   'the private host can edit all advertised settings'
 );
@@ -114,7 +114,7 @@ select extensions.is(
     from public.rooms
     where id = (select room_id from browser_test_rooms where label = 'primary')
   ),
-  'Final Atlas:locked-public-world:18:3:3',
+  'Final Atlas:locked-public-world:18:6:3',
   'private edits persist canonically before publication'
 );
 
@@ -207,7 +207,7 @@ select extensions.is(
       maximum_players::text || ':' || assignment_mode
     from public.list_public_rooms()
   ),
-  'Final Atlas:locked-public-world:18:3:3:random',
+  'Final Atlas:locked-public-world:18:6:3:random',
   'public discovery returns the final locked stable configuration'
 );
 select extensions.is(

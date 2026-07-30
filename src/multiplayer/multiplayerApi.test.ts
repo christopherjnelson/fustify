@@ -39,7 +39,7 @@ describe('multiplayer room creation', () => {
       display_name: '',
       seed: 'quiet-harbor-321',
       territory_count: 42,
-      continent_count: 5,
+      continent_count: 6,
       assignment_mode: 'random',
       max_seats: 5,
       game_name: 'New Game',
@@ -77,6 +77,44 @@ describe('multiplayer room creation', () => {
       max_seats: 4,
       game_name: 'Night Orbit',
     });
+  });
+
+  it('accepts six continents, preserves five, and rejects seven', async () => {
+    const room = {
+      id: 'six-continent-room',
+      visibility: 'private',
+      status: 'waiting',
+      join_code: 'ABCD1234',
+    };
+    const rpc = vi.fn(async () => ({ data: room, error: null }));
+    const client = { rpc } as unknown as SupabaseClient<Database>;
+
+    for (const continentCount of [5, 6]) {
+      await expect(
+        createRoom(client, {
+          settings: {
+            seed: `supported-${continentCount}`,
+            territoryCount: 42,
+            continentCount,
+            assignmentMode: 'random',
+            maxSeats: 5,
+          },
+        }),
+      ).resolves.toBe(room);
+    }
+
+    await expect(
+      createRoom(client, {
+        settings: {
+          seed: 'unsupported-seven',
+          territoryCount: 42,
+          continentCount: 7,
+          assignmentMode: 'random',
+          maxSeats: 5,
+        },
+      }),
+    ).rejects.toThrow();
+    expect(rpc).toHaveBeenCalledTimes(2);
   });
 
   it('rejects a creation result that is not authoritative private waiting state', async () => {

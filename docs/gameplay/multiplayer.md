@@ -25,7 +25,8 @@ security harness, and complete two-browser winner test all pass.
 - `/multiplayer/match/:matchId` restores the persisted canonical world and
   mutable match snapshot. It never invents ownership or combat results locally.
 
-The host selects 12–48 territories, 2–5 continents, 2–5 seats, and a seed.
+New rooms default to 42 territories and 6 continents. The host selects 12–48
+territories, 2–6 continents, 2–5 seats, and a seed.
 Multiplayer accepts random assignment only; player draft remains unchanged in
 local play. There are no bots, bot takeover, mid-match joins, spectators,
 matchmaking, started-game browsing, chat, timers, kicking, or host migration.

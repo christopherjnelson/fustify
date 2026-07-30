@@ -36,6 +36,7 @@ Migration order:
 19. `20260727055631_multiplayer_match_launch_state.sql`
 20. `20260728042940_expand_admin_operations.sql`
 21. `20260728203358_unique_usernames_discord_onboarding.sql`
+22. `20260730002339_enable_six_continent_worlds.sql`
 
 The authority migration extends `matches`, creates append-only
 `match_commands`, adds member-scoped read RLS, removes browser execution of the
@@ -77,6 +78,12 @@ advertised settings after publication, clears published room codes, narrows
 public joining to an ID-only result, and makes the private-to-public update the
 sole Discord enqueue event. Existing public rooms are immediately treated as
 published and locked; existing private waiting rooms remain editable.
+
+The six-continent migration widens new-room continent validation from five to
+six and makes 42/6 the default for omitted room settings. It preserves existing
+rooms, generator versions 3 and 4, five-continent selection, and the five-seat
+limit. Deploy the compatible public-room reader and announcement validator
+before applying it.
 
 The multiplayer-match-launch-state migration adds a service-role-only launch
 lease. It moves a validated room to `active` before server-side world

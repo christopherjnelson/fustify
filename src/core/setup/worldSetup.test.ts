@@ -144,11 +144,16 @@ describe('versioned world setup URLs', () => {
     ).not.toThrow();
   });
 
-  it('caps newly created worlds at five continents and five players', () => {
+  it('defaults new worlds to six continents and caps creation at six', () => {
+    expect(DEFAULT_WORLD_SETUP).toMatchObject({
+      territoryCount: 42,
+      continentCount: 6,
+      playerCount: 4,
+    });
     expect(
       normalizeNewWorldSetup({
         territoryCount: 42,
-        continentCount: 6,
+        continentCount: 7,
         playerCount: 6,
       }),
     ).toMatchObject({
@@ -158,7 +163,13 @@ describe('versioned world setup URLs', () => {
     });
   });
 
-  it('keeps existing six-continent and six-player URLs compatible', () => {
+  it('keeps explicit five-continent worlds and existing six-player URLs compatible', () => {
+    expect(
+      normalizeNewWorldSetup({
+        territoryCount: 42,
+        continentCount: 5,
+      }),
+    ).toMatchObject({ continentCount: 5 });
     expect(
       parseWorldSetup(
         'v=1&seed=existing-six&territories=42&continents=6&players=6',
