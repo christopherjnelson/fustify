@@ -1,6 +1,5 @@
+## Fustify
 <img width="1827" height="875" alt="Screenshot_20260731_084131" src="https://github.com/user-attachments/assets/48362323-f810-4962-88e6-aaeb5355514b" />
-# Fustify
-
 **Strategy on a different world every time.**
 
 Fustify is a browser strategy game played across deterministic, procedurally
