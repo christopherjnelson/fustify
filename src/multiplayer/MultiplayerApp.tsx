@@ -20,6 +20,7 @@ import {
 import {
   claimSeat,
   createRoom,
+  defaultMultiplayerRoomSettings,
   fetchPublicRooms,
   fetchRoomState,
   formatRoomCode,
@@ -190,13 +191,10 @@ function Lobby() {
         runAuthorized(() =>
           createRoom(client, {
             name,
-            settings: {
-              seed: generateReadableWorldSeed(),
-              territoryCount: 42,
-              continentCount: 5,
-              assignmentMode: 'random',
+            settings: defaultMultiplayerRoomSettings(
+              generateReadableWorldSeed(),
               maxSeats,
-            },
+            ),
           }),
         ),
       joinWithCode: (code) =>

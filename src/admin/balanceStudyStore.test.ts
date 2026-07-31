@@ -46,15 +46,49 @@ describe('balance study report and checkpoint store', () => {
       false,
     );
   });
-  it('retains completed history without deleting active checkpoint data', async () => {
+  it('retains completed history and deletes only completed checkpoints', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'fustify-study-history-'));
-    for (let index = 0; index < 3; index += 1)
-      await finalizeStudy(
-        { ...balanceStudyFixtures.completed, id: `balance-complete-${index}` },
-        2,
+    const activeCheckpoint = {
+      schemaVersion: 1 as const,
+      runId: balanceStudyFixtures.running.id,
+      preset: 'quick',
+      config: BALANCE_PRESETS.quick,
+      configHash: stableHash(BALANCE_PRESETS.quick),
+      matrixHash: stableHash(createStudyMatrix(BALANCE_PRESETS.quick)),
+      commit: balanceStudyFixtures.running.repository.commit,
+      startedAt: balanceStudyFixtures.running.startedAt,
+      runtimeMs: 10,
+      completed: [],
+    };
+    await writeStudyProgress(
+      balanceStudyFixtures.running,
+      activeCheckpoint,
+      root,
+    );
+    for (let index = 0; index < 3; index += 1) {
+      const report = {
+        ...balanceStudyFixtures.completed,
+        id: `balance-complete-${index}`,
+      };
+      await writeStudyProgress(
+        { ...report, status: 'running', completedAt: undefined },
+        { ...activeCheckpoint, runId: report.id },
         root,
       );
+      await finalizeStudy(report, 2, root);
+    }
     expect(await readdir(studyPaths(root).history)).toHaveLength(2);
+    await expect(
+      access(
+        resolve(
+          studyPaths(root).checkpoints,
+          `${balanceStudyFixtures.running.id}.json`,
+        ),
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      access(resolve(studyPaths(root).checkpoints, 'balance-complete-2.json')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
   it('rejects traversal-like run IDs', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'fustify-study-safe-'));

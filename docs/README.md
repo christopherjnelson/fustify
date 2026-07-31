@@ -25,8 +25,6 @@ routes coding agents to the appropriate runbook.
   bundle analysis and budgets
 - [`operations/deployment.md`](operations/deployment.md): droplet deployment,
   rollback, retention, and recovery
-- [`performance/bundle-budget-audit.md`](performance/bundle-budget-audit.md):
-  detailed bundle-budget audit
 
 ## Product systems
 
@@ -35,8 +33,3 @@ routes coding agents to the appropriate runbook.
 - [`world-generation/normalized-generator-v2.md`](world-generation/normalized-generator-v2.md):
   normalized-generator design
 - [`brand/README.md`](brand/README.md): visual identity and asset usage
-
-## History
-
-- [`history/handoff.md`](history/handoff.md): July 2026 implementation handoff;
-  useful context, but not a current operational runbook

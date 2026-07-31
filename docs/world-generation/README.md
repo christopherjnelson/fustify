@@ -118,12 +118,15 @@ WORLD_AUDIT_PHASE=my-review pnpm audit:world-visual
 ```
 
 The acceptance command rejects hard or severe findings. The audit command is
-non-blocking so a developer can preserve an investigation phase. Both use the
-real UI, neutral preview, 1366×768 full matrix, selected responsive fixtures at
-1920×1080 and 390×844, one minimap, and exact globe orientations at longitudes
-0°, 90°, 180°, and 270° with 12° latitude and distance 5.2. Results are ignored
-under `.fustify/reports/world-generation/<phase>/`; `index.html` links every
-capture and `summary.json` records categories.
+non-blocking so a developer can capture an investigation phase. Each run clears
+its selected phase directory before capture, preventing stale fixtures from
+surviving into the report. Use distinct phase names when comparison evidence
+must coexist. Both commands use the real UI, neutral preview, 1366×768 full
+matrix, selected responsive fixtures at 1920×1080 and 390×844, one minimap,
+and exact globe orientations at longitudes 0°, 90°, 180°, and 270° with 12°
+latitude and distance 5.2. Results are ignored under
+`.fustify/reports/world-generation/<phase>/`; `index.html` links every capture
+and `summary.json` records categories.
 
 For a before/after study, run the audit with `WORLD_AUDIT_PHASE=baseline`
 before generator edits and `WORLD_AUDIT_PHASE=corrected` after them. Never

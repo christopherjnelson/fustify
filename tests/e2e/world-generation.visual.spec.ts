@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { analyzeContinentQuality } from '../../src/core/generation/continentQuality';
 import {
@@ -11,6 +11,12 @@ import {
 const phase = process.env.WORLD_AUDIT_PHASE ?? 'corrected';
 const allowFailures = process.env.WORLD_AUDIT_ALLOW_FAILURES === '1';
 const artifactRoot = path.resolve('.fustify/reports/world-generation', phase);
+
+test.beforeAll(async (_fixtures, testInfo) => {
+  if (testInfo.project.name !== 'desktop-1920') return;
+  await rm(artifactRoot, { recursive: true, force: true });
+  await mkdir(artifactRoot, { recursive: true });
+});
 
 async function openWorldThroughUi(
   page: Page,

@@ -166,7 +166,13 @@ The runner deliberately uses one worker. Sequential execution keeps aggregation 
 
 ## Reports and interpretation
 
-Artifacts are ignored by Git under `.fustify/reports/studies/`: `latest.json`, `history/<run-id>.json`, and `checkpoints/<run-id>.json`. Reports use dedicated schema version 1. Writes use same-directory temporary files and atomic rename. Completed history retains the newest 20 reports; active checkpoints are never removed by retention.
+Artifacts are ignored by Git under `.fustify/reports/studies/`: `latest.json`,
+`history/<run-id>.json`, and `checkpoints/<run-id>.json`. Reports use dedicated
+schema version 1. Writes use same-directory temporary files and atomic rename.
+Completed history retains the newest 20 reports. Successful finalization writes
+the compact history report before deleting that run's checkpoint; interrupted
+checkpoints remain available for resume. Use `pnpm clean:reports --dry-run`
+before explicitly purging all local research history.
 
 Hard failures include only engine errors and invariant failures. Warnings
 separately classify overall unresolved rate, configuration turn/cap rate,

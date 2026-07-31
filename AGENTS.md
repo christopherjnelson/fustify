@@ -25,12 +25,10 @@ lives under `docs/`; load only the guides relevant to the task:
 - Generator invariants, visual audits, and normalized-generator design:
   [`docs/world-generation/README.md`](docs/world-generation/README.md)
 - Brand assets and usage: [`docs/brand/README.md`](docs/brand/README.md)
-- Historical implementation handoff (context only, not a current runbook):
-  [`docs/history/handoff.md`](docs/history/handoff.md)
 
 When guidance conflicts, follow this file first, then the current domain
-runbook, then historical notes. Update the relevant domain guide when behavior
-or operational commands change.
+runbook. Update the relevant domain guide when behavior or operational commands
+change.
 
 ## Required visual workflow
 
