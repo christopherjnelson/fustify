@@ -10,6 +10,7 @@ import { territoryFillColor } from '../presentation/territoryVisuals';
 import { SeaRouteOverlay } from '../components/SeaRouteOverlay';
 import { TerritoryOverlay } from '../components/TerritoryOverlay';
 import { GlobeLabels } from '../components/GlobeLabels';
+import { GlobeAtmosphere, GlobeLighting } from '../components/GlobeAppearance';
 
 const NO_LEGAL_ROUTE_TARGETS = new Set<string>();
 
@@ -89,17 +90,7 @@ function ReadonlyPlanet({ planet }: { planet: PlanetDefinition }) {
         showNeutralPreviewRoutes
       />
       <GlobeLabels planet={planet} />
-      <mesh scale={1.045}>
-        <sphereGeometry args={[PLANET_RADIUS, 48, 32]} />
-        <meshBasicMaterial
-          color="#69b9df"
-          transparent
-          opacity={0.055}
-          side={THREE.BackSide}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
+      <GlobeAtmosphere />
     </group>
   );
 }
@@ -115,13 +106,7 @@ export function ReadonlyGlobe({ planet }: { planet: PlanetDefinition }) {
     >
       <color attach="background" args={['#050914']} />
       <fog attach="fog" args={['#050914', 10, 26]} />
-      <ambientLight intensity={0.72} />
-      <directionalLight position={[4, 5, 6]} intensity={2.1} color="#e7f4ff" />
-      <directionalLight
-        position={[-4, -2, -3]}
-        intensity={0.65}
-        color="#4569b2"
-      />
+      <GlobeLighting />
       <Stars radius={34} depth={14} count={900} factor={2} fade speed={0.25} />
       <ReadonlyPlanet planet={planet} />
       <OrbitControls

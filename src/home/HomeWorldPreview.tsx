@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import * as THREE from 'three';
+import { GlobeLighting } from '../components/GlobeAppearance';
 import { NeutralPlanet } from '../components/NeutralPlanet';
 import type { PlanetDefinition } from '../core/types/planet';
 import {
@@ -191,17 +192,7 @@ function PreviewCanvas({
         fallback={<span>WebGL unavailable.</span>}
         onCreated={({ gl }) => setCanvas(gl.domElement)}
       >
-        <ambientLight intensity={0.72} />
-        <directionalLight
-          position={[4, 5, 6]}
-          intensity={2.1}
-          color="#e7f4ff"
-        />
-        <directionalLight
-          position={[-4, -2, -3]}
-          intensity={0.65}
-          color="#4569b2"
-        />
+        <GlobeLighting />
         <RevealPlanet
           key={planet.seed}
           planet={planet}

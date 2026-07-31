@@ -12,6 +12,11 @@ interface TerritoryOverlayProps {
   emphasized: boolean;
 }
 
+export const CONTINENT_BORDER_COLOR = '#c89b37';
+export const CONTINENT_BORDER_OPACITY = 0.72;
+export const COASTLINE_COLOR = '#e0b943';
+export const COASTLINE_OPACITY = 0.92;
+
 function boundaryGeometry(
   sphere: IcosphereData,
   surfaceCells: readonly SurfaceCellDefinition[],
@@ -110,17 +115,17 @@ export function TerritoryOverlay({
       </lineSegments>
       <lineSegments geometry={continentBorders} renderOrder={3}>
         <lineBasicMaterial
-          color={emphasized ? '#ffe29a' : '#d8ad62'}
+          color={emphasized ? '#ffe9a3' : CONTINENT_BORDER_COLOR}
           transparent
-          opacity={emphasized ? 1 : 0.48}
+          opacity={emphasized ? 1 : CONTINENT_BORDER_OPACITY}
           depthWrite={false}
         />
       </lineSegments>
       <lineSegments geometry={coastlines} renderOrder={4}>
         <lineBasicMaterial
-          color={emphasized ? '#bcecff' : '#67b5d4'}
+          color={emphasized ? '#ffdc70' : COASTLINE_COLOR}
           transparent
-          opacity={emphasized ? 1 : 0.78}
+          opacity={emphasized ? 1 : COASTLINE_OPACITY}
           depthWrite={false}
         />
       </lineSegments>

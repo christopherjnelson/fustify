@@ -20,6 +20,7 @@ import { useGameStore } from '../state/useGameStore';
 import { multiplayerInteractionCapabilities } from '../multiplayer/interactionCapabilities';
 import { ArmyMarkers } from './ArmyMarkers';
 import { GlobeLabels } from './GlobeLabels';
+import { GlobeAtmosphere } from './GlobeAppearance';
 import { GraphDebugOverlay } from './GraphDebugOverlay';
 import { SeaRouteOverlay } from './SeaRouteOverlay';
 import { TerritoryOverlay } from './TerritoryOverlay';
@@ -342,17 +343,7 @@ export function Planet({ planet }: PlanetProps) {
         </>
       )}
       <GraphDebugOverlay planet={planet} visible={debugView} />
-      <mesh scale={1.045}>
-        <sphereGeometry args={[PLANET_RADIUS, 48, 32]} />
-        <meshBasicMaterial
-          color="#69b9df"
-          transparent
-          opacity={0.055}
-          side={THREE.BackSide}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
+      <GlobeAtmosphere />
     </group>
   );
 }

@@ -2,6 +2,7 @@ import { Stars } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
 import { useGameStore } from '../state/useGameStore';
 import { CameraController } from './CameraController';
+import { GlobeLighting } from './GlobeAppearance';
 import { Planet } from './Planet';
 import { isVisualReview } from '../browser/visualReview';
 
@@ -35,17 +36,7 @@ export function GlobeScene() {
       >
         <color attach="background" args={['#050914']} />
         <fog attach="fog" args={['#050914', 10, 26]} />
-        <ambientLight intensity={0.72} />
-        <directionalLight
-          position={[4, 5, 6]}
-          intensity={2.1}
-          color="#e7f4ff"
-        />
-        <directionalLight
-          position={[-4, -2, -3]}
-          intensity={0.65}
-          color="#4569b2"
-        />
+        <GlobeLighting />
         {!visualReview && (
           <Stars
             radius={34}

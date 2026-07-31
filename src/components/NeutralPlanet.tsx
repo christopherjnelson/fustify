@@ -1,12 +1,11 @@
 import { useCallback, useMemo } from 'react';
-import * as THREE from 'three';
 import { getPlanetSurfaceSphere } from '../core/geometry/planetSurface';
-import { PLANET_RADIUS } from '../core/generation/constants';
 import type { PlanetDefinition } from '../core/types/planet';
 import type { TerritoryDefinition } from '../core/types/territory';
 import { PLANET_ROTATION } from '../presentation/globeOrientation';
 import { territoryFillColor } from '../presentation/territoryVisuals';
 import { PlanetSurfaceMeshes } from './PlanetSurfaceMeshes';
+import { GlobeAtmosphere } from './GlobeAppearance';
 import { SeaRouteOverlay } from './SeaRouteOverlay';
 import { TerritoryOverlay } from './TerritoryOverlay';
 
@@ -40,17 +39,7 @@ export function NeutralPlanet({ planet }: { planet: PlanetDefinition }) {
         debugView={false}
         showNeutralPreviewRoutes
       />
-      <mesh scale={1.045}>
-        <sphereGeometry args={[PLANET_RADIUS, 48, 32]} />
-        <meshBasicMaterial
-          color="#69b9df"
-          transparent
-          opacity={0.055}
-          side={THREE.BackSide}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
+      <GlobeAtmosphere />
     </group>
   );
 }
