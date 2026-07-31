@@ -1,8 +1,10 @@
-## Fustify
+# Fustify
 
 **Strategy on a different world every time.**
 
-<img width="1827" height="875" alt="Screenshot_20260731_084131" src="https://github.com/user-attachments/assets/48362323-f810-4962-88e6-aaeb5355514b" />
+<img width="1827" height="875" alt="procedural generated strategy" src="https://github.com/user-attachments/assets/48362323-f810-4962-88e6-aaeb5355514b" />
+
+**[Play the live beta →](https://dev.fustify.com)**
 
 Fustify is a browser strategy game played on deterministic, procedurally
 generated spherical worlds. Registered players can play locally against
@@ -192,3 +194,18 @@ runbooks are:
 
 Architecture and operational behavior belong in the relevant active runbook;
 Git history is the archive for superseded implementation milestones.
+
+## License
+
+Fustify is source-available under the
+[PolyForm Noncommercial License 1.0.0](./LICENSE).
+
+You may use, study, modify, and run Fustify for personal and other
+noncommercial purposes. Commercial use—including paid or advertising-supported
+hosting, resale, or monetized derivative works—requires prior written permission
+from Christopher J. Nelson.
+
+The Fustify name and logo may not be used to imply that a derivative project is
+official, affiliated with, or endorsed by Fustify.
+
+Copyright © 2026 Christopher J. Nelson.
