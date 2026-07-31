@@ -2,6 +2,11 @@ import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import type { GameAction } from '../core/game/types';
 import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
+import {
+  DEFAULT_NEW_CONTINENT_COUNT,
+  DEFAULT_WORLD_SETUP,
+  MAX_NEW_PLAYER_COUNT,
+} from '../core/setup/worldSetup';
 import type { Database, Tables } from './database.types';
 import type { AuthoritativeCommandResult } from './gameProtocol';
 import { MULTIPLAYER_ERRORS, multiplayerError } from './multiplayerError';
@@ -103,11 +108,22 @@ export interface CreateRoomOptions {
 }
 
 const DEFAULT_ROOM_SETTINGS = {
-  territoryCount: 42,
-  continentCount: 6,
+  territoryCount: DEFAULT_WORLD_SETUP.territoryCount,
+  continentCount: DEFAULT_NEW_CONTINENT_COUNT,
   assignmentMode: 'random',
-  maxSeats: 5,
+  maxSeats: MAX_NEW_PLAYER_COUNT,
 } as const;
+
+export function defaultMultiplayerRoomSettings(
+  seed: string,
+  maxSeats: number = DEFAULT_ROOM_SETTINGS.maxSeats,
+): MultiplayerRoomSettings {
+  return multiplayerRoomSettingsSchema.parse({
+    ...DEFAULT_ROOM_SETTINGS,
+    seed,
+    maxSeats,
+  });
+}
 
 const publicRoomPlayerSchema = z.object({
   displayName: z.string().min(1).max(40),
@@ -344,12 +360,11 @@ export async function createRoom(
   client: SupabaseClient<Database>,
   options: CreateRoomOptions = {},
 ): Promise<Room> {
-  const settings = multiplayerRoomSettingsSchema.parse(
-    options.settings ?? {
-      ...DEFAULT_ROOM_SETTINGS,
-      seed: (options.generateSeed ?? generateReadableWorldSeed)(),
-    },
-  );
+  const settings = options.settings
+    ? multiplayerRoomSettingsSchema.parse(options.settings)
+    : defaultMultiplayerRoomSettings(
+        (options.generateSeed ?? generateReadableWorldSeed)(),
+      );
   const args = {
     // Retained for the deployed RPC signature; the server ignores this value.
     display_name: '',

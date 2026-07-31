@@ -59,6 +59,19 @@ Future agents should run the appropriate report-enabled profile, keep `/admin`
 open, and include the resulting run ID in their handoff. Never claim that an
 interrupted, incomplete, pending, or skipped suite passed.
 
+## Generated-output maintenance
+
+Use `pnpm clean --dry-run` to preview routine removal of reproducible builds,
+coverage, Playwright output, bundle analysis, and release staging. `pnpm clean`
+performs that bounded cleanup without touching verification or research
+history.
+
+Use `pnpm clean:reports --dry-run` before intentionally removing all local
+verification, world-generation, balance-study, bot-simulation, and legacy
+image artifacts. `pnpm clean:all` combines report and transient cleanup.
+Targets are fixed inside the Fustify repository; the commands never remove
+`.env.local`, dependencies, or Supabase local state.
+
 ## Procedural-world visual audit
 
 World-generation changes use a focused Playwright path rather than gameplay
@@ -71,9 +84,11 @@ WORLD_AUDIT_PHASE=investigation pnpm audit:world-visual
 ```
 
 The acceptance command runs the checked-in seed matrix and fails hard
-structural or severe shape findings. The audit command preserves the same
+structural or severe shape findings. The audit command captures the same
 evidence without failing on findings, which is useful for a pre-fix baseline.
-Artifacts live under ignored
+Each run replaces its selected phase directory before capture, preventing
+removed fixtures from contaminating later summaries. Use different phase names
+when a before/after comparison must coexist. Artifacts live under ignored
 `.fustify/reports/world-generation/<phase>/`. Inspect `index.html`, every
 known-bad capture, the complete laptop matrix, and responsive full-page images;
 passing DOM/metric assertions do not replace image review. Camera captures use

@@ -57,13 +57,25 @@ configuration. This keeps the production client graph measurable even when a
 developer or CI runner has no `.env.local`; the placeholders are used only by
 the analysis build and are never credentials.
 
-## Current baseline, route map, and rationale
+## Reproducibility and policy
 
-See **[`../performance/bundle-budget-audit.md`](../performance/bundle-budget-audit.md)**
-for the audited commit, tool versions, reproducibility evidence, the exact
-contributing asset list for every route, chunk composition, historical growth
-attribution, dependency duplication findings, the optimizations applied, and the
-rationale and headroom behind each budget above.
+Run `pnpm clean` before collecting a formal comparison, then run
+`pnpm bundle:check` twice with the same Node version. Vite content hashes and
+the emitted asset bytes should agree between clean runs; `audit.json` may differ
+only in its timestamp. Record the Node version with any measurement because
+cross-version gzip totals are not evidence of application growth.
+
+Review every budget failure. Do not raise a limit merely to make the check
+pass. A feature adding more than approximately 15 KB gzip to an initial route
+requires an explicit route/chunk explanation. Protected gameplay and admin
+graphs must stay lazy; `tests/e2e/bundle-isolation.spec.ts` enforces that
+boundary.
+
+Rebaseline only for an intentional feature milestone after two clean,
+reproducible builds. Update this runbook, the relevant constants, tests, and
+completion report together. Treat a tiny raw largest-chunk overage as possible
+threshold noise, but investigate any meaningful gzip increase on an initial
+route.
 
 ## Investigating future growth
 
@@ -72,6 +84,6 @@ failure, then open the generated treemap for module-level detail. Check for new
 dynamic-entry dependencies, duplicate package versions, barrels that pull
 unexpected code, import-time side effects, and any test or Node-only paths.
 
-Do not raise a budget to make the check pass. The ongoing bundle policy,
-including the ~15 KB per-feature investigation threshold and the rebaselining
-rules, is documented in the audit.
+Do not raise a budget to make the check pass. Explain the route graph, identify
+the contributing assets, and preserve lazy boundaries before considering an
+intentional rebaseline.

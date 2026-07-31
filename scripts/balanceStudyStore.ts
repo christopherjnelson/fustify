@@ -82,6 +82,17 @@ export async function removeStudyHeartbeat(
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
 }
+
+export async function removeStudyCheckpoint(
+  runId: string,
+  directory = STUDY_ROOT,
+) {
+  try {
+    await unlink(resolve(studyPaths(directory).checkpoints, `${runId}.json`));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+}
 export async function atomicStudyWrite(path: string, value: unknown) {
   await mkdir(resolve(path, '..'), { recursive: true });
   const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
@@ -125,6 +136,7 @@ export async function finalizeStudy(
   await atomicStudyWrite(paths.latest, parsed);
   await atomicStudyWrite(resolve(paths.history, `${report.id}.json`), parsed);
   await removeStudyHeartbeat(report.id, directory);
+  await removeStudyCheckpoint(report.id, directory);
   const files = (await readdir(paths.history))
     .filter((name) => name.endsWith('.json'))
     .sort()

@@ -4,7 +4,7 @@
 // example the local event log) can translate multiplayer errors without
 // pulling the whole multiplayer room API — and therefore its Supabase and zod
 // schema graph — into the local game chunk. See
-// docs/performance/bundle-budget-audit.md.
+// docs/operations/bundle-analysis.md.
 
 export const MULTIPLAYER_ERRORS: Record<string, string> = {
   already_joined: 'You already belong to this room.',

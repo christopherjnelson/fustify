@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Database } from './database.types';
 import {
   createRoom,
+  defaultMultiplayerRoomSettings,
   fetchPublicRooms,
   joinPublicRoom,
   joinRoom,
@@ -21,6 +22,16 @@ afterEach(() => {
 });
 
 describe('multiplayer room creation', () => {
+  it('builds browser room defaults from the canonical six-continent setup', () => {
+    expect(defaultMultiplayerRoomSettings('fresh-room-123', 4)).toEqual({
+      seed: 'fresh-room-123',
+      territoryCount: 42,
+      continentCount: 6,
+      assignmentMode: 'random',
+      maxSeats: 4,
+    });
+  });
+
   it('persists one freshly generated readable seed during room creation', async () => {
     const room = {
       id: 'room-id',

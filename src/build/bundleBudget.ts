@@ -5,7 +5,7 @@
 // I/O (reading the Vite manifest, stat-ing and gzipping assets) and hands the
 // resulting plain data to `evaluateBundleBudgets`.
 //
-// Budget semantics are documented in docs/performance/bundle-budget-audit.md.
+// Budget semantics are documented in docs/operations/bundle-analysis.md.
 // In short: a route budget is the transitive closure of *static* imports from
 // the HTML entry chunk plus the chunks that the router loads for that route.
 // Dynamic imports are excluded, because they are what code splitting is for;
@@ -84,7 +84,7 @@ export interface BundleEvaluation {
 /**
  * Route budgets for Fustify's hand-rolled router (see src/main.tsx and
  * src/browser/BrowserApp.tsx). Baselines and headroom rationale live in
- * docs/performance/bundle-budget-audit.md.
+ * docs/operations/bundle-analysis.md.
  */
 export const BUNDLE_BUDGETS: BundleBudgets = {
   routes: [
