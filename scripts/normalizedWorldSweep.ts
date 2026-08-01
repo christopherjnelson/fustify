@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  CURRENT_GENERATOR_PROFILE,
-  CURRENT_GENERATOR_VERSION,
+  LEGACY_GENERATOR_PROFILE,
+  LEGACY_GENERATOR_VERSION,
   NORMALIZED_GENERATOR_PROFILE,
   NORMALIZED_GENERATOR_VERSION,
 } from '../src/core/generation/constants';
@@ -88,7 +88,7 @@ function profileSample(
   seed: string,
   continentCount: number,
   generatorVersion:
-    typeof CURRENT_GENERATOR_VERSION | typeof NORMALIZED_GENERATOR_VERSION,
+    typeof LEGACY_GENERATOR_VERSION | typeof NORMALIZED_GENERATOR_VERSION,
 ): ProfileSample {
   const timings = emptyTimings();
   const timingObserver: GenerationTimingObserver = (phase, milliseconds) => {
@@ -182,7 +182,7 @@ for (let seedIndex = 0; seedIndex < seedCount; seedIndex += 1) {
   for (const continentCount of continentCounts) {
     try {
       currentSamples.push(
-        profileSample(seed, continentCount, CURRENT_GENERATOR_VERSION),
+        profileSample(seed, continentCount, LEGACY_GENERATOR_VERSION),
       );
       peakCurrentHeapBytes = Math.max(
         peakCurrentHeapBytes,
@@ -192,7 +192,7 @@ for (let seedIndex = 0; seedIndex < seedCount; seedIndex += 1) {
       failures.push({
         seed,
         continentCount,
-        profile: CURRENT_GENERATOR_PROFILE,
+        profile: LEGACY_GENERATOR_PROFILE,
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -371,7 +371,7 @@ const benchmarkConfigurations = [
 const representativeRuntime = [];
 for (const configuration of benchmarkConfigurations) {
   for (const generatorVersion of [
-    CURRENT_GENERATOR_VERSION,
+    LEGACY_GENERATOR_VERSION,
     NORMALIZED_GENERATOR_VERSION,
   ] as const) {
     const total: number[] = [];
@@ -400,8 +400,8 @@ for (const configuration of benchmarkConfigurations) {
     representativeRuntime.push({
       ...configuration,
       profile:
-        generatorVersion === CURRENT_GENERATOR_VERSION
-          ? CURRENT_GENERATOR_PROFILE
+        generatorVersion === LEGACY_GENERATOR_VERSION
+          ? LEGACY_GENERATOR_PROFILE
           : NORMALIZED_GENERATOR_PROFILE,
       totalMilliseconds: summary(total),
       phaseMilliseconds: Object.fromEntries(
@@ -422,7 +422,7 @@ const report = {
   pairedWorldCount: pairs.length,
   failureCount: failures.length,
   failureCountByProfile: Object.fromEntries(
-    [CURRENT_GENERATOR_PROFILE, NORMALIZED_GENERATOR_PROFILE].map((profile) => [
+    [LEGACY_GENERATOR_PROFILE, NORMALIZED_GENERATOR_PROFILE].map((profile) => [
       profile,
       failures.filter((failure) => failure.profile === profile).length,
     ]),

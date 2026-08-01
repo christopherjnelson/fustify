@@ -21,7 +21,7 @@ import {
 } from './buildConnections.ts';
 import {
   CONTINENT_PALETTE,
-  CURRENT_GENERATOR_VERSION,
+  LEGACY_GENERATOR_VERSION,
   DEFAULT_CONTINENT_COUNT,
   DEFAULT_GENERATOR_VERSION,
   DEFAULT_LAND_COVERAGE,
@@ -430,7 +430,7 @@ export function generatePlanet(
   const generatorVersion =
     options.generatorVersion ?? DEFAULT_GENERATOR_VERSION;
   if (
-    generatorVersion !== CURRENT_GENERATOR_VERSION &&
+    generatorVersion !== LEGACY_GENERATOR_VERSION &&
     generatorVersion !== NORMALIZED_GENERATOR_VERSION
   ) {
     throw new Error(`Unsupported world generator version ${generatorVersion}.`);
@@ -450,7 +450,7 @@ export function generatePlanet(
   const sphere = createIcosphere(PLANET_SUBDIVISIONS);
   const cellAdjacency = buildCellAdjacency(sphere);
   const terrain = generateTerrain(
-    `${normalizedSeed}|v${CURRENT_GENERATOR_VERSION}`,
+    `${normalizedSeed}|v${LEGACY_GENERATOR_VERSION}`,
     sphere,
     cellAdjacency,
     targetLandCoverage,
@@ -479,7 +479,7 @@ export function generatePlanet(
     cellAdjacency,
   );
   const routeRandom = createSeededRandom(
-    `${normalizedSeed}|routes|${CURRENT_GENERATOR_VERSION}`,
+    `${normalizedSeed}|routes|${LEGACY_GENERATOR_VERSION}`,
   );
   const additionalRouteCount = routeRandom.integer(0, 3);
   const seaRoutes = buildSeaRoutes(
@@ -500,7 +500,7 @@ export function generatePlanet(
     landAdjacency,
     borderWeights,
     continentCount,
-    `${normalizedSeed}|v${CURRENT_GENERATOR_VERSION}`,
+    `${normalizedSeed}|v${LEGACY_GENERATOR_VERSION}`,
   );
   options.timingObserver?.(
     'candidate-scoring',
@@ -508,7 +508,7 @@ export function generatePlanet(
   );
   const players = generatePlayers(playerCount);
   const detailRandom = createSeededRandom(
-    `${normalizedSeed}|details|${CURRENT_GENERATOR_VERSION}`,
+    `${normalizedSeed}|details|${LEGACY_GENERATOR_VERSION}`,
   );
   const geographicNames = generateGeographicNames(
     normalizedSeed,
@@ -602,7 +602,7 @@ export function generatePlanet(
 
   const planet: PlanetDefinition = {
     seed: normalizedSeed,
-    generatorVersion: CURRENT_GENERATOR_VERSION,
+    generatorVersion: LEGACY_GENERATOR_VERSION,
     territoryCount,
     continentCount,
     playerCount,

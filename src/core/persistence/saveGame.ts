@@ -3,7 +3,7 @@ import type { ApplicationMode } from '../appFlow';
 import type { MatchState } from '../game/types';
 import { generatePlanet } from '../generation/generatePlanet';
 import {
-  CURRENT_GENERATOR_VERSION,
+  LEGACY_GENERATOR_VERSION,
   DEFAULT_GENERATOR_VERSION,
   NORMALIZED_GENERATOR_VERSION,
   type WorldGeneratorVersion,
@@ -72,7 +72,7 @@ const worldSetupSchema = z.object({
   version: z.number().int(),
   generatorVersion: z
     .union([
-      z.literal(CURRENT_GENERATOR_VERSION),
+      z.literal(LEGACY_GENERATOR_VERSION),
       z.literal(NORMALIZED_GENERATOR_VERSION),
     ])
     .default(DEFAULT_GENERATOR_VERSION),
@@ -173,7 +173,7 @@ const currentSaveSchema = z.object({
   savedAt: z.string().datetime(),
   generatorVersion: z
     .union([
-      z.literal(CURRENT_GENERATOR_VERSION),
+      z.literal(LEGACY_GENERATOR_VERSION),
       z.literal(NORMALIZED_GENERATOR_VERSION),
     ])
     .default(DEFAULT_GENERATOR_VERSION),

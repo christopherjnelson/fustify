@@ -3,7 +3,7 @@ import { createIcosphere } from '../geometry/icosphere';
 import { sphericalTriangleArea } from '../geometry/sphericalGeometry';
 import { getPlanetSurfaceSphere } from '../geometry/planetSurface';
 import {
-  CURRENT_GENERATOR_VERSION,
+  LEGACY_GENERATOR_VERSION,
   DEFAULT_GENERATOR_VERSION,
   NORMALIZED_GENERATOR_VERSION,
   PLANET_SUBDIVISIONS,
@@ -71,7 +71,7 @@ describe('normalized world generator v2', () => {
       territoryCount: 42,
       continentCount: 5,
       playerCount: 4,
-      generatorVersion: CURRENT_GENERATOR_VERSION,
+      generatorVersion: LEGACY_GENERATOR_VERSION,
     });
     expect(defaultPlanet).toEqual(explicitNormalized);
     expect(defaultPlanet.generatorVersion).toBe(DEFAULT_GENERATOR_VERSION);
@@ -174,7 +174,7 @@ describe('normalized world generator v2', () => {
       const current = analyzePlanetGeometry(
         generatePlanet(seed, {
           ...NORMALIZED_OPTIONS,
-          generatorVersion: CURRENT_GENERATOR_VERSION,
+          generatorVersion: LEGACY_GENERATOR_VERSION,
         }),
       );
       const normalized = analyzePlanetGeometry(

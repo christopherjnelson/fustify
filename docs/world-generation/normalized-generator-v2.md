@@ -1,9 +1,10 @@
 # Normalized world generator v2
 
 Status: canonical production generator. Version 3 remains available as the
-explicit `v1-current` diagnostic profile.
+explicit `v1-legacy` diagnostic profile. Older `v1-current` URLs remain valid
+as a read-only compatibility alias.
 
-## Current pipeline (`v1-current`, generator version 3)
+## Legacy v1 pipeline (`v1-legacy`, generator version 3)
 
 1. `generatePlanet` trims the supplied seed and combines it with generator
    version 3.
@@ -118,12 +119,14 @@ topology and ownership cannot change.
 
 ## Compatibility strategy
 
-- Numeric generator version 3 is named `v1-current`; version 4 is named
+- Numeric generator version 3 is named `v1-legacy`; version 4 is named
   `v2-normalized`.
 - `generatePlanet` defaults to version 4. Explicit version 3 selection preserves
   the established v1 output and fingerprint.
 - A setup URL without `generator` infers version 4. Canonical v2 serialization
-  omits the parameter; explicit v1 URLs retain `generator=v1-current`.
+  omits the parameter; explicit v1 URLs use `generator=v1-legacy`. Existing
+  `generator=v1-current` URLs still parse as version 3 and serialize back to
+  the canonical legacy name.
 - New save schema data records the generator version in `worldSetup` as well as
   the existing top-level field. Missing version metadata resolves to version 4.
 - Hosted rooms persist generator version 4 by default. Lobby previews and

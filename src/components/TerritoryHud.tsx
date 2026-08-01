@@ -43,6 +43,10 @@ import {
 } from '../browser/botPacingVisibility';
 import { BotPacingSelector } from './BotPacingSelector';
 import { useActionTracking } from './actionTrackingContext';
+import {
+  mobileGameplayPanelReducer,
+  shouldExpandMobileActions,
+} from './mobileGameplayPanel';
 
 const PHASE_LABELS = {
   reinforce: 'Reinforce',
@@ -473,6 +477,7 @@ export function TerritoryHud({
   const [fortifyAmount, setFortifyAmount] = useState(1);
   const [reviewingGameOver, setReviewingGameOver] = useState(false);
   const [confirmingEndAttack, setConfirmingEndAttack] = useState(false);
+  const [mobileActivityUnread, setMobileActivityUnread] = useState(0);
   const [navigatorOpen, dispatchNavigator] = useReducer(
     territoryDrawerReducer,
     false,
@@ -482,7 +487,14 @@ export function TerritoryHud({
       ? false
       : window.matchMedia('(max-width: 900px)').matches,
   );
+  const [mobilePanel, dispatchMobilePanel] = useReducer(
+    mobileGameplayPanelReducer,
+    'peek',
+  );
   const navigatorTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileTerritoryTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileActivityTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileMapTriggerRef = useRef<HTMLButtonElement>(null);
   const endAttackTriggerRef = useRef<HTMLButtonElement>(null);
   const endAttackConfirmRef = useRef<HTMLButtonElement>(null);
   const reinforcementTurnKey = `${match.turnNumber}:${match.activePlayerId}`;
@@ -493,7 +505,12 @@ export function TerritoryHud({
 
   const closeNavigator = () => {
     dispatchNavigator('close');
-    window.requestAnimationFrame(() => navigatorTriggerRef.current?.focus());
+    window.requestAnimationFrame(() =>
+      (compactLayout
+        ? mobileTerritoryTriggerRef.current
+        : navigatorTriggerRef.current
+      )?.focus(),
+    );
   };
 
   useEffect(() => {
@@ -658,6 +675,52 @@ export function TerritoryHud({
     (territoryId) => getAttackTargets(planet, match, territoryId).length > 0,
   );
   const previousCanControl = useRef(canControl);
+  const previousMobileCanControl = useRef(canControl);
+  const previousMobileContext = useRef('');
+
+  useEffect(() => {
+    if (!compactLayout) {
+      previousMobileContext.current = '';
+      dispatchMobilePanel({ type: 'CLOSE' });
+      return;
+    }
+    const context = [
+      match.turnNumber,
+      match.activePlayerId,
+      match.phase,
+      sourceId ?? '',
+      targetId ?? '',
+      confirmingEndAttack ? 'confirming' : '',
+    ].join(':');
+    if (previousMobileContext.current === context) return;
+    previousMobileContext.current = context;
+    if (previousMobileCanControl.current !== canControl) {
+      previousMobileCanControl.current = canControl;
+      if (!canControl && match.phase !== 'game-over') {
+        dispatchMobilePanel({ type: 'CLOSE' });
+        return;
+      }
+    }
+    if (!canControl && match.phase !== 'game-over') return;
+    dispatchMobilePanel({
+      type: 'CONTEXT_CHANGED',
+      expand: shouldExpandMobileActions({
+        phase: match.phase,
+        sourceSelected: Boolean(sourceId),
+        targetSelected: Boolean(targetId),
+        confirmingEndAttack,
+      }),
+    });
+  }, [
+    compactLayout,
+    canControl,
+    confirmingEndAttack,
+    match.activePlayerId,
+    match.phase,
+    match.turnNumber,
+    sourceId,
+    targetId,
+  ]);
 
   useEffect(() => {
     if (previousCanControl.current === canControl) return;
@@ -684,9 +747,12 @@ export function TerritoryHud({
 
   return (
     <>
-      <div className="left-hud-rail">
+      <div
+        className={`left-hud-rail${compactLayout ? ` mobile-gameplay-shell mobile-panel-${mobilePanel}` : ''}`}
+      >
         <aside
-          className={`hud${confirmingEndAttack ? ' confirmation-open' : ''}`}
+          id={compactLayout ? 'mobile-actions-panel' : undefined}
+          className={`hud${confirmingEndAttack ? ' confirmation-open' : ''}${compactLayout ? ` mobile-actions-sheet ${mobilePanel === 'actions' ? 'is-expanded' : 'is-peek'}` : ''}`}
           aria-label={
             multiplayerSession
               ? 'Multiplayer match controls'
@@ -723,6 +789,23 @@ export function TerritoryHud({
               <span>territories</span>
             </div>
           </section>
+
+          {compactLayout && (
+            <button
+              type="button"
+              className="mobile-sheet-toggle"
+              aria-label={
+                mobilePanel === 'actions'
+                  ? 'Collapse Actions'
+                  : 'Expand Actions'
+              }
+              aria-expanded={mobilePanel === 'actions'}
+              aria-controls="mobile-actions-panel"
+              onClick={() => dispatchMobilePanel({ type: 'TOGGLE_ACTIONS' })}
+            >
+              <span>{mobilePanel === 'actions' ? '⌄' : '⌃'}</span>
+            </button>
+          )}
 
           <PlayerViewModeSelector
             viewMode={viewMode}
@@ -1096,6 +1179,12 @@ export function TerritoryHud({
             <details className="game-menu">
               <SettingsMenuSummary />
               <div>
+                {compactLayout && (
+                  <div className="mobile-globe-help">
+                    <strong>Globe controls</strong>
+                    <span>Drag to rotate · pinch to zoom · tap to select</span>
+                  </div>
+                )}
                 <TurnSoundToggle />
                 {hasLocalBots && <BotPacingSelector context="game-menu" />}
                 {isBotPlaybackControlVisible({
@@ -1247,7 +1336,96 @@ export function TerritoryHud({
           players={configuredPlayers}
           onFocusTerritory={requestManualFocus}
           reactions={activityReactions}
+          presentation={compactLayout ? 'mobile-sheet' : 'dock'}
+          open={compactLayout ? mobilePanel === 'activity' : undefined}
+          onOpenChange={
+            compactLayout
+              ? (open) => {
+                  if (open) {
+                    dispatchMobilePanel({ type: 'OPEN', panel: 'activity' });
+                    return;
+                  }
+                  dispatchMobilePanel({ type: 'CLOSE' });
+                  window.requestAnimationFrame(() =>
+                    mobileActivityTriggerRef.current?.focus(),
+                  );
+                }
+              : undefined
+          }
+          onUnreadCountChange={
+            compactLayout ? setMobileActivityUnread : undefined
+          }
         />
+        {compactLayout && (
+          <nav
+            className="mobile-gameplay-toolbar"
+            aria-label="Mobile match controls"
+          >
+            <button
+              type="button"
+              className={mobilePanel === 'actions' ? 'active' : undefined}
+              aria-expanded={mobilePanel === 'actions'}
+              aria-controls="mobile-actions-panel"
+              onClick={() => dispatchMobilePanel({ type: 'TOGGLE_ACTIONS' })}
+            >
+              <span aria-hidden="true">◆</span>
+              Actions
+            </button>
+            <button
+              ref={mobileTerritoryTriggerRef}
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={navigatorOpen}
+              aria-controls="territory-navigator"
+              onClick={() => {
+                dispatchMobilePanel({ type: 'CLOSE' });
+                dispatchNavigator('open');
+              }}
+            >
+              <span aria-hidden="true">⌕</span>
+              Territories
+            </button>
+            <button
+              ref={mobileActivityTriggerRef}
+              type="button"
+              className={mobilePanel === 'activity' ? 'active' : undefined}
+              aria-expanded={mobilePanel === 'activity'}
+              aria-controls="mobile-activity-panel"
+              onClick={() => {
+                if (mobilePanel === 'activity') {
+                  dispatchMobilePanel({ type: 'CLOSE' });
+                } else {
+                  dispatchMobilePanel({ type: 'OPEN', panel: 'activity' });
+                }
+              }}
+            >
+              <span aria-hidden="true">☷</span>
+              Activity
+              {mobileActivityUnread > 0 && (
+                <i className="mobile-toolbar-badge" aria-hidden="true">
+                  {mobileActivityUnread > 99 ? '99+' : mobileActivityUnread}
+                </i>
+              )}
+            </button>
+            <button
+              ref={mobileMapTriggerRef}
+              type="button"
+              className={mobilePanel === 'map' ? 'active' : undefined}
+              aria-expanded={mobilePanel === 'map'}
+              aria-controls="mobile-map-panel"
+              onClick={() => {
+                if (mobilePanel === 'map') {
+                  dispatchMobilePanel({ type: 'CLOSE' });
+                } else {
+                  dispatchMobilePanel({ type: 'OPEN', panel: 'map' });
+                }
+              }}
+            >
+              <span aria-hidden="true">◎</span>
+              Map
+            </button>
+          </nav>
+        )}
       </div>
       <div className="gameplay-right-rail">
         {!compactLayout && (
@@ -1295,7 +1473,34 @@ export function TerritoryHud({
             )}
           </aside>
         )}
-        <Minimap />
+        {!compactLayout && <Minimap />}
+        {compactLayout && mobilePanel === 'map' && (
+          <section
+            id="mobile-map-panel"
+            className="mobile-map-sheet"
+            aria-labelledby="mobile-map-title"
+          >
+            <header>
+              <div>
+                <span className="eyebrow">Strategic overview</span>
+                <h2 id="mobile-map-title">World minimap</h2>
+              </div>
+              <button
+                type="button"
+                aria-label="Close Map"
+                onClick={() => {
+                  dispatchMobilePanel({ type: 'CLOSE' });
+                  window.requestAnimationFrame(() =>
+                    mobileMapTriggerRef.current?.focus(),
+                  );
+                }}
+              >
+                ×
+              </button>
+            </header>
+            <Minimap />
+          </section>
+        )}
       </div>
       {compactLayout && (
         <TerritoryNavigator

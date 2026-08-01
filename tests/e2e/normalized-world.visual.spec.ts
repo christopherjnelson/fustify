@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  CURRENT_GENERATOR_VERSION,
+  LEGACY_GENERATOR_VERSION,
   NORMALIZED_GENERATOR_VERSION,
 } from '../../src/core/generation/constants';
 import { analyzeContinentQuality } from '../../src/core/generation/continentQuality';
@@ -87,7 +87,7 @@ for (const fixture of NORMALIZED_WORLD_REVIEW_FIXTURES) {
     await openReviewHarness(page);
     const reports = [];
     for (const [profile, generatorVersion] of [
-      ['v1-current', CURRENT_GENERATOR_VERSION],
+      ['v1-legacy', LEGACY_GENERATOR_VERSION],
       ['v2-normalized', NORMALIZED_GENERATOR_VERSION],
     ] as const) {
       const output = path.join(

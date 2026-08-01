@@ -15,7 +15,7 @@ import { gameReducer } from '../core/game/gameReducer';
 import { formatMatchEvent } from '../core/game/eventFormatter';
 import type { GameAction, GameError, MatchState } from '../core/game/types';
 import {
-  CURRENT_GENERATOR_VERSION,
+  LEGACY_GENERATOR_VERSION,
   NORMALIZED_GENERATOR_VERSION,
 } from '../core/generation/constants';
 import { generatePlanet } from '../core/generation/generatePlanet';
@@ -1119,7 +1119,7 @@ export const useGameStore = create<GameState>((set, get) => {
         const save = parsed.save;
         if (
           save.generatorVersion !== save.worldSetup.generatorVersion ||
-          ![CURRENT_GENERATOR_VERSION, NORMALIZED_GENERATOR_VERSION].includes(
+          ![LEGACY_GENERATOR_VERSION, NORMALIZED_GENERATOR_VERSION].includes(
             save.generatorVersion,
           )
         ) {

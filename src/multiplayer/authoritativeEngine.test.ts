@@ -3,7 +3,7 @@ import { createAuthoritativeMatch } from './authoritativeEngine';
 import { sha256Fingerprint } from './gameProtocol';
 import { createMultiplayerPlayerConfigs } from './multiplayerPlayerConfig';
 import {
-  CURRENT_GENERATOR_VERSION,
+  LEGACY_GENERATOR_VERSION,
   DEFAULT_GENERATOR_VERSION,
 } from '../core/generation/constants';
 
@@ -99,7 +99,7 @@ describe('authoritative multiplayer initialization', () => {
     );
     const explicitV1 = await createAuthoritativeMatch(
       '00000000-0000-4000-8000-000000000022',
-      { ...room, generator_version: CURRENT_GENERATOR_VERSION },
+      { ...room, generator_version: LEGACY_GENERATOR_VERSION },
       seats,
     );
 
@@ -107,8 +107,8 @@ describe('authoritative multiplayer initialization', () => {
     expect(unversioned.generatorMetadata.generatorVersion).toBe(
       DEFAULT_GENERATOR_VERSION,
     );
-    expect(explicitV1.planet.generatorVersion).toBe(CURRENT_GENERATOR_VERSION);
-    expect(explicitV1.generatorMetadata.profile).toBe('v1-current');
+    expect(explicitV1.planet.generatorVersion).toBe(LEGACY_GENERATOR_VERSION);
+    expect(explicitV1.generatorMetadata.profile).toBe('v1-legacy');
   });
 
   it('rejects player draft without changing local-play support', async () => {

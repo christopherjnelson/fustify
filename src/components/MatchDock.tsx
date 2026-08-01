@@ -46,6 +46,10 @@ export function MatchDock({
   players,
   onFocusTerritory,
   reactions,
+  presentation = 'dock',
+  open: controlledOpen,
+  onOpenChange,
+  onUnreadCountChange,
 }: {
   matchId: string;
   events: MatchEvent[];
@@ -53,8 +57,13 @@ export function MatchDock({
   players: LocalPlayerConfig[];
   onFocusTerritory: (territoryId: string) => void;
   reactions?: ActivityReactionController;
+  presentation?: 'dock' | 'mobile-sheet';
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onUnreadCountChange?: (count: number) => void;
 }) {
-  const [open, setOpen] = useState(readOpenPreference);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(readOpenPreference);
+  const open = controlledOpen ?? uncontrolledOpen;
   const trackingRef = useRef<ActivityFeedTracking>(
     reconcileActivityFeed(null, matchId, events, true),
   );
@@ -78,13 +87,19 @@ export function MatchDock({
   const expand = () => {
     pinnedToNewestRef.current = true;
     clearUnread();
-    setOpen(true);
-    writeOpenPreference(true);
+    if (controlledOpen === undefined) {
+      setUncontrolledOpen(true);
+      writeOpenPreference(true);
+    }
+    onOpenChange?.(true);
   };
 
   const collapse = () => {
-    setOpen(false);
-    writeOpenPreference(false);
+    if (controlledOpen === undefined) {
+      setUncontrolledOpen(false);
+      writeOpenPreference(false);
+    }
+    onOpenChange?.(false);
     window.requestAnimationFrame(() => launcherRef.current?.focus());
   };
 
@@ -105,6 +120,10 @@ export function MatchDock({
     setUnreadCount(next.unreadCount);
   }, [events, matchId, open]);
 
+  useEffect(() => {
+    onUnreadCountChange?.(unreadCount);
+  }, [onUnreadCountChange, unreadCount]);
+
   const handleScroll = (event: UIEvent<HTMLOListElement>) => {
     const list = event.currentTarget;
     const atNewest =
@@ -122,10 +141,17 @@ export function MatchDock({
   };
 
   return (
-    <div className="match-dock-slot">
+    <div
+      className={`match-dock-slot${presentation === 'mobile-sheet' ? ' mobile-match-dock-slot' : ''}`}
+    >
       {open ? (
         <section
-          className="match-dock activity-panel"
+          id={
+            presentation === 'mobile-sheet'
+              ? 'mobile-activity-panel'
+              : undefined
+          }
+          className={`match-dock activity-panel${presentation === 'mobile-sheet' ? ' mobile-match-dock' : ''}`}
           aria-labelledby="activity-title"
           onKeyDown={handlePanelKeyDown}
         >
@@ -139,7 +165,11 @@ export function MatchDock({
               <button
                 type="button"
                 className="activity-collapse"
-                aria-label="Collapse Activity"
+                aria-label={
+                  presentation === 'mobile-sheet'
+                    ? 'Close Activity'
+                    : 'Collapse Activity'
+                }
                 onClick={collapse}
               >
                 <span aria-hidden="true">⌄</span>
@@ -165,7 +195,7 @@ export function MatchDock({
             reactions={reactions}
           />
         </section>
-      ) : (
+      ) : presentation === 'mobile-sheet' ? null : (
         <div className="activity-launcher-row">
           <button
             ref={launcherRef}

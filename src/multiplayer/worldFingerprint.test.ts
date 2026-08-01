@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { generatePlanet } from '../core/generation/generatePlanet';
 import { worldFingerprint } from './worldFingerprint';
 import {
-  CURRENT_GENERATOR_VERSION,
+  LEGACY_GENERATOR_VERSION,
   NORMALIZED_GENERATOR_VERSION,
 } from '../core/generation/constants';
 
@@ -37,7 +37,7 @@ describe('multiplayer world fingerprint', () => {
     const implicitNormalized = generatePlanet('versioned-fingerprint', options);
     const explicitCurrent = generatePlanet('versioned-fingerprint', {
       ...options,
-      generatorVersion: CURRENT_GENERATOR_VERSION,
+      generatorVersion: LEGACY_GENERATOR_VERSION,
     });
     const normalized = generatePlanet('versioned-fingerprint', {
       ...options,

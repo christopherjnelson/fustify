@@ -5,7 +5,7 @@ import { makeEvent } from '../core/game/events';
 import { gameReducer } from '../core/game/gameReducer';
 import type { MatchState } from '../core/game/types';
 import {
-  CURRENT_GENERATOR_VERSION,
+  NORMALIZED_GENERATOR_VERSION,
   type WorldGeneratorVersion,
 } from '../core/generation/constants';
 import { generatePlanet } from '../core/generation/generatePlanet';
@@ -77,7 +77,7 @@ export type VisualScenario =
 
 const FIXED_SETUP: WorldSetup = {
   version: 1,
-  generatorVersion: CURRENT_GENERATOR_VERSION,
+  generatorVersion: NORMALIZED_GENERATOR_VERSION,
   seed: 'visual-review-atlas',
   territoryCount: 42,
   continentCount: 6,

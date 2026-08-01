@@ -128,7 +128,7 @@ const scenarios: Array<{
   {
     name: 'fortification',
     region: '.territory-tools-panel, .mobile-territory-control',
-    heading: /Norololvaor/i,
+    heading: /Fortify once or skip/i,
   },
   {
     name: 'fortification-fixed',
@@ -173,8 +173,28 @@ const scenarios: Array<{
 for (const scenario of scenarios) {
   test(`visual review: ${scenario.name}`, async ({ page }, testInfo) => {
     await openScenario(page, scenario.name);
+    const mobileToolbar = page.getByRole('navigation', {
+      name: 'Mobile match controls',
+    });
+    const mobile = (await mobileToolbar.count()) > 0;
+    if (mobile) {
+      if (scenario.region.includes('activity-panel')) {
+        await mobileToolbar.getByRole('button', { name: 'Activity' }).click();
+      } else if (scenario.region.includes('minimap-panel')) {
+        await mobileToolbar.getByRole('button', { name: 'Map' }).click();
+      } else if (scenario.region.includes('.hud')) {
+        const actions = mobileToolbar.getByRole('button', { name: 'Actions' });
+        if ((await actions.getAttribute('aria-expanded')) !== 'true') {
+          await actions.click();
+        }
+      }
+    }
     if (scenario.name === 'navigator') {
-      await page.getByRole('button', { name: /Territory list/i }).click();
+      await (
+        mobile
+          ? mobileToolbar.getByRole('button', { name: 'Territories' })
+          : page.getByRole('button', { name: /Territory list/i })
+      ).click();
       await expect(page.locator('#territory-navigator')).toBeVisible();
     }
     if (scenario.name === 'attack-confirmation') {
@@ -190,6 +210,9 @@ for (const scenario of scenarios) {
       await page.evaluate(() =>
         window.__WORLDSEED_VISUAL__!.appendActionEventBatch(),
       );
+      if (mobile) {
+        await mobileToolbar.getByRole('button', { name: 'Map' }).click();
+      }
       await expect(page.getByTestId('minimap-action-cue')).toBeVisible();
       await page.waitForTimeout(700);
       await page.screenshot({
@@ -201,6 +224,9 @@ for (const scenario of scenarios) {
         'action-follow-minimap-ui.png',
         { animations: 'disabled' },
       );
+      if (mobile) {
+        await mobileToolbar.getByRole('button', { name: 'Activity' }).click();
+      }
     }
     if (scenario.name === 'player-elimination') {
       await page.locator('.event-log ol').evaluate((element) => {
@@ -223,12 +249,14 @@ for (const scenario of scenarios) {
     }
     if (scenario.name.startsWith('minimap-focus-')) {
       await page.waitForFunction(() => {
-        const longitude = Number(
-          document
-            .querySelector('.minimap-focus')
-            ?.getAttribute('data-longitude'),
+        const focus = document.querySelector('.minimap-focus');
+        const longitude = Number(focus?.getAttribute('data-longitude'));
+        const latitude = Number(focus?.getAttribute('data-latitude'));
+        return (
+          Number.isFinite(longitude) &&
+          Number.isFinite(latitude) &&
+          (Math.abs(longitude - 90) > 1 || Math.abs(latitude) > 1)
         );
-        return Number.isFinite(longitude) && Math.abs(longitude - 90) > 15;
       });
     }
 

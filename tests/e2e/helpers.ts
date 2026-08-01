@@ -1,4 +1,5 @@
 import { expect, type Page, type TestInfo } from '@playwright/test';
+import { NORMALIZED_GENERATOR_VERSION } from '../../src/core/generation/constants';
 
 export type Scenario =
   | 'world-setup'
@@ -73,6 +74,9 @@ export async function openScenario(
   });
   await expect(page.locator('.app-shell')).toHaveClass(
     new RegExp(`mode-(world-setup|pregame|handoff|playing|game-over)`),
+  );
+  expect((await stateSnapshot(page)).planet.generatorVersion).toBe(
+    NORMALIZED_GENERATOR_VERSION,
   );
   await page.locator('canvas').waitFor({ state: 'attached' });
   await page.waitForTimeout(150);

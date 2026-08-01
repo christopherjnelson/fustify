@@ -8988,3 +8988,322 @@ html.multiplayer-match-route .branded-app-content {
   color: color-mix(in srgb, var(--brand-danger) 76%, var(--brand-text-strong));
   background: var(--brand-danger-surface);
 }
+
+/* Compact active-match chrome keeps the globe as the primary touch surface. */
+@media (max-width: 900px) {
+  .left-hud-rail.mobile-gameplay-shell,
+  .protected-route-shell .left-hud-rail.mobile-gameplay-shell,
+  .branded-app-shell .left-hud-rail.mobile-gameplay-shell {
+    position: fixed;
+    z-index: 20;
+    inset: auto 0 0;
+    display: flex;
+    width: 100%;
+    max-height: none;
+    padding: 0;
+    align-items: center;
+    flex-direction: column;
+    gap: 0;
+    pointer-events: none;
+  }
+
+  .mobile-actions-sheet {
+    position: relative;
+    top: auto;
+    left: auto;
+    order: 1;
+    width: min(520px, calc(100vw - 24px));
+    max-height: min(70dvh, 620px);
+    padding: 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-radius: 18px 18px 0 0;
+    pointer-events: auto;
+    transition:
+      max-height 160ms ease,
+      padding 160ms ease;
+  }
+
+  .mobile-actions-sheet.is-peek {
+    height: 74px;
+    min-height: 74px;
+    padding: 8px;
+    overflow: hidden;
+  }
+
+  .mobile-actions-sheet.is-peek > :not(.turn-banner):not(.mobile-sheet-toggle) {
+    display: none;
+  }
+
+  .mobile-actions-sheet .turn-banner {
+    min-height: 56px;
+    margin: 0 0 10px;
+    padding: 8px 42px 8px 10px;
+  }
+
+  .mobile-actions-sheet.is-peek .turn-banner {
+    height: 58px;
+    margin: 0;
+  }
+
+  .mobile-sheet-toggle {
+    position: absolute;
+    z-index: 2;
+    top: 8px;
+    right: 8px;
+    display: grid;
+    width: 38px;
+    height: 58px;
+    padding: 0;
+    place-items: end center;
+    color: var(--brand-steel);
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .mobile-sheet-toggle span {
+    display: grid;
+    width: 28px;
+    height: 24px;
+    place-items: center;
+    border: 1px solid var(--brand-border);
+    border-radius: 999px;
+    background: var(--brand-panel-raised);
+    font-size: 0.9rem;
+  }
+
+  .mobile-gameplay-toolbar {
+    z-index: 3;
+    display: grid;
+    order: 2;
+    width: min(520px, 100%);
+    min-height: calc(56px + env(safe-area-inset-bottom));
+    padding: 5px 6px calc(5px + env(safe-area-inset-bottom));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    pointer-events: auto;
+    border-top: 1px solid var(--brand-border);
+    background: color-mix(in srgb, var(--brand-panel) 97%, transparent);
+    box-shadow: 0 -12px 34px rgba(0, 0, 0, 0.36);
+    backdrop-filter: blur(18px);
+  }
+
+  .mobile-gameplay-toolbar button {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    min-height: 46px;
+    padding: 4px 2px;
+    place-items: center;
+    gap: 1px;
+    color: var(--brand-steel);
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.58rem;
+    font-weight: 750;
+  }
+
+  .mobile-gameplay-toolbar button > span {
+    color: var(--brand-text);
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .mobile-toolbar-badge {
+    position: absolute;
+    top: 3px;
+    right: max(4px, calc(50% - 25px));
+    display: grid;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    place-items: center;
+    color: var(--brand-page);
+    border-radius: 999px;
+    background: var(--brand-accent);
+    font-size: 0.5rem;
+    font-style: normal;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .mobile-gameplay-toolbar button.active,
+  .mobile-gameplay-toolbar button[aria-expanded='true'] {
+    color: var(--brand-text-strong);
+    border-color: color-mix(
+      in srgb,
+      var(--brand-accent) 34%,
+      var(--brand-border)
+    );
+    background: color-mix(
+      in srgb,
+      var(--brand-accent) 9%,
+      var(--brand-panel-raised)
+    );
+  }
+
+  .mobile-panel-activity .mobile-actions-sheet,
+  .mobile-panel-map .mobile-actions-sheet {
+    display: none;
+  }
+
+  .mobile-match-dock-slot {
+    display: flex;
+    width: min(520px, calc(100vw - 24px));
+    min-height: 0;
+    order: 1;
+    align-items: flex-end;
+    pointer-events: auto;
+  }
+
+  .mobile-match-dock {
+    width: 100%;
+    height: min(58dvh, 480px);
+    border-radius: 18px 18px 0 0;
+  }
+
+  .mobile-map-sheet {
+    position: fixed;
+    z-index: 20;
+    right: auto;
+    bottom: calc(56px + env(safe-area-inset-bottom));
+    left: 50%;
+    width: min(430px, calc(100vw - 24px));
+    padding: 10px;
+    pointer-events: auto;
+    border: 1px solid var(--brand-border);
+    border-radius: 18px 18px 0 0;
+    background: color-mix(in srgb, var(--brand-panel) 96%, transparent);
+    box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.44);
+    transform: translateX(-50%);
+    backdrop-filter: blur(18px);
+  }
+
+  .mobile-map-sheet > header {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 2px 8px;
+  }
+
+  .mobile-map-sheet h2 {
+    margin: 1px 0 0;
+    color: var(--brand-text-strong);
+    font-family: var(--brand-display-font);
+    font-size: 0.9rem;
+  }
+
+  .mobile-map-sheet > header button {
+    width: 44px;
+    height: 44px;
+    color: var(--brand-text);
+    border: 1px solid var(--brand-border);
+    border-radius: 9px;
+    background: var(--brand-panel-raised);
+    cursor: pointer;
+    font-size: 1.3rem;
+  }
+
+  .mobile-map-sheet .minimap-panel {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    border-radius: 12px;
+  }
+
+  .mobile-globe-help {
+    display: grid;
+    gap: 2px;
+    padding: 7px 8px;
+    color: var(--brand-steel);
+    border-bottom: 1px solid var(--brand-border);
+    font-size: 0.58rem;
+    line-height: 1.4;
+  }
+
+  .mobile-globe-help strong {
+    color: var(--brand-text-strong);
+    font-size: 0.63rem;
+  }
+
+  .mode-playing .control-legend,
+  .mode-game-over .control-legend {
+    display: none;
+  }
+
+  .mobile-actions-sheet .game-menu > div {
+    right: auto;
+    left: 0;
+  }
+}
+
+@media (max-width: 900px) and (max-height: 500px) {
+  .mobile-actions-sheet {
+    width: min(480px, calc(100vw - 24px));
+    max-height: calc(100dvh - 54px - env(safe-area-inset-bottom));
+  }
+
+  .mobile-actions-sheet .game-menu > div {
+    bottom: calc(100% + 2px);
+  }
+
+  .mobile-actions-sheet.is-peek {
+    height: 70px;
+    min-height: 70px;
+  }
+
+  .mobile-gameplay-toolbar {
+    min-height: calc(52px + env(safe-area-inset-bottom));
+    padding-top: 3px;
+    padding-bottom: calc(3px + env(safe-area-inset-bottom));
+  }
+
+  .mobile-gameplay-toolbar button {
+    min-height: 44px;
+  }
+
+  .mobile-match-dock-slot {
+    width: min(480px, calc(100vw - 24px));
+  }
+
+  .mobile-match-dock {
+    height: min(72dvh, 280px);
+  }
+
+  .mobile-map-sheet {
+    bottom: calc(52px + env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 64px - env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+
+  .territory-drawer {
+    inset: 0 0 0 auto;
+    width: min(480px, 68vw);
+    height: 100dvh;
+    border-top: 0;
+    border-left: 1px solid var(--brand-border);
+    border-radius: 0;
+  }
+
+  .territory-drawer .territory-navigator {
+    padding: 10px 12px;
+  }
+
+  .territory-drawer .territory-selection-card {
+    display: none;
+  }
+
+  .territory-drawer .territory-filter {
+    margin-top: 8px;
+  }
+
+  .territory-drawer .drawer-footer {
+    flex: none;
+    padding-top: 7px;
+  }
+}

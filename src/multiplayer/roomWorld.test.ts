@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CURRENT_GENERATOR_VERSION,
+  LEGACY_GENERATOR_VERSION,
   DEFAULT_GENERATOR_VERSION,
 } from '../core/generation/constants';
 import type { Room } from './multiplayerApi';
@@ -57,11 +57,11 @@ describe('multiplayer room worlds', () => {
     });
     const explicitV1 = generateRoomPreviewPlanet({
       ...room,
-      generator_version: CURRENT_GENERATOR_VERSION,
+      generator_version: LEGACY_GENERATOR_VERSION,
     });
 
     expect(unversioned.generatorVersion).toBe(DEFAULT_GENERATOR_VERSION);
     expect(unversioned).toEqual(generateRoomPreviewPlanet(room));
-    expect(explicitV1.generatorVersion).toBe(CURRENT_GENERATOR_VERSION);
+    expect(explicitV1.generatorVersion).toBe(LEGACY_GENERATOR_VERSION);
   });
 });

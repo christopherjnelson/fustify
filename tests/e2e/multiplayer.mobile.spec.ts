@@ -127,7 +127,10 @@ test('mobile restores an authoritative active match without clipping controls', 
         )!.name,
       };
     });
-    await host.getByRole('button', { name: /Territory list/ }).click();
+    await host
+      .getByRole('navigation', { name: 'Mobile match controls' })
+      .getByRole('button', { name: 'Territories' })
+      .click();
     await host.getByRole('button', { name: 'All territories' }).click();
     await host
       .getByRole('button', {

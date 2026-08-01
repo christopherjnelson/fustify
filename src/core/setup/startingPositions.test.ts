@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CURRENT_GENERATOR_VERSION } from '../generation/constants';
+import { LEGACY_GENERATOR_VERSION } from '../generation/constants';
 import { generatePlanet } from '../generation/generatePlanet';
 import { createMatch } from '../game/createMatch';
 import { createDefaultPlayerConfigs } from './playerConfig';
@@ -14,7 +14,7 @@ import {
 
 // Hold geography stable so this suite measures assignment, not generator drift.
 const planet = generatePlanet('starting-position-tests', {
-  generatorVersion: CURRENT_GENERATOR_VERSION,
+  generatorVersion: LEGACY_GENERATOR_VERSION,
   territoryCount: 42,
   continentCount: 6,
   playerCount: 4,
@@ -24,7 +24,7 @@ const players = createDefaultPlayerConfigs(4);
 
 function linePlanet(territoryCount = 10) {
   const generated = generatePlanet(`line-starting-position-${territoryCount}`, {
-    generatorVersion: CURRENT_GENERATOR_VERSION,
+    generatorVersion: LEGACY_GENERATOR_VERSION,
     territoryCount,
     continentCount: 2,
     playerCount: 2,

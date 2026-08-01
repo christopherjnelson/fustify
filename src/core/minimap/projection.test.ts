@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMatch } from '../game/createMatch';
 import { generatePlanet } from '../generation/generatePlanet';
-import { CURRENT_GENERATOR_VERSION } from '../generation/constants';
+import { LEGACY_GENERATOR_VERSION } from '../generation/constants';
 import { getPlanetSurfaceSphere } from '../geometry/planetSurface';
 import {
   parseLocalMatchSave,
@@ -36,7 +36,7 @@ import {
 
 const DEFAULT_SETUP: WorldSetup = {
   version: 1,
-  generatorVersion: CURRENT_GENERATOR_VERSION,
+  generatorVersion: LEGACY_GENERATOR_VERSION,
   seed: 'minimap-projection',
   territoryCount: 42,
   continentCount: 6,
@@ -46,7 +46,7 @@ const DEFAULT_SETUP: WorldSetup = {
 
 // These seeds classify v3 topology so the test isolates projection behavior.
 const GENERATED_SEAM_FIXTURE_OPTIONS = {
-  generatorVersion: CURRENT_GENERATOR_VERSION,
+  generatorVersion: LEGACY_GENERATOR_VERSION,
   territoryCount: 42,
   continentCount: 6,
   playerCount: 4,

@@ -6,6 +6,7 @@ const baseURL = `http://127.0.0.1:${PORT}`;
 export default defineConfig({
   testDir: './tests/e2e',
   outputDir: 'test-results/playwright',
+  timeout: 60_000,
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
@@ -47,6 +48,15 @@ export default defineConfig({
       name: 'mobile-390',
       use: {
         viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
+    {
+      name: 'mobile-landscape-844',
+      testMatch: /mobile-gameplay\.spec\.ts/,
+      use: {
+        viewport: { width: 844, height: 390 },
         isMobile: true,
         hasTouch: true,
       },

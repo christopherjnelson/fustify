@@ -1,10 +1,58 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openScenario, stateSnapshot } from './helpers';
+import {
+  openScenario as openScenarioBase,
+  stateSnapshot,
+  type Scenario,
+} from './helpers';
 import { installRegisteredAuthFixture } from './registeredAuthTestClient';
 
 test.beforeEach(async ({ page }) => {
   await installRegisteredAuthFixture(page);
 });
+
+async function openScenario(page: Page, scenario: Scenario) {
+  await openScenarioBase(page, scenario);
+  if ((page.viewportSize()?.width ?? 901) > 900) return;
+  const actions = page
+    .getByRole('navigation', { name: 'Mobile match controls' })
+    .getByRole('button', { name: 'Actions' });
+  if (
+    (await actions.count()) > 0 &&
+    (await actions.getAttribute('aria-expanded')) !== 'true'
+  ) {
+    await actions.click();
+  }
+}
+
+function mobilePanelButton(
+  page: Page,
+  name: 'Actions' | 'Territories' | 'Activity' | 'Map',
+) {
+  return page
+    .getByRole('navigation', { name: 'Mobile match controls' })
+    .getByRole('button', { name });
+}
+
+async function openMobilePanel(
+  page: Page,
+  name: 'Actions' | 'Activity' | 'Map',
+) {
+  if ((page.viewportSize()?.width ?? 901) > 900) return;
+  const button = mobilePanelButton(page, name);
+  await expect(button).toBeVisible();
+  if ((await button.getAttribute('aria-expanded')) !== 'true') {
+    await button.click();
+  }
+}
+
+async function openTerritoryNavigator(page: Page) {
+  const mobileTrigger = mobilePanelButton(page, 'Territories');
+  if ((page.viewportSize()?.width ?? 901) <= 900) {
+    await mobileTrigger.click();
+  } else {
+    await page.getByRole('button', { name: /Territory list/i }).click();
+  }
+}
 
 function territoryNavigator(page: Page) {
   return page.locator('#territory-navigator');
@@ -258,6 +306,7 @@ test('local bot playback pauses safely and resumes with the selected pacing', as
   await page.getByRole('button', { name: 'Assign territories' }).click();
   page.on('dialog', (dialog) => void dialog.accept());
   await page.getByRole('button', { name: 'Begin Match' }).click();
+  await openMobilePanel(page, 'Actions');
   await expect(page.getByTestId('bot-turn-status')).toBeVisible({
     timeout: 15_000,
   });
@@ -273,6 +322,7 @@ test('local bot playback pauses safely and resumes with the selected pacing', as
     });
   const gameMenu = page.locator('details.game-menu');
   const openGameMenu = async () => {
+    await openMobilePanel(page, 'Actions');
     if (
       !(await gameMenu.evaluate(
         (element) => (element as HTMLDetailsElement).open,
@@ -303,7 +353,7 @@ test('local bot playback pauses safely and resumes with the selected pacing', as
   await page.waitForTimeout(350);
   expect(await savedEventCount()).toBe(beforeDeliberateAction);
 
-  await page.getByRole('button', { name: 'Territory list' }).click();
+  await openTerritoryNavigator(page);
   const navigator = territoryNavigator(page);
   await expect(navigator).toBeVisible();
   const inspectTerritory = navigator.locator('ul button').first();
@@ -391,6 +441,7 @@ test('minimap follows neutral, draft, ready, and active ownership lifecycle', as
       .locator('.minimap-territories path[data-owner-id=""]'),
   ).toHaveCount(0);
   await openScenario(page, 'reinforcement');
+  await openMobilePanel(page, 'Map');
   await expect(page.getByTestId('minimap')).toBeVisible();
   await expect(
     page
@@ -406,6 +457,7 @@ test('minimap reflects reducer ownership and focuses territories without changin
   page,
 }) => {
   await openScenario(page, 'pending-capture');
+  await openMobilePanel(page, 'Map');
   const minimap = page.getByTestId('minimap');
   const before = await stateSnapshot(page);
   for (const [territoryId, territory] of Object.entries(
@@ -427,15 +479,17 @@ test('minimap reflects reducer ownership and focuses territories without changin
   expect(after.match).toEqual(before.match);
   expect(after.setupPhase).toBe(before.setupPhase);
 
-  await page.getByRole('button', { name: /Territory list/i }).focus();
-  await page.keyboard.press('Tab');
-  expect(
-    await page.evaluate(() =>
-      document
-        .querySelector('.minimap-panel')
-        ?.contains(document.activeElement),
-    ),
-  ).toBe(false);
+  if ((await mobilePanelButton(page, 'Map').count()) === 0) {
+    await page.getByRole('button', { name: /Territory list/i }).focus();
+    await page.keyboard.press('Tab');
+    expect(
+      await page.evaluate(() =>
+        document
+          .querySelector('.minimap-panel')
+          ?.contains(document.activeElement),
+      ),
+    ).toBe(false);
+  }
 });
 
 test('minimap stays in bounds and separate from primary controls', async ({
@@ -752,6 +806,14 @@ test('neutral and in-progress draft setups save and resume', async ({
     const expectedPhase = (await stateSnapshot(page)).setupPhase;
     const expectedPick = (await stateSnapshot(page)).draftPickIndex;
     await page.getByRole('button', { name: 'Save setup' }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const saved = window.localStorage.getItem('fustify.local-match');
+          return saved ? JSON.parse(saved).matchSetup.setupPhase : null;
+        }),
+      )
+      .toBe(expectedPhase);
     await page.reload();
     await page.waitForFunction(() => window.__WORLDSEED_VISUAL__ !== undefined);
     await page.getByRole('button', { name: 'Resume saved session' }).click();
@@ -788,7 +850,12 @@ test('territory navigator opens, focuses search, selects, focuses camera, and cl
   page,
 }) => {
   await openScenario(page, 'navigator');
-  const trigger = page.getByRole('button', { name: /Territory list/i });
+  const compact = page.viewportSize()!.width <= 900;
+  const trigger = compact
+    ? page
+        .getByRole('navigation', { name: 'Mobile match controls' })
+        .getByRole('button', { name: 'Territories' })
+    : page.getByRole('button', { name: /Territory list/i });
   await trigger.click();
   const navigator = territoryNavigator(page);
   await expect(navigator).toBeVisible();
@@ -804,7 +871,9 @@ test('territory navigator opens, focuses search, selects, focuses camera, and cl
   await expect(page.getByLabel('Search territories')).toBeFocused();
   const before = await stateSnapshot(page);
   const focusMarker = page.locator('.minimap-focus');
-  const initialTransform = await focusMarker.getAttribute('transform');
+  const initialTransform = compact
+    ? null
+    : await focusMarker.getAttribute('transform');
   await navigator.locator('ul button:not(:disabled)').first().click();
   await expect(navigator).toBeVisible();
   const after = await stateSnapshot(page);
@@ -816,9 +885,11 @@ test('territory navigator opens, focuses search, selects, focuses camera, and cl
   await expect(navigator.locator('.territory-selection-card')).toContainText(
     focusedTerritory.name,
   );
-  await expect
-    .poll(() => focusMarker.getAttribute('transform'))
-    .not.toBe(initialTransform);
+  if (!compact) {
+    await expect
+      .poll(() => focusMarker.getAttribute('transform'))
+      .not.toBe(initialTransform);
+  }
   expect((await stateSnapshot(page)).globeFocus).not.toEqual(before.globeFocus);
   await closeTerritoryNavigator(page).click();
   await expect(navigator).toBeHidden();
@@ -902,15 +973,15 @@ test('territory navigator scrolls within its minimap-bounded presentation', asyn
     const navigatorElement = document.querySelector('#territory-navigator')!;
     const list = navigatorElement.querySelector('ul')!;
     const minimap = document
-      .querySelector('.minimap-panel')!
-      .getBoundingClientRect();
+      .querySelector('.minimap-panel')
+      ?.getBoundingClientRect();
     const bounds = navigatorElement.getBoundingClientRect();
     return {
       compact: window.innerWidth <= 900,
       navigatorTop: bounds.top,
       navigatorRight: bounds.right,
       navigatorBottom: bounds.bottom,
-      minimapTop: minimap.top,
+      minimapTop: minimap?.top ?? window.innerHeight,
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
       listScrollHeight: list.scrollHeight,
@@ -992,6 +1063,15 @@ test('reinforcement amount selection submits once, clamps, and supports Max', as
   ).toBeVisible();
 
   await page.getByRole('button', { name: 'Place 1 army' }).click();
+  const mobileActions = page
+    .getByRole('navigation', { name: 'Mobile match controls' })
+    .getByRole('button', { name: 'Actions' });
+  if (
+    (await mobileActions.count()) > 0 &&
+    (await mobileActions.getAttribute('aria-expanded')) !== 'true'
+  ) {
+    await mobileActions.click();
+  }
   await expect(page.getByText('Attack phase', { exact: true })).toBeVisible();
   expect((await stateSnapshot(page)).phase).toBe('attack');
 });
@@ -1189,6 +1269,7 @@ test('capture rejects insufficient movement and player elimination is announced 
   expect((await stateSnapshot(page)).match).toEqual(before);
 
   await openScenario(page, 'player-elimination');
+  await openMobilePanel(page, 'Activity');
   await expect(page.getByText(/was eliminated by/i)).toBeVisible();
   expect(
     Object.values((await stateSnapshot(page)).match.players).some(
@@ -1304,7 +1385,7 @@ test('multiplayer territory intent stays immediate while confirmation is delayed
     return { sourceId, targetId, sourceName, targetName };
   });
 
-  await page.getByRole('button', { name: /Territory list/i }).click();
+  await openTerritoryNavigator(page);
   const navigator = territoryNavigator(page);
   await navigator.getByRole('button', { name: 'All territories' }).click();
   await navigator
@@ -1447,14 +1528,26 @@ test('Activity dock and saved resume controls are operable', async ({
   page,
 }) => {
   await openScenario(page, 'reinforcement');
+  const mobileActivity = page
+    .getByRole('navigation', { name: 'Mobile match controls' })
+    .getByRole('button', { name: 'Activity' });
+  if ((await mobileActivity.count()) > 0) {
+    await mobileActivity.click();
+  }
   await expect(
     page.getByRole('region', { name: 'Activity', exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Collapse Activity' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Open Activity' }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Open Activity' }).click();
+  if ((await mobileActivity.count()) > 0) {
+    await page.getByRole('button', { name: 'Close Activity' }).click();
+    await expect(mobileActivity).toBeFocused();
+    await mobileActivity.click();
+  } else {
+    await page.getByRole('button', { name: 'Collapse Activity' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Open Activity' }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Open Activity' }).click();
+  }
   await expect(
     page.getByRole('region', { name: 'Activity', exact: true }),
   ).toBeVisible();
@@ -1469,6 +1562,8 @@ test('other-player action cues remain visible while Follow Action is opt-in and 
   page,
 }) => {
   await openScenario(page, 'action-follow');
+  const compact = (await mobilePanelButton(page, 'Activity').count()) > 0;
+  await openMobilePanel(page, 'Activity');
   const follow = page.getByRole('button', { name: 'Follow action' });
   await expect(follow).toHaveAttribute('aria-pressed', 'false');
 
@@ -1476,6 +1571,7 @@ test('other-player action cues remain visible while Follow Action is opt-in and 
   const firstCue = await page.evaluate(() =>
     window.__WORLDSEED_VISUAL__!.appendActionEventBatch(),
   );
+  await openMobilePanel(page, 'Map');
   const minimapCue = page.getByTestId('minimap-action-cue');
   await expect(minimapCue).toBeVisible();
   await expect(minimapCue).toHaveAttribute(
@@ -1488,6 +1584,7 @@ test('other-player action cues remain visible while Follow Action is opt-in and 
   );
   expect((await stateSnapshot(page)).focusSequence).toBe(initialSequence);
 
+  await openMobilePanel(page, 'Activity');
   await follow.click();
   const following = page.getByRole('button', { name: 'Following action' });
   await expect(following).toHaveAttribute('aria-pressed', 'true');
@@ -1510,9 +1607,11 @@ test('other-player action cues remain visible while Follow Action is opt-in and 
   await page.evaluate(() =>
     window.__WORLDSEED_VISUAL__!.appendActionEventBatch(),
   );
+  await openMobilePanel(page, 'Map');
   await expect(minimapCue).toBeVisible();
   expect((await stateSnapshot(page)).focusSequence).toBe(pausedSequence);
 
+  await openMobilePanel(page, 'Activity');
   await resume.click();
   expect((await stateSnapshot(page)).focusSequence).toBe(pausedSequence);
   await page.evaluate(() =>
@@ -1533,13 +1632,24 @@ test('other-player action cues remain visible while Follow Action is opt-in and 
   ).toBeVisible();
   expect((await stateSnapshot(page)).focusSequence).toBe(beforeManualFocus + 1);
 
-  await page.getByRole('button', { name: 'Collapse Activity' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Resume follow' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Open Activity' }),
-  ).toBeVisible();
+  await page
+    .getByRole('button', {
+      name: compact ? 'Close Activity' : 'Collapse Activity',
+    })
+    .click();
+  if (compact) {
+    await openMobilePanel(page, 'Activity');
+    await expect(
+      page.getByRole('button', { name: 'Resume follow' }),
+    ).toBeVisible();
+  } else {
+    await expect(
+      page.getByRole('button', { name: 'Resume follow' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Open Activity' }),
+    ).toBeVisible();
+  }
 
   await page.evaluate(() =>
     window.__WORLDSEED_VISUAL__!.changeActionTrackingMatch(),
@@ -1556,6 +1666,7 @@ test('combat beams skip self actions while retaining minimap cues', async ({
   const self = await appendActionAndReadBeam(page, 'self');
   expect(self.beam.kind).toBe('combat');
   expect(self.beam.visible).toBe(false);
+  await openMobilePanel(page, 'Map');
   await expect(page.getByTestId('minimap-action-cue')).toBeVisible();
 
   const other = await appendActionAndReadBeam(page, 'other');
@@ -1572,6 +1683,7 @@ test('non-combat actions retain minimap cues without globe beams', async ({
     const result = await appendActionAndReadBeam(page, 'other', kind);
     expect(result.beam.kind).toBe(kind);
     expect(result.beam.visible).toBe(false);
+    await openMobilePanel(page, 'Map');
     const minimapCue = page.getByTestId('minimap-action-cue');
     await expect(minimapCue).toBeVisible();
     await expect(minimapCue).toHaveAttribute(
@@ -1586,10 +1698,12 @@ test('reduced motion uses a static action beacon and immediate follow focus', as
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await openScenario(page, 'action-follow');
+  await openMobilePanel(page, 'Activity');
   await page.getByRole('button', { name: 'Follow action' }).click();
   const action = await page.evaluate(() =>
     window.__WORLDSEED_VISUAL__!.appendActionEventBatch(),
   );
+  await openMobilePanel(page, 'Map');
   const cuePath = page
     .getByTestId('minimap-action-cue')
     .locator('.action-cue-target');

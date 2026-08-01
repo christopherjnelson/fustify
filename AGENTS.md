@@ -41,7 +41,11 @@ For changes that affect layout, controls, dialogs, responsive behavior, globe pr
 5. Check clipping, internal scrolling, panel/globe overlap, modal obstruction, contrast, hidden phase controls, responsive spacing, and detached horizon markers.
 6. If an intentional UI change requires new baselines, run `pnpm test:visual:update`, inspect every affected full-page capture, and then rerun `pnpm test:visual`.
 
-Playwright starts Vite on port 4173. Its Chromium projects are 1920×1080, 1366×768, and 390×844. Full-page review output is generated under `test-results/ui-review/`; UI-region baselines are committed under `tests/e2e/visual.spec.ts-snapshots/`.
+Playwright starts Vite on port 4173. Its Chromium projects are 1920×1080,
+1366×768, and 390×844, plus an 844×390 touch-enabled landscape project
+limited to the mobile gameplay suite. Full-page review output is generated
+under `test-results/ui-review/`; UI-region baselines are committed under
+`tests/e2e/visual.spec.ts-snapshots/`.
 
 ## Scenario-fixture safety
 

@@ -1,37 +1,39 @@
-export const CURRENT_GENERATOR_VERSION = 3;
+export const LEGACY_GENERATOR_VERSION = 3;
 export const NORMALIZED_GENERATOR_VERSION = 4;
 export const DEFAULT_GENERATOR_VERSION = NORMALIZED_GENERATOR_VERSION;
 export const GENERATOR_VERSION = DEFAULT_GENERATOR_VERSION;
-export const CURRENT_GENERATOR_PROFILE = 'v1-current';
+export const LEGACY_GENERATOR_PROFILE = 'v1-legacy';
+export const LEGACY_GENERATOR_PROFILE_ALIAS = 'v1-current';
 export const NORMALIZED_GENERATOR_PROFILE = 'v2-normalized';
 
 export type WorldGeneratorVersion =
-  typeof CURRENT_GENERATOR_VERSION | typeof NORMALIZED_GENERATOR_VERSION;
+  typeof LEGACY_GENERATOR_VERSION | typeof NORMALIZED_GENERATOR_VERSION;
 
 export type WorldGeneratorProfile =
-  typeof CURRENT_GENERATOR_PROFILE | typeof NORMALIZED_GENERATOR_PROFILE;
+  typeof LEGACY_GENERATOR_PROFILE | typeof NORMALIZED_GENERATOR_PROFILE;
 
 export function generatorProfile(
   version: WorldGeneratorVersion,
 ): WorldGeneratorProfile {
   return version === NORMALIZED_GENERATOR_VERSION
     ? NORMALIZED_GENERATOR_PROFILE
-    : CURRENT_GENERATOR_PROFILE;
+    : LEGACY_GENERATOR_PROFILE;
 }
 
 export function generatorVersionFromProfile(
   profile: string | null | undefined,
 ): WorldGeneratorVersion {
-  return profile === CURRENT_GENERATOR_PROFILE
-    ? CURRENT_GENERATOR_VERSION
+  return profile === LEGACY_GENERATOR_PROFILE ||
+    profile === LEGACY_GENERATOR_PROFILE_ALIAS
+    ? LEGACY_GENERATOR_VERSION
     : DEFAULT_GENERATOR_VERSION;
 }
 
 export function resolveGeneratorVersion(
   version: unknown,
 ): WorldGeneratorVersion {
-  return version === CURRENT_GENERATOR_VERSION
-    ? CURRENT_GENERATOR_VERSION
+  return version === LEGACY_GENERATOR_VERSION
+    ? LEGACY_GENERATOR_VERSION
     : DEFAULT_GENERATOR_VERSION;
 }
 export const DEFAULT_TERRITORY_COUNT = 42;

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { generatePlanet } from '../generation/generatePlanet';
 import {
-  CURRENT_GENERATOR_VERSION,
+  LEGACY_GENERATOR_VERSION,
   DEFAULT_GENERATOR_VERSION,
-  CURRENT_GENERATOR_PROFILE,
+  LEGACY_GENERATOR_PROFILE,
+  LEGACY_GENERATOR_PROFILE_ALIAS,
   NORMALIZED_GENERATOR_PROFILE,
   NORMALIZED_GENERATOR_VERSION,
 } from '../generation/constants';
@@ -35,7 +36,7 @@ describe('versioned world setup URLs', () => {
   it('round-trips a valid setup deterministically', () => {
     const setup: WorldSetup = {
       version: 1,
-      generatorVersion: CURRENT_GENERATOR_VERSION,
+      generatorVersion: LEGACY_GENERATOR_VERSION,
       seed: 'shared-world',
       territoryCount: 36,
       continentCount: 5,
@@ -48,10 +49,20 @@ describe('versioned world setup URLs', () => {
     );
     const second = serializeWorldSetup(setup, first);
     expect(first.toString()).toBe(
-      `v=1&generator=${CURRENT_GENERATOR_PROFILE}&seed=shared-world&territories=36&continents=5&players=3&assignment=player-draft&a=first&logo=a&z=last`,
+      `v=1&generator=${LEGACY_GENERATOR_PROFILE}&seed=shared-world&territories=36&continents=5&players=3&assignment=player-draft&a=first&logo=a&z=last`,
     );
     expect(second.toString()).toBe(first.toString());
     expect(worldSetupsEqual(parseWorldSetup(first).setup, setup)).toBe(true);
+  });
+
+  it('accepts the former v1-current profile as a legacy compatibility alias', () => {
+    const parsed = parseWorldSetup(
+      `v=1&generator=${LEGACY_GENERATOR_PROFILE_ALIAS}&seed=legacy`,
+    ).setup;
+    expect(parsed.generatorVersion).toBe(LEGACY_GENERATOR_VERSION);
+    expect(serializeWorldSetup(parsed).get('generator')).toBe(
+      LEGACY_GENERATOR_PROFILE,
+    );
   });
 
   it('generates the same planet from the same copied setup URL', () => {
