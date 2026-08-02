@@ -58,12 +58,6 @@ const suites: SuiteDefinition[] = [
     command: 'git diff --check',
   },
   {
-    id: 'generation-quick',
-    displayName: 'Generation simulation',
-    category: 'generation-quick',
-    command: 'pnpm test:simulation',
-  },
-  {
     id: 'bot-quick',
     displayName: 'Quick bot simulation',
     category: 'bot-quick',

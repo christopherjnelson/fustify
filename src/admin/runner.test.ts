@@ -30,7 +30,9 @@ describe('verification runner', () => {
   it('persists incremental passed and failed command results and continues', async () => {
     const directory = await temporaryDirectory('fustify-runner-');
     const reportDirectory = resolve(directory, 'reports');
+    const commands: string[] = [];
     const runner: CommandRunner = vi.fn(async (command, child) => {
+      commands.push(command);
       child(null);
       const failed =
         command === 'pnpm lint' ||
@@ -56,9 +58,16 @@ describe('verification runner', () => {
     expect(report.suites.find((suite) => suite.id === 'lint')?.status).toBe(
       'failed',
     );
-    expect(
-      report.suites.find((suite) => suite.id === 'generation-quick')?.status,
-    ).toBe('passed');
+    expect(commands).toEqual([
+      'pnpm test',
+      'pnpm exec tsc -b',
+      'pnpm lint',
+      'pnpm build',
+      'pnpm format:check',
+      'git diff --check',
+      'pnpm simulate:bots -- --games 10',
+      'pnpm test:coverage',
+    ]);
     expect(report.failures).toHaveLength(3);
     expect(
       (await readValidatedReport(reportPaths(reportDirectory).latest)).id,

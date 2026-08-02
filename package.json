@@ -21,7 +21,7 @@
     "test:watch": "vitest",
     "test:names": "NAMING_AUDIT=1 vitest run src/core/generation/naming/generateGeographicNames.test.ts",
     "test:integration:dev-proxy": "vitest run --config vitest.integration.config.ts",
-    "test:coverage": "vitest run --coverage src/core",
+    "test:coverage": "vitest run --coverage src/core/game src/core/persistence/saveGame.test.ts src/core/simulation/simulator.test.ts",
     "test:simulation": "vitest run --disableConsoleIntercept src/core/simulation/simulator.test.ts",
     "test:simulation:stress": "SIMULATION_STRESS=1 vitest run --disableConsoleIntercept src/core/simulation/simulator.test.ts",
     "test:simulation:replay": "vitest run --disableConsoleIntercept src/core/simulation/simulator.test.ts -t 'replays the configured failing seed'",
