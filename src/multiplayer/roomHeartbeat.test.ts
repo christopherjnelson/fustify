@@ -154,27 +154,24 @@ describe('waiting-room membership heartbeat', () => {
     stop();
   });
 
-  it.each(['leave', 'closure', 'match start', 'account change', 'unmount'])(
-    'stops timers and recovery listeners after %s',
-    async () => {
-      vi.useFakeTimers();
-      const { windowTarget, documentTarget } = schedulerTargets();
-      const touch = vi.fn(async () => true);
-      const stop = startRoomHeartbeatScheduler({
-        touch,
-        reconcile: vi.fn(async () => undefined),
-      });
-      await flushPromises();
+  it('disposes the interval and recovery listeners when stopped', async () => {
+    vi.useFakeTimers();
+    const { windowTarget, documentTarget } = schedulerTargets();
+    const touch = vi.fn(async () => true);
+    const stop = startRoomHeartbeatScheduler({
+      touch,
+      reconcile: vi.fn(async () => undefined),
+    });
+    await flushPromises();
 
-      stop();
-      windowTarget.dispatch('focus');
-      windowTarget.dispatch('online');
-      documentTarget.dispatch('visibilitychange');
-      await vi.advanceTimersByTimeAsync(ROOM_HEARTBEAT_INTERVAL_MS * 2);
+    stop();
+    windowTarget.dispatch('focus');
+    windowTarget.dispatch('online');
+    documentTarget.dispatch('visibilitychange');
+    await vi.advanceTimersByTimeAsync(ROOM_HEARTBEAT_INTERVAL_MS * 2);
 
-      expect(touch).toHaveBeenCalledTimes(1);
-    },
-  );
+    expect(touch).toHaveBeenCalledTimes(1);
+  });
 
   it('enables scheduling only for canonical waiting-room membership', () => {
     const state = {

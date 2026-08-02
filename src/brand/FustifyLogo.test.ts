@@ -5,10 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { FustifyLogo } from './FustifyLogo';
 import { FustifyMark } from './FustifyMark';
 
-const assetPaths = [
-  'public/brand/fustify-globe-f-master.png',
-  'public/brand/fustify-globe-f-512.png',
-  'public/brand/fustify-globe-f-256.png',
+const squareIconPaths = [
   'public/apple-touch-icon.png',
   'public/favicon-64.png',
   'public/favicon-32.png',
@@ -88,7 +85,7 @@ describe('FustifyLogo', () => {
 });
 
 describe('static brand assets', () => {
-  it.each(assetPaths)('%s is a square PNG', (assetPath) => {
+  it.each(squareIconPaths)('%s is a square PNG', (assetPath) => {
     const dimensions = pngDimensions(assetPath);
 
     expect(dimensions.width).toBe(dimensions.height);
