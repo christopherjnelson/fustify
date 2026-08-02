@@ -12,7 +12,8 @@ const phase = process.env.WORLD_AUDIT_PHASE ?? 'corrected';
 const allowFailures = process.env.WORLD_AUDIT_ALLOW_FAILURES === '1';
 const artifactRoot = path.resolve('.fustify/reports/world-generation', phase);
 
-test.beforeAll(async (_fixtures, testInfo) => {
+test.beforeAll(async ({ browserName: _browserName }, testInfo) => {
+  void _browserName;
   if (testInfo.project.name !== 'desktop-1920') return;
   await rm(artifactRoot, { recursive: true, force: true });
   await mkdir(artifactRoot, { recursive: true });
