@@ -1,5 +1,7 @@
 # Fustify
 
+[![CI](https://github.com/christopherjnelson/fustify/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/christopherjnelson/fustify/actions/workflows/ci.yml)
+
 **Strategy on a different world every time.**
 
 <img width="1827" height="875" alt="procedural generated strategy" src="https://github.com/user-attachments/assets/48362323-f810-4962-88e6-aaeb5355514b" />
