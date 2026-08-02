@@ -92,31 +92,28 @@ describe('active-match HUD utilities', () => {
     expect(markup).toContain('aria-valuetext="Fast · 1 second"');
   });
 
-  it.each(['local', 'authoritative multiplayer'])(
-    'omits debug access for %s play while retaining player utilities',
-    () => {
-      const markup = renderToStaticMarkup(
+  it('omits debug access while retaining player utilities', () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        HudUtilityRow,
+        {},
         createElement(
-          HudUtilityRow,
-          {},
-          createElement(
-            'details',
-            { className: 'game-menu' },
-            createElement(SettingsMenuSummary),
-          ),
+          'details',
+          { className: 'game-menu' },
+          createElement(SettingsMenuSummary),
         ),
-      );
+      ),
+    );
 
-      expect(markup).not.toMatch(/>\s*Debug\s*</);
-      expect(markup).not.toContain('aria-pressed=');
-      expect(markup).not.toContain('Territory list');
-      expect(markup).toContain(
-        '<summary aria-label="Settings" title="Settings">',
-      );
-      expect(markup).toContain('<svg viewBox="0 0 24 24" aria-hidden="true"');
-      expect(markup).not.toContain('>Game</summary>');
-    },
-  );
+    expect(markup).not.toMatch(/>\s*Debug\s*</);
+    expect(markup).not.toContain('aria-pressed=');
+    expect(markup).not.toContain('Territory list');
+    expect(markup).toContain(
+      '<summary aria-label="Settings" title="Settings">',
+    );
+    expect(markup).toContain('<svg viewBox="0 0 24 24" aria-hidden="true"');
+    expect(markup).not.toContain('>Game</summary>');
+  });
 
   it('retains the underlying debug state and action for future authorized access', () => {
     expect(useGameStore.getState().debugView).toBe(false);
@@ -185,26 +182,23 @@ describe('territory selection presentation', () => {
 });
 
 describe('player globe view modes', () => {
-  it.each(['local', 'authoritative multiplayer'])(
-    'offers only Ownership and Continents in the %s HUD',
-    () => {
-      const markup = renderToStaticMarkup(
-        createElement(PlayerViewModeSelector, {
-          viewMode: 'ownership',
-          onViewModeChange: () => undefined,
-        }),
-      );
+  it('offers only Ownership and Continents in the player HUD', () => {
+    const markup = renderToStaticMarkup(
+      createElement(PlayerViewModeSelector, {
+        viewMode: 'ownership',
+        onViewModeChange: () => undefined,
+      }),
+    );
 
-      expect(PLAYER_VIEW_MODES.map((mode) => mode.id)).toEqual([
-        'ownership',
-        'continents',
-      ]);
-      expect(markup).toContain('>Ownership</button>');
-      expect(markup).toContain('>Continents</button>');
-      expect(markup).not.toContain('Terrain');
-      expect(markup.match(/<button/g)).toHaveLength(2);
-    },
-  );
+    expect(PLAYER_VIEW_MODES.map((mode) => mode.id)).toEqual([
+      'ownership',
+      'continents',
+    ]);
+    expect(markup).toContain('>Ownership</button>');
+    expect(markup).toContain('>Continents</button>');
+    expect(markup).not.toContain('Terrain');
+    expect(markup.match(/<button/g)).toHaveLength(2);
+  });
 
   it('retains selection behavior for both player-facing modes', () => {
     const ownershipMarkup = renderToStaticMarkup(
@@ -287,21 +281,18 @@ describe('reinforcement placement controls', () => {
     expect(markup).toContain('Place 3 armies');
   });
 
-  it.each(['local', 'authoritative multiplayer'])(
-    'shows only the singular placement action for one remaining army in %s play',
-    () => {
-      const markup = renderReinforcementControls({
-        remainingReinforcements: 1,
-        amount: 4,
-      });
+  it('shows only the singular placement action for one remaining army', () => {
+    const markup = renderReinforcementControls({
+      remainingReinforcements: 1,
+      amount: 4,
+    });
 
-      expect(markup).not.toContain('type="range"');
-      expect(markup).not.toContain('Armies to place');
-      expect(markup).not.toContain('Max:');
-      expect(markup).toContain('Place 1 army');
-      expect(markup).not.toContain('Place 1 armies');
-    },
-  );
+    expect(markup).not.toContain('type="range"');
+    expect(markup).not.toContain('Armies to place');
+    expect(markup).not.toContain('Max:');
+    expect(markup).toContain('Place 1 army');
+    expect(markup).not.toContain('Place 1 armies');
+  });
 
   it('keeps the singular action disabled and busy while multiplayer placement is pending', () => {
     const markup = renderReinforcementControls({
