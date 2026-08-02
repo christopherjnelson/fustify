@@ -7,11 +7,12 @@ existing pnpm checks → validated JSON artifacts → read-only Vite API → /ad
 ```
 
 Run `pnpm verify:report` for the practical standard profile (unit, typecheck,
-lint, build, formatting, diff consistency, quick generation, quick bots, and
-coverage). Run `pnpm verify:report:full` to add Playwright interaction and
-visual comparisons plus generation and bot stress suites. Independent checks
-continue after a failure. Extended thousands-game studies remain explicit
-`pnpm simulate:bots` commands and are never part of ordinary verification.
+lint, build, formatting, diff consistency, quick bots, and coverage). The unit
+suite already includes the ordinary generation-simulation smoke matrix. Run
+`pnpm verify:report:full` to add Playwright interaction and visual comparisons
+plus generation and bot stress suites. Independent checks continue after a
+failure. Extended thousands-game studies remain explicit `pnpm simulate:bots`
+commands and are never part of ordinary verification.
 
 Reports use schema version 1, validated at every write and read. The runner
 atomically replaces `.fustify/reports/latest.json` before and after each suite,
