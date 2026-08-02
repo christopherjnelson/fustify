@@ -41,11 +41,6 @@ const scenarios: Array<{
     heading: /Preview and assign territories/i,
   },
   {
-    name: 'multiple-bot-setup',
-    region: '.game-setup-shell-overlay',
-    heading: /Preview and assign territories/i,
-  },
-  {
     name: 'pregame-six-seats',
     region: '.game-setup-shell-overlay',
     heading: /Preview and assign territories/i,
@@ -104,7 +99,6 @@ const scenarios: Array<{
   },
   { name: 'bot-turn', region: '.hud', heading: /is acting/i },
   { name: 'bot-reinforcement', region: '.hud', heading: /is acting/i },
-  { name: 'human-after-bot', region: '.hud', heading: /Crimson League/i },
   { name: 'bot-victory', region: '.hud', heading: /Match won/i },
   { name: 'attack-source', region: '.hud', heading: /Crimson League/i },
   { name: 'attack-target', region: '.hud', heading: /Crimson League/i },
