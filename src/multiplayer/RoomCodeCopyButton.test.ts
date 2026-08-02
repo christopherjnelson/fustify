@@ -1,12 +1,12 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { RoomCodeCopyControl } from './RoomCodeCopyButton';
 import {
   copyRoomCode,
   ROOM_CODE_COPY_FEEDBACK_MS,
-  RoomCodeCopyControl,
   scheduleRoomCodeCopyReset,
-} from './RoomCodeCopyButton';
+} from './roomCodeCopy';
 
 describe('room code copy control', () => {
   it('copies the formatted room code and renders visible, accessible success feedback', async () => {
