@@ -167,6 +167,7 @@ export const runCommand: CommandRunner = (command, onChild) =>
 export async function executeVerification(
   profile: 'standard' | 'full',
   commandRunner: CommandRunner = runCommand,
+  reportDirectory?: string,
 ): Promise<VerificationRun> {
   const startedAt = new Date().toISOString();
   const selected = suites.filter(
@@ -207,13 +208,13 @@ export async function executeVerification(
   process.once('SIGINT', sigint);
   process.once('SIGTERM', sigterm);
   try {
-    await writeLatest(run);
+    await writeLatest(run, reportDirectory);
     for (const suite of run.suites) {
       if (interruption) break;
       suite.status = 'running';
       suite.startedAt = new Date().toISOString();
       run.updatedAt = suite.startedAt;
-      await writeLatest(run);
+      await writeLatest(run, reportDirectory);
       try {
         const result = await commandRunner(suite.command, (child) => {
           activeChild = child;
@@ -291,7 +292,7 @@ export async function executeVerification(
       }
       run.updatedAt = new Date().toISOString();
       run.totals = summarizeRun(run);
-      await writeLatest(run);
+      await writeLatest(run, reportDirectory);
     }
     if (interruption) {
       const active = run.suites.find((suite) => suite.status === 'running');
@@ -319,6 +320,7 @@ export async function executeVerification(
     await finalizeReport(
       run,
       Number(process.env.FUSTIFY_REPORT_RETENTION ?? 20),
+      reportDirectory,
     );
   }
   return run;
