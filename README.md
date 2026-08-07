@@ -6,7 +6,6 @@
 
 <img width="1827" height="875" alt="procedural generated strategy" src="https://github.com/user-attachments/assets/48362323-f810-4962-88e6-aaeb5355514b" />
 
-**[Play the live beta →](https://dev.fustify.com)**
 
 Fustify is a browser strategy game played on deterministic, procedurally
 generated spherical worlds. Registered players can play locally against
