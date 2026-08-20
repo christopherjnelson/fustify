@@ -1,0 +1,28 @@
+:8080 {
+	encode zstd gzip
+
+	@blocked path_regexp blocked (^|/)(\.[^/]+|src(/|$)|node_modules(/|$))|\.map$
+	respond @blocked 404
+
+	handle /api/* {
+		reverse_proxy fustify-api:8787
+	}
+
+	@supabase path /auth/v1 /auth/v1/* /rest/v1 /rest/v1/* /realtime/v1 /realtime/v1/* /storage/v1 /storage/v1/* /functions/v1 /functions/v1/* /graphql/v1 /graphql/v1/*
+	handle @supabase {
+		reverse_proxy api-gw:8000
+	}
+
+	handle {
+		root * /srv/fustify/web
+
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+
+		@html not path /assets/*
+		header @html Cache-Control "no-cache, no-store, must-revalidate"
+
+		try_files {path} /index.html
+		file_server
+	}
+}

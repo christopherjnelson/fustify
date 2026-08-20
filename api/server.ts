@@ -7,7 +7,10 @@ import {
   SupabaseStartMatchRepository,
 } from './startMatchService.ts';
 import { runAuthoritativeInitializer } from './workerInitializer.ts';
-import { resolveFustifyApiPort } from './runtimeConfiguration.ts';
+import {
+  resolveFustifyApiHost,
+  resolveFustifyApiPort,
+} from './runtimeConfiguration.ts';
 
 class MissingEnvironmentError extends Error {
   readonly variableName: string;
@@ -64,9 +67,11 @@ function createAdminConsole() {
         new URL(url).hostname.split('.')[0]!,
       managementAccessToken:
         process.env.SUPABASE_MANAGEMENT_ACCESS_TOKEN?.trim() || undefined,
+      platformApiEnabled:
+        process.env.SUPABASE_DEPLOYMENT_MODE?.trim() !== 'self-hosted',
       expectedMigration:
         process.env.FUSTIFY_EXPECTED_SUPABASE_MIGRATION?.trim() ||
-        '20260728042940',
+        '20260730002339',
       mutationsEnabled: process.env.FUSTIFY_ADMIN_MUTATIONS_ENABLED === '1',
     });
   } catch (error) {
@@ -84,10 +89,11 @@ function createAdminConsole() {
 const service = createMatchStartService();
 const server = createApiServer(service, createAdminConsole());
 const port = resolveFustifyApiPort(process.env.FUSTIFY_API_PORT);
+const host = resolveFustifyApiHost(process.env.FUSTIFY_API_HOST);
 
-server.listen(port, '127.0.0.1');
+server.listen(port, host);
 await once(server, 'listening');
-console.log(`Fustify API listening on http://127.0.0.1:${port.toString()}`);
+console.log(`Fustify API listening on http://${host}:${port.toString()}`);
 
 async function shutdown() {
   server.close();

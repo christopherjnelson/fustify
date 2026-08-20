@@ -29,8 +29,8 @@ export async function installAdminAuthFixture(
       missing_profiles: 0,
       inconsistent_rooms: 0,
       incomplete_matches: 0,
-      latest_migration: '20260728042940',
-      expected_migration: '20260728042940',
+      latest_migration: '20260730002339',
+      expected_migration: '20260730002339',
       migration_drift: false,
       cache_hit_ratio: 0.99,
       index_hit_ratio: 0.98,
@@ -42,6 +42,7 @@ export async function installAdminAuthFixture(
     if (pathname.endsWith('/overview')) body = { health, overview: null };
     else if (pathname.endsWith('/metrics'))
       body = {
+        configured: true,
         generatedAt: '2026-07-28T04:00:00.000Z',
         aggregates: { pg_stat_database_numbackends: 4 },
       };

@@ -9,6 +9,10 @@ The only authorized deployment target is:
 - Region: `us-east-1`
 - PostgreSQL: 17
 
+This is the only authorized **hosted** target. A production self-hosted target
+must use the pinned bundle and migration procedure below; never point remote
+commands intended for this project ref at an unverified self-hosted database.
+
 Never reset this project or delete unrelated audit rows. The source of truth is
 `supabase/migrations/` plus the source-controlled directories under
 `supabase/functions/`.
@@ -37,6 +41,143 @@ Migration order:
 20. `20260728042940_expand_admin_operations.sql`
 21. `20260728203358_unique_usernames_discord_onboarding.sql`
 22. `20260730002339_enable_six_continent_worlds.sql`
+
+## Self-hosted production
+
+The supported self-hosted topology keeps the application contract unchanged:
+Supabase Auth, PostgREST/RPC, Realtime, Storage, and the three Edge Functions
+run in the official Docker stack. Fustify adds a small Compose overlay for
+Discord Auth, function secrets, Caddy TLS, private database ports, and a
+one-shot migration service that runs after Supabase Auth is healthy. The
+reviewed upstream release is `self-hosted/v0.8.0` at commit
+`241bb11c0627f2981746d37033f57dbfa81d29b0`; do not float image tags or deploy
+the CLI local-development stack to the Internet.
+
+Install a rehearsal or production instance into an empty absolute directory:
+
+```bash
+pnpm supabase:self-host:install -- /srv/fustify-supabase
+cd /srv/fustify-supabase
+sh utils/generate-keys.sh
+sh utils/add-new-auth-keys.sh
+```
+
+Review `.env` after key generation and replace every `replace_*` value. Set the
+public backend hostname, application URL, exact Auth redirects, production
+SMTP, and Discord credentials. The host must have inbound TCP 80/443, inbound
+UDP 443 when HTTP/3 is desired, working DNS, outbound SMTP/Discord access, and
+at least 4 GB RAM/2 CPUs/40 GB SSD; 8 GB RAM/4 CPUs/80 GB SSD is preferred.
+Caddy is the only public service. Envoy remains Compose-internal and Supavisor
+binds only to host loopback.
+
+Synchronize function source, its shared application modules, and pending
+migrations after application changes, then validate before every start:
+
+```bash
+FUSTIFY_SUPABASE_ROOT=/srv/fustify-supabase \
+  pnpm supabase:self-host:sync-functions
+FUSTIFY_SUPABASE_ROOT=/srv/fustify-supabase \
+  pnpm supabase:self-host:validate
+cd /srv/fustify-supabase
+docker compose up -d --wait
+docker compose ps
+FUSTIFY_SUPABASE_ROOT=/srv/fustify-supabase \
+  pnpm supabase:self-host:verify-runtime
+```
+
+Configure the Node API with the self-hosted public URL and keys and set
+`SUPABASE_DEPLOYMENT_MODE=self-hosted`. In this mode application-owned admin
+features remain active, while hosted Management API logs, Metrics, advisors,
+and dashboard links are deliberately disabled. Inspect services with
+`docker compose logs <service>` instead.
+
+### Platform migration and rollback
+
+Perform the first full rehearsal on local hardware. Export the hosted database
+to a new mode-0700 directory using the session pooler or direct connection:
+
+```bash
+SUPABASE_PLATFORM_DB_URL='postgresql://...' \
+  pnpm supabase:self-host:export-platform -- /absolute/path/platform-export
+```
+
+After validating the fresh self-hosted stack, restore only into the isolated
+target. This action changes its database and requires an explicit confirmation:
+
+```bash
+FUSTIFY_PLATFORM_RESTORE_CONFIRMATION='RESTORE PLATFORM DATABASE' \
+  deployment/self-hosted-supabase/restore-platform.sh \
+  /absolute/path/platform-export /srv/fustify-supabase
+```
+
+The target schema is created from the source-controlled migrations. The hosted
+export supplies roles and data, including Auth users; `schema.sql` remains in
+the checksummed export as audit and recovery evidence but is not reapplied over
+the migrated target. Storage object bytes and Edge Functions are not part of
+the database export. Configure rclone remotes for the hosted and self-hosted
+Storage S3 endpoints, review the mandatory dry run, then apply:
+
+```bash
+pnpm supabase:self-host:copy-storage -- hosted:fustify selfhost:fustify
+FUSTIFY_STORAGE_COPY_APPLY=1 \
+  pnpm supabase:self-host:copy-storage -- hosted:fustify selfhost:fustify
+```
+
+Create or update Vault entries after restore so database-triggered Discord
+delivery targets the new public function URL and uses the same invocation
+secret as the Functions container:
+
+```sql
+select vault.create_secret(
+  'https://supabase.example.com/functions/v1/announce-public-room',
+  'discord_room_announcement_function_url'
+);
+select vault.create_secret(
+  '<same high-entropy invocation secret as .env>',
+  'discord_room_announcement_invocation_secret'
+);
+```
+
+Existing hosted JWTs do not validate against the new signing keys. Schedule a
+maintenance window and require all players to sign in again. Keep the hosted
+project unchanged during the rollback window; rollback is an application
+redeploy using the previous hosted URL and keys.
+
+### Backups and recovery
+
+Production backups use Restic so the database, Storage objects, functions,
+Postgres custom-key material, Compose inputs, and secrets are encrypted
+together. Configure a repository on a different machine in
+`/srv/fustify-supabase/.env.backup`:
+
+```dotenv
+RESTIC_REPOSITORY=sftp:backup-host:/srv/backups/fustify-supabase
+RESTIC_PASSWORD_FILE=/home/fustify/.config/restic/fustify-password
+```
+
+Install the checked-in systemd service and timer with the paths and service
+account adjusted for the host. The nightly job briefly stops the stack for a
+filesystem-consistent snapshot, keeps seven daily and four weekly snapshots,
+restarts with health checks, and refuses overlapping runs. A restore retains
+the previous database and Storage directories under a timestamped
+`pre-restore-*` directory and requires
+`FUSTIFY_RESTORE_CONFIRMATION='RESTORE FUSTIFY SUPABASE'`. Perform one restore
+rehearsal before production cutover.
+
+### Cutover gates
+
+- `docker compose ps` reports every required service healthy.
+- The migration history ends at `20260730002339` and database tests pass.
+- Email signup, confirmation, recovery, anonymous upgrade, Discord sign-in and
+  linking, and profile avatar import pass on the new hostname.
+- Room creation/publication, thumbnail upload, Discord delivery, multiplayer
+  authority/concurrency, Realtime recovery, admin authorization, and cleanup
+  jobs pass.
+- Run `pnpm test`, `pnpm test:simulation`,
+  `pnpm test:simulation:stress`, the multiplayer Playwright suites, and
+  `pnpm verify:report:full` before changing production URLs.
+- Verify an encrypted off-host backup and a full restore before accepting
+  public multiplayer traffic.
 
 The authority migration extends `matches`, creates append-only
 `match_commands`, adds member-scoped read RLS, removes browser execution of the

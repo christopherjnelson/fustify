@@ -25,6 +25,8 @@ routes coding agents to the appropriate runbook.
   bundle analysis and budgets
 - [`operations/deployment.md`](operations/deployment.md): droplet deployment,
   rollback, retention, and recovery
+- [`operations/lan.md`](operations/lan.md): one-project Docker/Arcane LAN
+  installation, operation, updates, and recovery
 
 ## Product systems
 

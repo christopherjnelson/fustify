@@ -89,8 +89,8 @@ const health = {
   missing_profiles: 1,
   inconsistent_rooms: 2,
   incomplete_matches: 1,
-  latest_migration: '20260728042940',
-  expected_migration: '20260728042940',
+  latest_migration: '20260730002339',
+  expected_migration: '20260730002339',
   migration_drift: false,
   cache_hit_ratio: 0.997,
   index_hit_ratio: 0.994,
@@ -111,6 +111,7 @@ export function fixtureAdminConsoleSource(): AdminConsoleSource {
     },
     async metrics() {
       return {
+        configured: true,
         generatedAt: '2026-07-28T04:00:00.000Z',
         aggregates: {
           pg_stat_database_numbackends: 9,

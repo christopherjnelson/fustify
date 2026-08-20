@@ -256,19 +256,29 @@ function Overview({ source }: { source: AdminConsoleSource }) {
       <State loading={state.loading} error={state.error}>
         {state.data && <HealthMetrics health={state.data.health} />}
       </State>
-      <h3>Supabase Metrics API</h3>
+      <h3>Infrastructure metrics</h3>
       <State loading={metrics.loading} error={metrics.error}>
-        <div className="admin-metric-list">
-          {metrics.data &&
-            Object.entries(metrics.data.aggregates)
-              .slice(0, 24)
-              .map(([name, value]) => (
-                <div key={name}>
-                  <code>{name}</code>
-                  <strong>{formatNumber(value)}</strong>
-                </div>
-              ))}
-        </div>
+        {metrics.data?.configured === false ? (
+          <div className="admin-notice">
+            <h3>Hosted metrics unavailable</h3>
+            <p>
+              This deployment does not use the Supabase platform Metrics API.
+              Inspect the self-hosted containers on the backend server.
+            </p>
+          </div>
+        ) : (
+          <div className="admin-metric-list">
+            {metrics.data &&
+              Object.entries(metrics.data.aggregates)
+                .slice(0, 24)
+                .map(([name, value]) => (
+                  <div key={name}>
+                    <code>{name}</code>
+                    <strong>{formatNumber(value)}</strong>
+                  </div>
+                ))}
+          </div>
+        )}
       </State>
     </section>
   );
@@ -856,8 +866,8 @@ function Logs({ source }: { source: AdminConsoleSource }) {
       <div className="admin-section-heading">
         <div>
           <p className="admin-eyebrow">Curated and redacted</p>
-          <h2 id="admin-logs">Supabase logs</h2>
-          <p>Warnings and errors only; raw payloads remain in Supabase.</p>
+          <h2 id="admin-logs">Backend logs</h2>
+          <p>Warnings and errors only; raw payloads remain on the backend.</p>
         </div>
         <div className="admin-filter">
           <label>
@@ -902,7 +912,10 @@ function Logs({ source }: { source: AdminConsoleSource }) {
         {!state.data?.configured ? (
           <div className="admin-notice">
             <h3>Log access not configured</h3>
-            <p>Add the server-only analytics token to enable this feed.</p>
+            <p>
+              Hosted log access is unavailable. Inspect the self-hosted
+              containers on the backend server.
+            </p>
           </div>
         ) : (
           <>

@@ -19,6 +19,7 @@ function source(): AdminConsoleSource {
     }),
     audit: vi.fn(async () => []),
     metrics: vi.fn(async () => ({
+      configured: true,
       generatedAt: new Date(0).toISOString(),
       aggregates: {},
     })),
@@ -54,7 +55,7 @@ describe('expanded administration console', () => {
 
     expect(markup).toContain('Search accounts');
     expect(markup).toContain('Confirmation');
-    expect(markup).not.toContain('Supabase logs');
+    expect(markup).not.toContain('Backend logs');
     expect(consoleSource.logs).not.toHaveBeenCalled();
   });
 

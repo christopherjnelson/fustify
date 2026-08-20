@@ -1,0 +1,61 @@
+services:
+  api-gw:
+    ports: !override []
+
+  auth:
+    environment:
+      GOTRUE_EXTERNAL_DISCORD_ENABLED: '${DISCORD_ENABLED:-false}'
+      GOTRUE_EXTERNAL_DISCORD_CLIENT_ID: '${DISCORD_CLIENT_ID:-}'
+      GOTRUE_EXTERNAL_DISCORD_SECRET: '${DISCORD_CLIENT_SECRET:-}'
+      GOTRUE_EXTERNAL_DISCORD_REDIRECT_URI: '${API_EXTERNAL_URL}/callback'
+
+  functions:
+    volumes:
+      - ./volumes/fustify-src:/home/deno/src:ro
+    environment:
+      DISCORD_WEBHOOK: '${DISCORD_WEBHOOK:-}'
+      DISCORD_ROOM_ANNOUNCEMENT_INVOCATION_SECRET: '${DISCORD_ROOM_ANNOUNCEMENT_INVOCATION_SECRET:-}'
+
+  fustify-migrations:
+    image: supabase/postgres:17.6.1.136
+    restart: 'no'
+    depends_on:
+      auth:
+        condition: service_healthy
+    entrypoint: ['/bin/bash', '/fustify/apply-migrations.sh']
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: '${POSTGRES_PORT}'
+      POSTGRES_DB: '${POSTGRES_DB}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+    volumes:
+      - ./volumes/db/fustify-migrations:/fustify-migrations:ro
+      - ./volumes/db/fustify-apply-migrations.sh:/fustify/apply-migrations.sh:ro
+
+  supavisor:
+    ports: !override
+      - '127.0.0.1:${POSTGRES_PORT}:5432'
+      - '127.0.0.1:${POOLER_PROXY_PORT_TRANSACTION}:6543'
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    depends_on:
+      api-gw:
+        condition: service_healthy
+      fustify-migrations:
+        condition: service_completed_successfully
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      FUSTIFY_SUPABASE_DOMAIN: '${FUSTIFY_SUPABASE_DOMAIN}'
+    volumes:
+      - ./Caddyfile.fustify:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

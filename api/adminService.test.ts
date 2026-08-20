@@ -199,4 +199,22 @@ describe('Supabase administration service', () => {
       ],
     });
   });
+
+  it('does not call hosted platform APIs in self-hosted mode', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new SupabaseAdminConsole(
+      { ...configuration, platformApiEnabled: false },
+      clients({}),
+    );
+
+    await expect(
+      service.logs({ service: 'all', window: '1h', limit: 50 }),
+    ).resolves.toEqual({ configured: false, entries: [] });
+    await expect(service.metrics()).resolves.toMatchObject({
+      configured: false,
+      aggregates: {},
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

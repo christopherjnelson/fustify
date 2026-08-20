@@ -20,8 +20,10 @@ static health metadata contract. The Node `/api/health` endpoint is the runtime
 health authority.
 
 The API only initializes multiplayer matches. Ordinary multiplayer gameplay
-continues to use Supabase. This workflow does not run migrations or deploy Edge
-Functions.
+continues to use the configured Supabase backend, which may be hosted or
+self-hosted. This workflow does not operate that backend, run migrations, or
+deploy Edge Functions. The self-hosted backend has an independent lifecycle
+documented in the Supabase runbook.
 
 ## One-time installation
 
@@ -68,12 +70,18 @@ Keep both files mode `0600`; never commit them:
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_DEPLOYMENT_MODE` (`hosted` or `self-hosted`)
 - Optional: `FUSTIFY_API_PORT` (default `8787`)
 
 `/srv/fustify/repository/.env.production.local`
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+For self-hosting, both URLs point to the public TLS hostname of the self-hosted
+API gateway. Set `SUPABASE_DEPLOYMENT_MODE=self-hosted`; omit
+`SUPABASE_PROJECT_REF` and `SUPABASE_MANAGEMENT_ACCESS_TOKEN` because the
+platform Management, Metrics, and advisor APIs do not exist there.
 
 After valid server values are present, rerunning `setup-droplet.sh` derives a
 missing or invalid frontend file from the corresponding public server values

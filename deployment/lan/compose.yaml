@@ -1,0 +1,161 @@
+name: fustify-lan
+
+services:
+  studio:
+    extends:
+      file: docker-compose.yml
+      service: studio
+
+  api-gw:
+    extends:
+      file: docker-compose.yml
+      service: api-gw
+    ports: !override []
+    volumes:
+      - ./volumes/api/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro,Z
+      - ./volumes/api/envoy/cds.yaml:/etc/envoy/cds.yaml:ro,Z
+      - ./volumes/api/envoy/lds.template.yaml:/etc/envoy/lds.template.yaml:ro,Z
+      - ./volumes/api/envoy/docker-entrypoint.sh:/docker-entrypoint.sh:ro,Z
+
+  auth:
+    extends:
+      file: docker-compose.yml
+      service: auth
+    environment:
+      GOTRUE_EXTERNAL_DISCORD_ENABLED: '${DISCORD_ENABLED:-false}'
+      GOTRUE_EXTERNAL_DISCORD_CLIENT_ID: '${DISCORD_CLIENT_ID:-}'
+      GOTRUE_EXTERNAL_DISCORD_SECRET: '${DISCORD_CLIENT_SECRET:-}'
+      GOTRUE_EXTERNAL_DISCORD_REDIRECT_URI: '${API_EXTERNAL_URL}/callback'
+
+  rest:
+    extends:
+      file: docker-compose.yml
+      service: rest
+
+  realtime:
+    extends:
+      file: docker-compose.yml
+      service: realtime
+
+  storage:
+    extends:
+      file: docker-compose.yml
+      service: storage
+
+  imgproxy:
+    extends:
+      file: docker-compose.yml
+      service: imgproxy
+
+  meta:
+    extends:
+      file: docker-compose.yml
+      service: meta
+
+  functions:
+    extends:
+      file: docker-compose.yml
+      service: functions
+    volumes:
+      - ./volumes/fustify-src:/home/deno/src:ro,Z
+    environment:
+      DISCORD_WEBHOOK: '${DISCORD_WEBHOOK:-}'
+      DISCORD_ROOM_ANNOUNCEMENT_INVOCATION_SECRET: '${DISCORD_ROOM_ANNOUNCEMENT_INVOCATION_SECRET:-}'
+
+  db:
+    extends:
+      file: docker-compose.yml
+      service: db
+
+  fustify-migrations:
+    image: supabase/postgres:17.6.1.136
+    restart: 'no'
+    depends_on:
+      auth:
+        condition: service_healthy
+    entrypoint: ['/bin/bash', '/fustify/apply-migrations.sh']
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: '${POSTGRES_PORT}'
+      POSTGRES_DB: '${POSTGRES_DB}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+    volumes:
+      - ./volumes/db/fustify-migrations:/fustify-migrations:ro,Z
+      - ./volumes/db/fustify-apply-migrations.sh:/fustify/apply-migrations.sh:ro,Z
+
+  supavisor:
+    extends:
+      file: docker-compose.yml
+      service: supavisor
+    ports: !override
+      - '127.0.0.1:${FUSTIFY_LAN_POSTGRES_PORT:-15432}:5432'
+      - '127.0.0.1:${FUSTIFY_LAN_POOLER_PORT:-16543}:6543'
+
+  fustify-api:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+      target: api
+      args:
+        SUPABASE_PUBLISHABLE_KEY: '${SUPABASE_PUBLISHABLE_KEY}'
+    image: fustify-lan-api:local
+    restart: unless-stopped
+    depends_on:
+      api-gw:
+        condition: service_healthy
+      fustify-migrations:
+        condition: service_completed_successfully
+    environment:
+      FUSTIFY_API_HOST: 0.0.0.0
+      FUSTIFY_API_PORT: 8787
+      SUPABASE_URL: http://api-gw:8000
+      SUPABASE_PUBLISHABLE_KEY: '${SUPABASE_PUBLISHABLE_KEY}'
+      SUPABASE_SECRET_KEY: '${SUPABASE_SECRET_KEY}'
+      SUPABASE_SERVICE_ROLE_KEY: '${SERVICE_ROLE_KEY}'
+      SUPABASE_DEPLOYMENT_MODE: self-hosted
+      FUSTIFY_EXPECTED_SUPABASE_MIGRATION: '20260730002339'
+      FUSTIFY_ADMIN_MUTATIONS_ENABLED: '${FUSTIFY_ADMIN_MUTATIONS_ENABLED:-0}'
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8787/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  caddy:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+      target: gateway
+      args:
+        SUPABASE_PUBLISHABLE_KEY: '${SUPABASE_PUBLISHABLE_KEY}'
+    image: fustify-lan-gateway:local
+    restart: unless-stopped
+    depends_on:
+      api-gw:
+        condition: service_healthy
+      fustify-api:
+        condition: service_healthy
+    ports:
+      - '${FUSTIFY_LAN_BIND_ADDRESS:-0.0.0.0}:${FUSTIFY_LAN_PORT:-8080}:8080'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--quiet',
+          '--spider',
+          'http://127.0.0.1:8080/health.json',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  db-config:
+  deno-cache:

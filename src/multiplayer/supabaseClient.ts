@@ -15,7 +15,11 @@ declare global {
 }
 
 export function readMultiplayerConfiguration(): MultiplayerConfiguration | null {
-  const url = import.meta.env.VITE_SUPABASE_URL?.trim();
+  const configuredUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+  const url =
+    configuredUrl === 'same-origin' && typeof window !== 'undefined'
+      ? window.location.origin
+      : configuredUrl;
   const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
   return url && publishableKey ? { url, publishableKey } : null;
 }

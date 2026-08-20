@@ -34,7 +34,7 @@ function adminConsole(overrides: Partial<AdminConsole> = {}): AdminConsole {
     maintenance: vi.fn(async () => ({ health: {} })),
     mutateMaintenance: vi.fn(async () => ({ retried: true })),
     audit: vi.fn(async () => ({ entries: [] })),
-    metrics: vi.fn(async () => ({ aggregates: {} })),
+    metrics: vi.fn(async () => ({ configured: true, aggregates: {} })),
     ...overrides,
   };
 }

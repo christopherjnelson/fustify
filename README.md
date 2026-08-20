@@ -63,9 +63,29 @@ initialization also requires the server-only `SUPABASE_SERVICE_ROLE_KEY`.
 Never expose that service-role key through a `VITE_` variable.
 
 Production uses a combined immutable frontend/API release on an Ubuntu
-droplet behind Caddy. Use the
+droplet behind Caddy. The multiplayer backend may be Supabase Cloud or the
+pinned self-hosted Supabase deployment under `deployment/self-hosted-supabase/`.
+Use the
 [deployment runbook](./docs/operations/deployment.md) for setup, secrets,
 deployment, rollback, retention, and recovery.
+
+For an occasional private-network game night, install the complete Fustify LAN
+bundle into an Arcane projects directory. It packages the frontend, Node API,
+and pinned Supabase stack behind one HTTP origin and persists its state across
+Arcane Up/Down operations:
+
+```bash
+pnpm lan:install -- /absolute/path/to/arcane/projects/fustify-lan \
+  http://your-lan-host:8080
+```
+
+This is `pnpm lan:install`, not `pnpm install`: the latter treats the path and
+URL as package dependencies. On the current Arcane host, the projects directory
+is `/home/chris/Projects/docker-stacks`, so the installed project is
+`/home/chris/Projects/docker-stacks/fustify-lan`.
+
+See the [LAN game-night runbook](./docs/operations/lan.md) before starting the
+project for the first time.
 
 ## Commands
 

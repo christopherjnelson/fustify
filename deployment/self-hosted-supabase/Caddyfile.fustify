@@ -1,0 +1,4 @@
+{$FUSTIFY_SUPABASE_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy api-gw:8000
+}

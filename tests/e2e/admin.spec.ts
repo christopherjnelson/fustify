@@ -265,7 +265,7 @@ test('late account snapshots do not replace the selected section', async ({
     body: JSON.stringify({ accounts: [], hasMore: false }),
   });
   await expect(
-    page.getByRole('heading', { name: 'Supabase logs' }),
+    page.getByRole('heading', { name: 'Backend logs' }),
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Accounts' })).toHaveCount(0);
 });

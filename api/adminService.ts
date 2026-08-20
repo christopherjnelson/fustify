@@ -269,6 +269,7 @@ export interface AdminConfiguration {
   secretKey: string;
   projectRef: string;
   managementAccessToken?: string;
+  platformApiEnabled?: boolean;
   expectedMigration?: string;
   mutationsEnabled: boolean;
 }
@@ -800,7 +801,10 @@ export class SupabaseAdminConsole implements AdminConsole {
   }
 
   async logs(query: AdminLogQuery) {
-    if (!this.configuration.managementAccessToken) {
+    if (
+      this.configuration.platformApiEnabled === false ||
+      !this.configuration.managementAccessToken
+    ) {
       return { configured: false, entries: [] };
     }
     const seconds = { '15m': 900, '1h': 3600, '3h': 10_800, '24h': 86_400 }[
@@ -868,6 +872,13 @@ export class SupabaseAdminConsole implements AdminConsole {
   }
 
   async metrics() {
+    if (this.configuration.platformApiEnabled === false) {
+      return {
+        configured: false,
+        generatedAt: new Date().toISOString(),
+        aggregates: {},
+      };
+    }
     const endpoint = `https://${this.configuration.projectRef}.supabase.co/customer/v1/privileged/metrics`;
     const response = await fetch(endpoint, {
       headers: {
@@ -892,6 +903,7 @@ export class SupabaseAdminConsole implements AdminConsole {
       if (selected.size >= 100) break;
     }
     return {
+      configured: true,
       generatedAt: new Date().toISOString(),
       aggregates: Object.fromEntries(selected),
     };
@@ -1002,7 +1014,7 @@ export class SupabaseAdminConsole implements AdminConsole {
 
   private healthSnapshot(value: unknown) {
     const health = asRecord(value);
-    const expected = this.configuration.expectedMigration ?? '20260728042940';
+    const expected = this.configuration.expectedMigration ?? '20260730002339';
     return {
       ...health,
       expected_migration: expected,
@@ -1022,7 +1034,10 @@ export class SupabaseAdminConsole implements AdminConsole {
   }
 
   private async advisors() {
-    if (!this.configuration.managementAccessToken) {
+    if (
+      this.configuration.platformApiEnabled === false ||
+      !this.configuration.managementAccessToken
+    ) {
       return { configured: false, security: [], performance: [] };
     }
     const load = async (kind: 'security' | 'performance') => {

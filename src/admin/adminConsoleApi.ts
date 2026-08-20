@@ -161,6 +161,7 @@ export interface AdminConsoleSource {
   maintenanceAction(input: Record<string, unknown>): Promise<void>;
   audit(): Promise<AdminAuditEntry[]>;
   metrics(): Promise<{
+    configured: boolean;
     generatedAt: string;
     aggregates: Record<string, number>;
   }>;
@@ -270,6 +271,7 @@ export function serverAdminConsoleSource(
     async metrics() {
       return z
         .object({
+          configured: z.boolean(),
           generatedAt: z.string(),
           aggregates: z.record(z.string(), z.number()),
         })
