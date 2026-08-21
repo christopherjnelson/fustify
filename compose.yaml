@@ -1,0 +1,49 @@
+name: fustify
+
+services:
+  database:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fustify
+      POSTGRES_USER: fustify
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fustify-development-only}
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fustify -d fustify']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - fustify-postgres:/var/lib/postgresql/data
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://fustify:${POSTGRES_PASSWORD:-fustify-development-only}@database:5432/fustify
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-development-secret-change-before-production-32chars}
+      BETTER_AUTH_URL: ${FUSTIFY_ORIGIN:-http://localhost:8080}
+      FUSTIFY_TRUSTED_ORIGINS: ${FUSTIFY_ORIGIN:-http://localhost:8080}
+      FUSTIFY_API_HOST: 0.0.0.0
+      FUSTIFY_API_PORT: 8787
+      FUSTIFY_STATIC_ROOT: /app/dist
+      FUSTIFY_API_ALLOW_INCOMPLETE_CONFIGURATION: 1
+    ports:
+      - '${FUSTIFY_PORT:-8080}:8787'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8787/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  fustify-postgres:

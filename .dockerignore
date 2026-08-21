@@ -1,0 +1,9 @@
+.git
+.env*
+.fustify
+artifacts
+coverage
+dist
+dist-api
+node_modules
+test-results

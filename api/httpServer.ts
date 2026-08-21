@@ -50,6 +50,17 @@ export interface MatchStarter {
   start(authorization: string | null, roomId: string): Promise<unknown>;
 }
 
+export type NodeRequestHandler = (
+  request: IncomingMessage,
+  response: ServerResponse,
+) => void | Promise<void>;
+
+export type FallbackRequestHandler = (
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+) => boolean | Promise<boolean>;
+
 function queryObject(url: URL) {
   return Object.fromEntries(url.searchParams.entries());
 }
@@ -186,7 +197,12 @@ async function handleAdminRequest(
   sendJson(response, 404, { code: 'not_found' });
 }
 
-export function createApiServer(service: MatchStarter, admin?: AdminConsole) {
+export function createApiServer(
+  service?: MatchStarter,
+  admin?: AdminConsole,
+  authHandler?: NodeRequestHandler,
+  fallbackHandler?: FallbackRequestHandler,
+) {
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -196,6 +212,14 @@ export function createApiServer(service: MatchStarter, admin?: AdminConsole) {
           return;
         }
         sendJson(response, 200, { status: 'ok' });
+        return;
+      }
+
+      if (
+        authHandler &&
+        (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/'))
+      ) {
+        await authHandler(request, response);
         return;
       }
 
@@ -209,7 +233,18 @@ export function createApiServer(service: MatchStarter, admin?: AdminConsole) {
       }
 
       if (url.pathname !== '/api/multiplayer/start') {
+        if (
+          !url.pathname.startsWith('/api/') &&
+          fallbackHandler &&
+          (await fallbackHandler(request, response, url))
+        ) {
+          return;
+        }
         sendJson(response, 404, { code: 'not_found' });
+        return;
+      }
+      if (!service) {
+        sendJson(response, 503, { code: 'multiplayer_unavailable' });
         return;
       }
       if (request.method !== 'POST') {

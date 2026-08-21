@@ -1,4 +1,6 @@
 import { once } from 'node:events';
+import { resolve } from 'node:path';
+import { toNodeHandler } from 'better-auth/node';
 import { SupabaseAdminConsole } from './adminService.ts';
 import { createApiServer } from './httpServer.ts';
 import {
@@ -7,7 +9,14 @@ import {
   SupabaseStartMatchRepository,
 } from './startMatchService.ts';
 import { runAuthoritativeInitializer } from './workerInitializer.ts';
-import { resolveFustifyApiPort } from './runtimeConfiguration.ts';
+import {
+  resolveFustifyApiHost,
+  resolveFustifyApiPort,
+} from './runtimeConfiguration.ts';
+import { createFustifyAuth } from './auth.ts';
+import { resolveAuthConfiguration } from './authConfiguration.ts';
+import { createDatabasePool, runDatabaseMigrations } from './database.ts';
+import { createStaticFileHandler } from './staticFiles.ts';
 
 class MissingEnvironmentError extends Error {
   readonly variableName: string;
@@ -81,17 +90,39 @@ function createAdminConsole() {
   }
 }
 
-const service = createMatchStartService();
-const server = createApiServer(service, createAdminConsole());
+const databaseUrl = process.env.DATABASE_URL?.trim();
+const database = databaseUrl
+  ? createDatabasePool({ connectionString: databaseUrl })
+  : undefined;
+if (database) {
+  const applied = await runDatabaseMigrations(database);
+  if (applied.length > 0) {
+    console.log(`Applied database migrations: ${applied.join(', ')}`);
+  }
+}
+const authConfiguration = resolveAuthConfiguration(process.env);
+const auth =
+  database && authConfiguration
+    ? createFustifyAuth(database, authConfiguration)
+    : undefined;
+const staticRoot = process.env.FUSTIFY_STATIC_ROOT?.trim();
+const server = createApiServer(
+  createMatchStartService(),
+  createAdminConsole(),
+  auth ? toNodeHandler(auth) : undefined,
+  staticRoot ? createStaticFileHandler(resolve(staticRoot)) : undefined,
+);
 const port = resolveFustifyApiPort(process.env.FUSTIFY_API_PORT);
+const host = resolveFustifyApiHost(process.env.FUSTIFY_API_HOST);
 
-server.listen(port, '127.0.0.1');
+server.listen(port, host);
 await once(server, 'listening');
-console.log(`Fustify API listening on http://127.0.0.1:${port.toString()}`);
+console.log(`Fustify API listening on http://${host}:${port.toString()}`);
 
 async function shutdown() {
   server.close();
   await once(server, 'close');
+  await database?.end();
 }
 
 process.once('SIGINT', () => void shutdown());
