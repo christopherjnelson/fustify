@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { Pool } from 'pg';
 import type { AuthoritativeMatchInitialization } from '../src/multiplayer/authoritativeEngine.ts';
 import {
   MatchStartService,
+  PostgresStartMatchRepository,
   type AuthoritativeRoom,
   type MultiplayerMatch,
   type StartMatchRepository,
@@ -200,6 +202,51 @@ describe('Node match start service', () => {
       roomId,
       matchId: expect.any(String),
       actorUserId: hostId,
+    });
+  });
+});
+
+describe('Postgres match start authorization', () => {
+  it('rejects malformed bearer credentials without querying Postgres', async () => {
+    const query = vi.fn();
+    const repository = new PostgresStartMatchRepository({
+      query,
+    } as unknown as Pool);
+
+    await expect(repository.authorize('Basic private')).resolves.toEqual({
+      ok: false,
+      status: 401,
+      code: 'not_authenticated',
+    });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('accepts only a current Better Auth session with a completed profile', async () => {
+    const query = vi.fn(async () => ({ rows: [{ user_id: hostId }] }));
+    const repository = new PostgresStartMatchRepository({
+      query,
+    } as unknown as Pool);
+
+    await expect(
+      repository.authorize('Bearer valid-session-token-1234'),
+    ).resolves.toEqual({ ok: true, actorUserId: hostId });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('from auth_sessions as sessions'),
+      ['valid-session-token-1234'],
+    );
+  });
+
+  it('fails closed when the session is expired or onboarding is incomplete', async () => {
+    const repository = new PostgresStartMatchRepository({
+      query: vi.fn(async () => ({ rows: [] })),
+    } as unknown as Pool);
+
+    await expect(
+      repository.authorize('Bearer expired-session-token-1234'),
+    ).resolves.toEqual({
+      ok: false,
+      status: 403,
+      code: 'account_required',
     });
   });
 });

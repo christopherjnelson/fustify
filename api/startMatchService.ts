@@ -1,18 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { Pool, PoolClient } from 'pg';
 import type {
   AuthoritativeMatchInitialization,
   ClaimedSeat,
 } from '../src/multiplayer/authoritativeEngine.ts';
-import type {
-  Database,
-  Json,
-  Tables,
-} from '../src/multiplayer/database.types.ts';
-import { authorizeGameplayRequest } from '../src/multiplayer/requestAuthorization.ts';
+import type { Json, Tables } from '../src/multiplayer/database.types.ts';
 
 export type MultiplayerMatch = Tables<'matches'>;
-type Room = Tables<'rooms'>;
 
 export interface AuthoritativeRoom {
   id: string;
@@ -186,148 +180,110 @@ export class MatchStartService {
   }
 }
 
-export interface SupabaseStartConfiguration {
-  url: string;
-  publishableKey: string;
-  serviceRoleKey: string;
+function bearerToken(authorization: string | null): string | null {
+  const match = authorization?.match(/^Bearer ([A-Za-z0-9_-]{16,512})$/);
+  return match?.[1] ?? null;
 }
 
-export class SupabaseStartMatchRepository implements StartMatchRepository {
-  private readonly authClient: SupabaseClient<Database>;
-  private readonly admin: SupabaseClient<Database>;
+function databaseRow<T>(row: unknown): T {
+  return JSON.parse(JSON.stringify(row)) as T;
+}
 
-  constructor(configuration: SupabaseStartConfiguration) {
-    const authOptions = {
-      auth: { persistSession: false, autoRefreshToken: false },
-    } as const;
-    this.authClient = createClient<Database>(
-      configuration.url,
-      configuration.publishableKey,
-      authOptions,
-    );
-    this.admin = createClient<Database>(
-      configuration.url,
-      configuration.serviceRoleKey,
-      authOptions,
-    );
+async function transaction<T>(
+  pool: Pool,
+  operation: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    const result = await operation(client);
+    await client.query('commit');
+    return result;
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally {
+    client.release();
   }
+}
+
+export class PostgresStartMatchRepository implements StartMatchRepository {
+  constructor(private readonly pool: Pool) {}
 
   async authorize(
     authorization: string | null,
   ): ReturnType<StartMatchRepository['authorize']> {
-    const authorized = await authorizeGameplayRequest(
-      authorization,
-      async (token) => {
-        const { data, error } = await this.authClient.auth.getUser(token);
-        return { user: data.user, error };
-      },
+    const token = bearerToken(authorization);
+    if (!token) {
+      return {
+        ok: false,
+        status: 401,
+        code: 'not_authenticated',
+      } as const;
+    }
+    const result = await this.pool.query<{ user_id: string }>(
+      `select sessions.user_id
+       from auth_sessions as sessions
+       join profiles on profiles.user_id = sessions.user_id
+       where sessions.token = $1
+         and sessions.expires_at > statement_timestamp()
+         and profiles.onboarding_completed`,
+      [token],
     );
-    if (!authorized.ok) return authorized;
-    const unrestrictedAdmin = this.admin as unknown as SupabaseClient;
-    const { data: moderation, error } = await unrestrictedAdmin
-      .from('account_moderation')
-      .select('state,banned_until')
-      .eq('user_id', authorized.actorUserId)
-      .maybeSingle();
-    if (error?.code !== 'PGRST205' && error) {
-      throw new MatchStartError('server_configuration_error', 503);
-    }
-    if (
-      moderation?.state === 'deleted' ||
-      moderation?.state === 'revoked' ||
-      (moderation?.state === 'banned' &&
-        (!moderation.banned_until ||
-          Date.parse(moderation.banned_until) > Date.now()))
-    ) {
+    const actorUserId = result.rows[0]?.user_id;
+    if (!actorUserId) {
       return {
         ok: false,
         status: 403,
         code: 'account_required',
       } as const;
     }
-    const { data: profile, error: profileError } = await unrestrictedAdmin
-      .from('profiles')
-      .select('onboarding_completed')
-      .eq('user_id', authorized.actorUserId)
-      .maybeSingle();
-    if (profileError || profile?.onboarding_completed !== true) {
-      return {
-        ok: false,
-        status: 403,
-        code: 'account_required',
-      } as const;
-    }
-    return authorized;
+    return { ok: true, actorUserId };
   }
 
   async loadRoom(roomId: string): Promise<AuthoritativeRoom> {
-    const { data, error } = await this.admin
-      .from('rooms')
-      .select(
-        'id, host_user_id, seed, territory_count, continent_count, assignment_mode, generator_version',
-      )
-      .eq('id', roomId)
-      .maybeSingle();
-    if (error || !data) throw new Error('room_access_denied');
-    return data satisfies Pick<
-      Room,
-      | 'id'
-      | 'host_user_id'
-      | 'seed'
-      | 'territory_count'
-      | 'continent_count'
-      | 'assignment_mode'
-      | 'generator_version'
-    >;
+    const result = await this.pool.query<AuthoritativeRoom>(
+      `select id, host_user_id, seed, territory_count, continent_count,
+              assignment_mode, generator_version
+       from rooms where id = $1`,
+      [roomId],
+    );
+    const room = result.rows[0];
+    if (!room) throw new Error('room_access_denied');
+    return room;
   }
 
   async loadExistingMatch(roomId: string): Promise<MultiplayerMatch | null> {
-    const { data, error } = await this.admin
-      .from('matches')
-      .select('*')
-      .eq('room_id', roomId)
-      .maybeSingle();
-    if (error) throw error;
-    return data;
+    const result = await this.pool.query(
+      'select * from matches where room_id = $1',
+      [roomId],
+    );
+    return result.rows[0]
+      ? databaseRow<MultiplayerMatch>(result.rows[0])
+      : null;
   }
 
   async loadClaimedSeats(roomId: string): Promise<ClaimedSeat[]> {
-    const { data: seats, error: seatsError } = await this.admin
-      .from('room_seats')
-      .select('seat_index, occupant_user_id')
-      .eq('room_id', roomId)
-      .eq('controller_type', 'human')
-      .not('occupant_user_id', 'is', null)
-      .order('seat_index');
-    if (seatsError) throw new Error('room_access_denied');
-
-    const occupantUserIds = (seats ?? []).flatMap((seat) =>
-      seat.occupant_user_id ? [seat.occupant_user_id] : [],
+    const result = await this.pool.query<{
+      seat_index: number;
+      occupant_user_id: string;
+      display_name: string;
+    }>(
+      `select seats.seat_index, seats.occupant_user_id, profiles.display_name
+       from room_seats as seats
+       join profiles on profiles.user_id = seats.occupant_user_id
+       where seats.room_id = $1
+         and seats.controller_type = 'human'
+         and seats.occupant_user_id is not null
+       order by seats.seat_index`,
+      [roomId],
     );
-    if (occupantUserIds.length === 0) return [];
-
-    const { data: profiles, error: profilesError } = await this.admin
-      .from('profiles')
-      .select('user_id, display_name')
-      .in('user_id', occupantUserIds);
-    if (profilesError) throw new Error('profile_unavailable');
-    const names = new Map(
-      (profiles ?? []).map((profile) => [
-        profile.user_id,
-        profile.display_name,
-      ]),
-    );
-    return (seats ?? []).map((seat) => {
-      const userId = seat.occupant_user_id;
-      const displayName = userId ? names.get(userId) : null;
-      if (!userId || !displayName) throw new Error('profile_unavailable');
-      return {
-        seatIndex: seat.seat_index,
-        userId,
-        displayName,
-        controllerType: 'human',
-      };
-    });
+    return result.rows.map((seat) => ({
+      seatIndex: seat.seat_index,
+      userId: seat.occupant_user_id,
+      displayName: seat.display_name,
+      controllerType: 'human',
+    }));
   }
 
   async beginInitialization({
@@ -339,15 +295,58 @@ export class SupabaseStartMatchRepository implements StartMatchRepository {
     matchId: string;
     actorUserId: string;
   }): Promise<void> {
-    const { error } = await this.admin.rpc(
-      'authority_begin_room_match_initialization',
-      {
-        p_room_id: roomId,
-        p_match_id: matchId,
-        p_actor_user_id: actorUserId,
-      },
-    );
-    if (error) throw error;
+    await transaction(this.pool, async (client) => {
+      const roomResult = await client.query<{
+        host_user_id: string;
+        status: string;
+        assignment_mode: string;
+      }>(
+        'select host_user_id, status, assignment_mode from rooms where id = $1 for update',
+        [roomId],
+      );
+      const room = roomResult.rows[0];
+      if (!room) throw new Error('room_access_denied');
+      if (room.host_user_id !== actorUserId) throw new Error('host_only');
+      if (room.assignment_mode !== 'random') {
+        throw new Error('multiplayer_draft_unsupported');
+      }
+      const seats = await client.query<{ count: string }>(
+        `select count(*)::text as count from room_seats
+         where room_id = $1 and occupant_user_id is not null
+           and controller_type = 'human'`,
+        [roomId],
+      );
+      if (Number(seats.rows[0]?.count ?? 0) < 2) {
+        throw new Error('not_enough_players');
+      }
+      const existing = await client.query(
+        'select started_at from match_launches where room_id = $1 for update',
+        [roomId],
+      );
+      if (room.status === 'active' && existing.rows[0]) {
+        const startedAt = new Date(existing.rows[0].started_at as string);
+        if (Date.now() - startedAt.getTime() <= 5 * 60_000) {
+          throw new Error('room_not_waiting');
+        }
+        await client.query(
+          `update match_launches
+           set match_id = $2, started_at = statement_timestamp()
+           where room_id = $1`,
+          [roomId, matchId],
+        );
+      } else {
+        if (room.status !== 'waiting') throw new Error('room_not_waiting');
+        await client.query(
+          'insert into match_launches (room_id, match_id) values ($1, $2)',
+          [roomId, matchId],
+        );
+      }
+      await client.query(
+        `update rooms set status = 'active', revision = revision + 1
+         where id = $1`,
+        [roomId],
+      );
+    });
   }
 
   async cancelInitialization({
@@ -359,15 +358,20 @@ export class SupabaseStartMatchRepository implements StartMatchRepository {
     matchId: string;
     actorUserId: string;
   }): Promise<void> {
-    const { error } = await this.admin.rpc(
-      'authority_cancel_room_match_initialization',
-      {
-        p_room_id: roomId,
-        p_match_id: matchId,
-        p_actor_user_id: actorUserId,
-      },
-    );
-    if (error) throw error;
+    await transaction(this.pool, async (client) => {
+      const deleted = await client.query(
+        'delete from match_launches where room_id = $1 and match_id = $2',
+        [roomId, matchId],
+      );
+      if (deleted.rowCount === 1) {
+        await client.query(
+          `update rooms set status = 'waiting', revision = revision + 1
+           where id = $1 and host_user_id = $2 and status = 'active'
+             and not exists (select 1 from matches where room_id = $1)`,
+          [roomId, actorUserId],
+        );
+      }
+    });
   }
 
   async commitInitialization({
@@ -381,21 +385,50 @@ export class SupabaseStartMatchRepository implements StartMatchRepository {
     actorUserId: string;
     initialized: AuthoritativeMatchInitialization;
   }): Promise<MultiplayerMatch> {
-    const { data, error } = await this.admin.rpc(
-      'authority_initialize_room_match',
-      {
-        p_room_id: roomId,
-        p_match_id: matchId,
-        p_actor_user_id: actorUserId,
-        p_setup_snapshot: initialized.setupSnapshot as Json,
-        p_seat_order_snapshot: initialized.seatOrderSnapshot as unknown as Json,
-        p_generator_metadata: initialized.generatorMetadata as Json,
-        p_planet_snapshot: initialized.planet as unknown as Json,
-        p_state_snapshot: initialized.state as unknown as Json,
-        p_state_fingerprint: initialized.stateFingerprint,
-      },
-    );
-    if (error) throw error;
-    return data;
+    return transaction(this.pool, async (client) => {
+      const roomResult = await client.query<{ host_user_id: string }>(
+        'select host_user_id from rooms where id = $1 for update',
+        [roomId],
+      );
+      if (roomResult.rows[0]?.host_user_id !== actorUserId) {
+        throw new Error('host_only');
+      }
+      const launch = await client.query(
+        'select 1 from match_launches where room_id = $1 and match_id = $2',
+        [roomId, matchId],
+      );
+      if (!launch.rows[0]) throw new Error('room_not_waiting');
+      const existing = await client.query(
+        'select * from matches where room_id = $1 for update',
+        [roomId],
+      );
+      if (existing.rows[0]?.state_snapshot) {
+        return databaseRow<MultiplayerMatch>(existing.rows[0]);
+      }
+      if (existing.rows[0]) throw new Error('legacy_match_incomplete');
+      const inserted = await client.query(
+        `insert into matches (
+           id, room_id, status, revision, setup_snapshot,
+           seat_order_snapshot, generator_metadata, planet_snapshot,
+           state_snapshot, state_fingerprint
+         ) values ($1, $2, 'active', 0, $3, $4, $5, $6, $7, $8)
+         returning *`,
+        [
+          matchId,
+          roomId,
+          initialized.setupSnapshot as Json,
+          initialized.seatOrderSnapshot as unknown as Json,
+          initialized.generatorMetadata as Json,
+          initialized.planet as unknown as Json,
+          initialized.state as unknown as Json,
+          initialized.stateFingerprint,
+        ],
+      );
+      await client.query(
+        'delete from match_launches where room_id = $1 and match_id = $2',
+        [roomId, matchId],
+      );
+      return databaseRow<MultiplayerMatch>(inserted.rows[0]);
+    });
   }
 }

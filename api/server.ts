@@ -6,7 +6,7 @@ import { createApiServer } from './httpServer.ts';
 import {
   MatchStartError,
   MatchStartService,
-  SupabaseStartMatchRepository,
+  PostgresStartMatchRepository,
 } from './startMatchService.ts';
 import { runAuthoritativeInitializer } from './workerInitializer.ts';
 import {
@@ -34,30 +34,20 @@ function requiredEnvironment(name: string): string {
   return value;
 }
 
-function createMatchStartService() {
-  try {
-    const repository = new SupabaseStartMatchRepository({
-      url: requiredEnvironment('SUPABASE_URL'),
-      publishableKey: requiredEnvironment('SUPABASE_PUBLISHABLE_KEY'),
-      serviceRoleKey:
-        process.env.SUPABASE_SECRET_KEY?.trim() ||
-        requiredEnvironment('SUPABASE_SERVICE_ROLE_KEY'),
-    });
-    return new MatchStartService(repository, runAuthoritativeInitializer);
-  } catch (error) {
-    if (
-      process.env.FUSTIFY_API_ALLOW_INCOMPLETE_CONFIGURATION === '1' &&
-      error instanceof MissingEnvironmentError
-    ) {
-      console.warn(`Fustify match start unavailable: ${error.message}.`);
-      return {
-        async start() {
-          throw new MatchStartError('server_configuration_error', 503);
-        },
-      };
-    }
-    throw error;
+function createMatchStartService(
+  database: ReturnType<typeof createDatabasePool> | undefined,
+) {
+  if (database) {
+    return new MatchStartService(
+      new PostgresStartMatchRepository(database),
+      runAuthoritativeInitializer,
+    );
   }
+  return {
+    async start() {
+      throw new MatchStartError('server_configuration_error', 503);
+    },
+  };
 }
 
 function createAdminConsole() {
@@ -111,7 +101,7 @@ const profileApi =
   database && auth ? new ProfileApi(database, auth) : undefined;
 const staticRoot = process.env.FUSTIFY_STATIC_ROOT?.trim();
 const server = createApiServer(
-  createMatchStartService(),
+  createMatchStartService(database),
   createAdminConsole(),
   authHandler
     ? async (request, response) => {
