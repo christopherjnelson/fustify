@@ -20,13 +20,7 @@ import { profileInitials } from './guestName';
 import { currentSafeReturnPath, validatedReturnPath } from './returnPath';
 import { BrandedAppShell } from '../brand/BrandedAppShell';
 
-export type DialogView =
-  | 'sign-in'
-  | 'register'
-  | 'guest-upgrade'
-  | 'guest-switch-warning'
-  | 'forgot-password'
-  | 'edit-profile';
+export type DialogView = 'sign-in' | 'register' | 'edit-profile';
 
 export const OPEN_PROFILE_EDITOR_EVENT = 'fustify:open-profile-editor';
 
@@ -70,20 +64,11 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
     }
     const params = new URLSearchParams(window.location.search);
     const requestedAccountAction = params.get('account');
-    if (
-      requestedAccountAction !== 'create' &&
-      requestedAccountAction !== 'recovery'
-    ) {
+    if (requestedAccountAction !== 'create') {
       return;
     }
     const timer = window.setTimeout(() => {
-      setDialog(
-        requestedAccountAction === 'recovery'
-          ? 'forgot-password'
-          : account.status === 'legacy-anonymous'
-            ? 'guest-upgrade'
-            : 'register',
-      );
+      setDialog('register');
     }, 0);
     params.delete('account');
     const search = params.toString();
@@ -170,19 +155,7 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
                 : (identity.email ?? 'Registered account')}
             </span>
           </div>
-          {identity.isAnonymous ? (
-            <div className="account-actions">
-              <button type="button" onClick={() => open('guest-upgrade')}>
-                Finish account setup
-              </button>
-              <button
-                type="button"
-                onClick={() => open('guest-switch-warning')}
-              >
-                Sign in to existing account
-              </button>
-            </div>
-          ) : (
+          {!identity.isAnonymous && (
             <div className="account-actions">
               {!compact &&
                 accountCapabilities(identity.isAnonymous)
@@ -276,9 +249,7 @@ export function AccountRequiredGate({
     dialog === undefined
       ? client && account.status === 'signed-out'
         ? 'sign-in'
-        : account.status === 'legacy-anonymous'
-          ? 'guest-upgrade'
-          : null
+        : null
       : dialog;
 
   if (
@@ -341,22 +312,6 @@ export function AccountRequiredGate({
             </button>
             <button type="button" onClick={() => setDialog('register')}>
               Create account
-            </button>
-            <button type="button" onClick={() => setDialog('forgot-password')}>
-              Forgot password
-            </button>
-          </div>
-        )}
-        {account.status === 'legacy-anonymous' && (
-          <div className="account-actions">
-            <button type="button" onClick={() => setDialog('guest-upgrade')}>
-              Finish creating account
-            </button>
-            <button
-              type="button"
-              onClick={() => setDialog('guest-switch-warning')}
-            >
-              Sign in to existing account
             </button>
           </div>
         )}

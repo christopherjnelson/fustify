@@ -1,10 +1,9 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ApplicationClient } from './applicationClient';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_GENERATOR_VERSION } from '../core/generation/constants';
-import type { Database } from './database.types';
 import type { Room } from './multiplayerApi';
 import { generateRoomPreviewPlanet } from './roomWorld';
-import { roomThumbnailPath, roomThumbnailPublicUrl } from './worldThumbnail';
+import { roomThumbnailPublicUrl } from './worldThumbnail';
 import {
   buildWorldThumbnailSvg,
   replaceRoomThumbnail,
@@ -43,41 +42,10 @@ describe('room world thumbnails', () => {
     expect(first).not.toContain('<script');
   });
 
-  it('publishes a public room through one stable upsert path', async () => {
-    const upload = vi.fn(async () => ({ error: null }));
-    const rpc = vi.fn(async () => ({
-      data: { ...room, thumbnail_path: roomThumbnailPath(room.id) },
-      error: null,
-    }));
-    const client = {
-      storage: { from: vi.fn(() => ({ upload })) },
-      rpc,
-    } as unknown as SupabaseClient<Database>;
-    const thumbnail = new Blob(['webp'], { type: 'image/webp' });
-    const createThumbnail = vi.fn(async () => thumbnail);
-
-    await replaceRoomThumbnail(client, room, createThumbnail);
-
-    expect(createThumbnail).toHaveBeenCalledWith(room);
-    expect(upload).toHaveBeenCalledWith(
-      `${room.id}/world.webp`,
-      thumbnail,
-      expect.objectContaining({
-        contentType: 'image/webp',
-        upsert: true,
-      }),
-    );
-    expect(rpc).toHaveBeenCalledWith('publish_room_thumbnail', {
-      p_room_id: room.id,
-      p_thumbnail_path: `${room.id}/world.webp`,
-    });
-  });
-
   it('does no thumbnail work for private rooms', async () => {
     const client = {
-      storage: { from: vi.fn() },
-      rpc: vi.fn(),
-    } as unknown as SupabaseClient<Database>;
+      removeChannel: vi.fn(),
+    } as unknown as ApplicationClient;
     const createThumbnail = vi.fn();
 
     await expect(
@@ -88,35 +56,17 @@ describe('room world thumbnails', () => {
       ),
     ).resolves.toMatchObject({ visibility: 'private' });
     expect(createThumbnail).not.toHaveBeenCalled();
-    expect(client.storage.from).not.toHaveBeenCalled();
-    expect(client.rpc).not.toHaveBeenCalled();
-  });
-
-  it('does not publish metadata when the upload fails', async () => {
-    const client = {
-      storage: {
-        from: vi.fn(() => ({
-          upload: vi.fn(async () => ({ error: new Error('storage failed') })),
-        })),
-      },
-      rpc: vi.fn(),
-    } as unknown as SupabaseClient<Database>;
-
-    await expect(
-      replaceRoomThumbnail(client, room, async () => new Blob(['webp'])),
-    ).rejects.toThrow('storage failed');
-    expect(client.rpc).not.toHaveBeenCalled();
   });
 
   it('uses the same-origin generated SVG for application API rooms', async () => {
     const client = {
       transport: 'fustify-http',
-    } as unknown as SupabaseClient<Database>;
+    } as unknown as ApplicationClient;
     const createThumbnail = vi.fn();
 
-    await expect(replaceRoomThumbnail(client, room, createThumbnail)).resolves.toBe(
-      room,
-    );
+    await expect(
+      replaceRoomThumbnail(client, room, createThumbnail),
+    ).resolves.toBe(room);
     expect(createThumbnail).not.toHaveBeenCalled();
     expect(
       roomThumbnailPublicUrl(
@@ -124,8 +74,6 @@ describe('room world thumbnails', () => {
         `${room.id}/world.webp`,
         room.thumbnail_version + 1,
       ),
-    ).toBe(
-      `/api/multiplayer/rooms/${room.id}/thumbnail.svg?v=1`,
-    );
+    ).toBe(`/api/multiplayer/rooms/${room.id}/thumbnail.svg?v=1`);
   });
 });

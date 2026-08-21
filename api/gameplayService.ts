@@ -50,9 +50,12 @@ function bearerToken(authorization: string | null): string | null {
 function statusFor(code: string): number {
   if (code === 'not_authenticated') return 401;
   if (
-    ['account_required', 'room_access_denied', 'seat_required', 'not_your_turn'].includes(
-      code,
-    )
+    [
+      'account_required',
+      'room_access_denied',
+      'seat_required',
+      'not_your_turn',
+    ].includes(code)
   )
     return 403;
   if (code === 'match_not_found') return 404;
@@ -131,8 +134,7 @@ export class PostgresGameplayService {
       [token],
     );
     const actorUserId = actor.rows[0]?.user_id;
-    if (!actorUserId)
-      throw new GameplayCommandError('account_required', 403);
+    if (!actorUserId) throw new GameplayCommandError('account_required', 403);
 
     try {
       const action = parseGameAction(input.action);
@@ -223,7 +225,9 @@ export class PostgresGameplayService {
               (seat) => seat.playerId === transition.state.winnerId,
             )
           : undefined;
-        if (Boolean(transition.state.winnerId) !== Boolean(winnerSeat?.userId)) {
+        if (
+          Boolean(transition.state.winnerId) !== Boolean(winnerSeat?.userId)
+        ) {
           throw new Error('invalid_authoritative_state');
         }
         const resultingRevision = input.expectedRevision + 1;

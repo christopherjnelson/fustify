@@ -103,7 +103,7 @@ describe('completed multiplayer post-match actions', () => {
     await creator.generateNewWorld();
     expect(createRoom).toHaveBeenCalledTimes(1);
 
-    rejectFirst(new Error('sensitive Supabase detail'));
+    rejectFirst(new Error('sensitive backend detail'));
     await originalAttempt;
     expect(navigate).not.toHaveBeenCalled();
     expect(errors.at(-1)).toBe('Multiplayer request failed.');

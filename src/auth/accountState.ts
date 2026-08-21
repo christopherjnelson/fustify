@@ -1,10 +1,9 @@
 import type {
+  AppAuthClient,
+  AppSession,
+  AppUser,
   AuthChangeEvent,
-  Session,
-  SupabaseClient,
-  User,
-} from '@supabase/supabase-js';
-import type { Database } from '../multiplayer/database.types';
+} from './authClientTypes';
 import {
   fetchOwnProfileForVerifiedUser,
   profileApiError,
@@ -16,7 +15,7 @@ import {
 } from './registeredSession';
 
 export interface RegisteredAccount {
-  user: User;
+  user: AppUser;
   userId: string;
   email: string | null;
   profile: UserProfile;
@@ -27,7 +26,7 @@ export type ProtectedAccountState =
   | { status: 'signed-out' }
   | {
       status: 'legacy-anonymous';
-      user: User;
+      user: AppUser;
       profile: UserProfile;
     }
   | {
@@ -46,7 +45,7 @@ export const PROFILE_UNAVAILABLE_MESSAGE =
 export const BACKEND_ACCOUNT_REQUIRED_MESSAGE =
   'The server no longer accepts this account session. Please retry verification.';
 
-type Client = SupabaseClient<Database>;
+type Client = AppAuthClient;
 type Listener = (state: ProtectedAccountState) => void;
 
 function stateUserId(state: ProtectedAccountState): string | null {
@@ -285,7 +284,7 @@ export class AccountController {
 
   private handleAuthChange(
     event: AuthChangeEvent,
-    session: Session | null,
+    session: AppSession | null,
   ): void {
     if (event === 'SIGNED_OUT') {
       invalidateRegisteredSessionPreparation(this.client);

@@ -1,13 +1,14 @@
 import { createAuthClient } from 'better-auth/client';
-import type { SupabaseClient, User } from '@supabase/supabase-js';
-import type { Database } from '../multiplayer/database.types';
+import type {
+  AppAuthClient,
+  AppSession,
+  AppUser,
+  AuthChangeEvent,
+} from './authClientTypes';
 
 const betterAuthClient = createAuthClient({ basePath: '/api/auth' });
 
-type LegacyClient = SupabaseClient<Database>;
-type LegacyAuth = LegacyClient['auth'];
-
-function authError(error: unknown) {
+function authError(error: unknown): Error | null {
   if (!error) return null;
   if (error instanceof Error) return error;
   const value = error as { code?: string; message?: string; status?: number };
@@ -17,175 +18,121 @@ function authError(error: unknown) {
   });
 }
 
-async function currentUser(): Promise<User | null> {
-  const session = await betterAuthClient.getSession();
-  if (session.error || !session.data?.user) return null;
-  const sessionData = session.data;
-  const identity = {
-    id: `email:${sessionData.user.id}`,
-    identity_id: `email:${sessionData.user.id}`,
-    user_id: sessionData.user.id,
-    identity_data: {},
-    provider: 'email',
-    created_at: sessionData.user.createdAt.toISOString(),
-    updated_at: sessionData.user.updatedAt.toISOString(),
-    last_sign_in_at: sessionData.session.updatedAt.toISOString(),
-  };
+async function currentUser(): Promise<AppUser | null> {
+  const result = await betterAuthClient.getSession();
+  if (result.error || !result.data?.user) return null;
   return {
-    id: sessionData.user.id,
-    aud: 'authenticated',
-    role: 'authenticated',
-    email: sessionData.user.email,
-    email_confirmed_at: sessionData.user.emailVerified
-      ? sessionData.user.updatedAt.toISOString()
-      : undefined,
-    phone: '',
-    confirmed_at: sessionData.user.emailVerified
-      ? sessionData.user.updatedAt.toISOString()
-      : undefined,
-    last_sign_in_at: sessionData.session.updatedAt.toISOString(),
-    app_metadata: {},
+    id: result.data.user.id,
+    email: result.data.user.email,
     user_metadata: {
-      display_name: sessionData.user.name,
-      avatar_url: sessionData.user.image,
+      display_name: result.data.user.name,
+      avatar_url: result.data.user.image,
     },
-    identities: [identity],
-    created_at: sessionData.user.createdAt.toISOString(),
-    updated_at: sessionData.user.updatedAt.toISOString(),
+    created_at: result.data.user.createdAt.toISOString(),
+    updated_at: result.data.user.updatedAt.toISOString(),
     is_anonymous: false,
   };
 }
 
-async function legacySession() {
+async function currentSession(): Promise<{
+  data: { session: AppSession | null };
+  error: Error | null;
+}> {
   const result = await betterAuthClient.getSession();
   if (result.error || !result.data) {
-    return { data: { session: null }, error: authError(result.error) };
+    return {
+      data: { session: null },
+      error: import.meta.env.DEV ? null : authError(result.error),
+    };
   }
   const user = await currentUser();
-  if (!user) return { data: { session: null }, error: null };
   return {
     data: {
-      session: {
-        access_token: result.data.session.token,
-        token_type: 'bearer' as const,
-        expires_in: Math.max(
-          0,
-          Math.floor(
-            (result.data.session.expiresAt.getTime() - Date.now()) / 1_000,
-          ),
-        ),
-        expires_at: Math.floor(result.data.session.expiresAt.getTime() / 1_000),
-        refresh_token: '',
-        user,
-      },
+      session: user
+        ? {
+            access_token: result.data.session.token,
+            expires_at: Math.floor(
+              result.data.session.expiresAt.getTime() / 1_000,
+            ),
+            user,
+          }
+        : null,
     },
     error: null,
   };
 }
 
-const auth = {
-  async signUp(input: {
-    email: string;
-    password: string;
-    options?: { data?: { display_name?: string }; emailRedirectTo?: string };
-  }) {
-    const result = await betterAuthClient.signUp.email({
-      name: input.options?.data?.display_name?.trim() || input.email,
-      email: input.email,
-      password: input.password,
-      callbackURL: input.options?.emailRedirectTo,
-    });
-    const user = result.data ? await currentUser() : null;
-    const session = user ? (await legacySession()).data.session : null;
-    return { data: { user, session }, error: authError(result.error) };
-  },
-  async signInWithPassword(input: { email: string; password: string }) {
-    const result = await betterAuthClient.signIn.email(input);
-    return { data: result.data, error: authError(result.error) };
-  },
-  async signOut() {
-    const result = await betterAuthClient.signOut();
-    return { error: authError(result.error) };
-  },
-  async getSession() {
-    return legacySession();
-  },
-  async getUser() {
-    try {
-      return { data: { user: await currentUser() }, error: null };
-    } catch (error) {
-      return { data: { user: null }, error: authError(error) };
-    }
-  },
-  async getClaims() {
-    const user = await currentUser();
-    return {
-      data: user ? { claims: { sub: user.id, is_anonymous: false } } : null,
-      error: null,
-    };
-  },
-  async refreshSession() {
-    const result = await legacySession();
-    return {
-      data: {
-        session: result.data.session,
-        user: result.data.session?.user ?? null,
-      },
-      error: result.error,
-    };
-  },
-  onAuthStateChange(callback: Parameters<LegacyAuth['onAuthStateChange']>[0]) {
-    let initial = true;
-    const unsubscribe = betterAuthClient.$store.atoms.$sessionSignal.subscribe(
-      () => {
-        void legacySession().then(({ data }) => {
-          callback(
-            initial ? 'INITIAL_SESSION' : 'TOKEN_REFRESHED',
-            data.session,
-          );
-          initial = false;
+const client: AppAuthClient = {
+  auth: {
+    async signUp(input) {
+      const result = await betterAuthClient.signUp.email({
+        name: input.options?.data?.display_name?.trim() || input.email,
+        email: input.email,
+        password: input.password,
+      });
+      const user = result.data ? await currentUser() : null;
+      const session = user ? (await currentSession()).data.session : null;
+      return { data: { user, session }, error: authError(result.error) };
+    },
+    async signInWithPassword(input) {
+      const result = await betterAuthClient.signIn.email(input);
+      return { data: result.data, error: authError(result.error) };
+    },
+    async signOut() {
+      const result = await betterAuthClient.signOut();
+      return { error: authError(result.error) };
+    },
+    getSession: currentSession,
+    async getUser() {
+      try {
+        return { data: { user: await currentUser() }, error: null };
+      } catch (error) {
+        return { data: { user: null }, error: authError(error) };
+      }
+    },
+    async getClaims() {
+      const user = await currentUser();
+      return {
+        data: user
+          ? { claims: { sub: user.id, is_anonymous: false as const } }
+          : null,
+        error: null,
+      };
+    },
+    async refreshSession() {
+      const result = await currentSession();
+      return {
+        data: {
+          session: result.data.session,
+          user: result.data.session?.user ?? null,
+        },
+        error: result.error,
+      };
+    },
+    onAuthStateChange(callback) {
+      let initial = true;
+      const unsubscribe =
+        betterAuthClient.$store.atoms.$sessionSignal.subscribe(() => {
+          void currentSession().then(({ data }) => {
+            const event: AuthChangeEvent = initial
+              ? 'INITIAL_SESSION'
+              : data.session
+                ? 'TOKEN_REFRESHED'
+                : 'SIGNED_OUT';
+            callback(event, data.session);
+            initial = false;
+          });
         });
-      },
-    );
-    return {
-      data: { subscription: { id: 'better-auth', callback, unsubscribe } },
-    };
+      return { data: { subscription: { unsubscribe } } };
+    },
   },
-  async resetPasswordForEmail(
-    email: string,
-    options?: { redirectTo?: string },
-  ) {
-    const result = await betterAuthClient.requestPasswordReset({
-      email,
-      redirectTo: options?.redirectTo,
-    });
-    return { data: result.data, error: authError(result.error) };
-  },
-  async resend() {
-    return {
-      data: null,
-      error: Object.assign(new Error('Email verification is not enabled.'), {
-        code: 'verification_unavailable',
-      }),
-    };
-  },
-} as unknown as LegacyAuth;
+};
 
-const client = { auth } as unknown as LegacyClient;
-
-export function getAppAuthClient(): LegacyClient {
+export function getAppAuthClient(): AppAuthClient {
   if (import.meta.env.DEV && window.__FUSTIFY_AUTH_TEST_CLIENT__) {
-    return window.__FUSTIFY_AUTH_TEST_CLIENT__;
+    return window.__FUSTIFY_AUTH_TEST_CLIENT__ as unknown as AppAuthClient;
   }
   return client;
-}
-
-export async function resetAppPassword(token: string, password: string) {
-  const result = await betterAuthClient.resetPassword({
-    token,
-    newPassword: password,
-  });
-  if (result.error) throw authError(result.error);
 }
 
 export async function getAppSessionToken(): Promise<string | null> {

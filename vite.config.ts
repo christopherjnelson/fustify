@@ -16,16 +16,6 @@ export default defineConfig(({ mode }) => {
   );
 
   return {
-    define: isBundleAnalysis
-      ? {
-          'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(
-            'https://bundle-analysis.invalid',
-          ),
-          'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY': JSON.stringify(
-            'bundle-analysis-publishable-key',
-          ),
-        }
-      : undefined,
     plugins: [
       react(),
       fustifyAdminReportsPlugin(),

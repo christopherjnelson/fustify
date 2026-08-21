@@ -1,6 +1,34 @@
 import type { Page } from '@playwright/test';
 
 export async function installRegisteredAuthFixture(page: Page) {
+  const profile = {
+    user_id: '10000000-0000-4000-8000-000000000001',
+    display_name: 'Player One',
+    avatar_url: null,
+    onboarding_completed: true,
+    created_at: '2026-07-24T06:00:00.000Z',
+    updated_at: '2026-07-24T06:00:00.000Z',
+  };
+  await page.route('**/api/profile', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ json: profile });
+      return;
+    }
+    const update = route.request().postDataJSON() as {
+      displayName?: string;
+      avatarUrl?: string | null;
+    };
+    await route.fulfill({
+      json: {
+        ...profile,
+        display_name: update.displayName ?? profile.display_name,
+        avatar_url: update.avatarUrl ?? profile.avatar_url,
+      },
+    });
+  });
+  await page.route('**/api/profile/username-options?**', async (route) => {
+    await route.fulfill({ json: { available: true, suggestions: [] } });
+  });
   await page.addInitScript(() => {
     const user = {
       id: '10000000-0000-4000-8000-000000000001',

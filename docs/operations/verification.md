@@ -1,10 +1,7 @@
-# Verification reports and local admin
+# Verification reports
 
-Fustify's developer-only verification pipeline is deliberately one-way:
-
-```text
-existing pnpm checks → validated JSON artifacts → read-only Vite API → /admin
-```
+Fustify's developer verification pipeline runs existing pnpm checks and writes
+validated JSON artifacts for command-line and file-based review.
 
 Run `pnpm verify:report` for the practical standard profile (unit, typecheck,
 lint, build, formatting, diff consistency, quick bots, and coverage). The unit
@@ -32,32 +29,17 @@ than losing the partial run. Pending suites are never presented as passed. A
 running report older than 30 seconds is shown as potentially abandoned, without
 rewriting it.
 
-During `pnpm dev`, open `/admin`. The Vite server exposes only:
-
-- `GET /__fustify/admin/reports/latest`
-- `GET /__fustify/admin/reports?limit=20`
-- `GET /__fustify/admin/reports/:id`
-
-The API is development-only, GET-only, validates JSON, bounds history, accepts
-only filesystem-safe IDs, and resolves only fixed report locations. Corrupt and
-unsupported reports return safe errors. Production `/admin` explains that the
-local source is unavailable. React consumes an `AdminReportSource`, leaving a
-future authenticated remote implementation possible without coupling the UI to
-Vite or the filesystem.
-
-The page polls every 1.5 seconds only while visible and the latest run is active
-(or absent), refreshes on visibility return, prevents overlapping requests,
-preserves historical selection, and retains valid data through transient
-errors. It is read-only: there are no run, cancel, delete, upload, or shell
-controls.
+Inspect `.fustify/reports/latest.json` for the current result and
+`.fustify/reports/history/` for retained runs. The schemas and report-store
+tests remain the authority for parsing and retention.
 
 Bot data is adapted from the existing `BotSimulationReport`: requested and
 completed games, outcomes, wins, turn percentiles, caps, errors, invariants,
 runtime, throughput, and reproduction descriptors. The existing simulation
 contract and reducer remain authoritative.
 
-Future agents should run the appropriate report-enabled profile, keep `/admin`
-open, and include the resulting run ID in their handoff. Never claim that an
+Future agents should run the appropriate report-enabled profile and include
+the resulting run ID in their handoff. Never claim that an
 interrupted, incomplete, pending, or skipped suite passed.
 
 ## Generated-output maintenance
@@ -71,7 +53,7 @@ Use `pnpm clean:reports --dry-run` before intentionally removing all local
 verification, world-generation, balance-study, bot-simulation, and legacy
 image artifacts. `pnpm clean:all` combines report and transient cleanup.
 Targets are fixed inside the Fustify repository; the commands never remove
-`.env.local`, dependencies, or Supabase local state.
+`.env.local`, dependencies, or PostgreSQL data.
 
 ## Procedural-world visual audit
 

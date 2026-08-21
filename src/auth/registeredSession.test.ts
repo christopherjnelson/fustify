@@ -1,6 +1,5 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
-import type { Database } from '../multiplayer/database.types';
+import type { AppAuthClient } from './authClientTypes';
 import {
   ensureRegisteredSessionReady,
   invalidateRegisteredSessionPreparation,
@@ -9,8 +8,8 @@ import {
 const userId = '10000000-0000-4000-8000-000000000001';
 const otherUserId = '20000000-0000-4000-8000-000000000002';
 
-function asClient(value: unknown): SupabaseClient<Database> {
-  return value as SupabaseClient<Database>;
+function asClient(value: unknown): AppAuthClient {
+  return value as AppAuthClient;
 }
 
 function session(id = userId, isAnonymous = false, token = 'current-token') {

@@ -1,6 +1,5 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ApplicationClient } from './applicationClient';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Database } from './database.types';
 import { heartbeatRoomMembership, type RoomState } from './multiplayerApi';
 import {
   isWaitingRoomMember,
@@ -53,26 +52,27 @@ afterEach(() => {
 });
 
 describe('waiting-room membership heartbeat', () => {
-  it('coalesces overlapping RPC requests and passes only the room identifier', async () => {
-    let resolveRpc:
-      ((value: { data: boolean; error: null }) => void) | undefined;
-    const rpc = vi.fn(
+  it('coalesces overlapping API heartbeat requests', async () => {
+    let resolveRequest: ((value: Response) => void) | undefined;
+    const fetch = vi.fn(
       () =>
-        new Promise<{ data: boolean; error: null }>((resolve) => {
-          resolveRpc = resolve;
+        new Promise<Response>((resolve) => {
+          resolveRequest = resolve;
         }),
     );
-    const client = { rpc } as unknown as SupabaseClient<Database>;
+    vi.stubGlobal('fetch', fetch);
+    const client = {} as ApplicationClient;
 
     const first = heartbeatRoomMembership(client, 'room-id');
     const second = heartbeatRoomMembership(client, 'room-id');
 
     expect(second).toBe(first);
-    expect(rpc).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenCalledWith('heartbeat_room_membership', {
-      p_room_id: 'room-id',
-    });
-    resolveRpc?.({ data: true, error: null });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/multiplayer/rooms/room-id/heartbeat',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    resolveRequest?.(new Response('true'));
     await expect(first).resolves.toBe(true);
   });
 

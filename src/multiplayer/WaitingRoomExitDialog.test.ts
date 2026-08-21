@@ -113,7 +113,7 @@ describe('waiting room exit confirmation', () => {
     await runWaitingRoomExit({
       pending,
       leave: async () => {
-        throw new Error('raw Supabase detail');
+        throw new Error('raw backend detail');
       },
       onSuccess: () => calls.push('navigate'),
       onFailure: () => calls.push('contained-error'),

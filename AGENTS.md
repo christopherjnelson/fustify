@@ -14,10 +14,10 @@ lives under `docs/`; load only the guides relevant to the task:
   [`docs/gameplay/controllers.md`](docs/gameplay/controllers.md)
 - Balance-study operation and interpretation:
   [`docs/gameplay/balance-studies.md`](docs/gameplay/balance-studies.md)
-- Verification reports and the development admin dashboard:
+- Verification reports:
   [`docs/operations/verification.md`](docs/operations/verification.md)
-- Supabase schema, security, Auth, functions, and remote validation:
-  [`docs/operations/supabase.md`](docs/operations/supabase.md)
+- PostgreSQL schema, Better Auth, application APIs, and validation:
+  [`docs/operations/postgres.md`](docs/operations/postgres.md)
 - Production builds and bundle budgets:
   [`docs/operations/bundle-analysis.md`](docs/operations/bundle-analysis.md)
 - Droplet deployment, rollback, and recovery:
@@ -70,9 +70,8 @@ Simulation failures must retain the reproduction block printed by the harness. R
 ## Verification dashboard workflow
 
 Use `pnpm verify:report` for ordinary completed implementation work and
-`pnpm verify:report:full` when Playwright and stress suites are required. Keep
-the development-only `/admin` page open when useful and include the generated
-verification run ID in the handoff. Reports live under ignored
+`pnpm verify:report:full` when Playwright and stress suites are required.
+Include the generated verification run ID in the handoff. Reports live under ignored
 `.fustify/reports/`; do not commit run history. Never claim that a suite passed
 when its structured report says pending, skipped, interrupted, or incomplete.
 

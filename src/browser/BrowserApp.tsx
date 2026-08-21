@@ -5,7 +5,6 @@ import { hasLocalSetupParameters, isMultiplayerRoute } from './routes';
 import { Home } from '../home/Home';
 
 const routeClasses = [
-  'admin-route',
   'auth-route',
   'multiplayer-route',
   'multiplayer-match-route',

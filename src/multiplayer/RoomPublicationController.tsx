@@ -1,6 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from './database.types';
+import type { ApplicationClient } from './applicationClient';
 import {
   fetchRoomState,
   multiplayerError,
@@ -33,7 +32,7 @@ export function RoomPublicationController({
   setSettings,
   setState,
 }: {
-  client: SupabaseClient<Database>;
+  client: ApplicationClient;
   roomId: string;
   settings: Room;
   isSettingsDirty: () => boolean;

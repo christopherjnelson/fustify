@@ -103,18 +103,6 @@ export const BUNDLE_BUDGETS: BundleBudgets = {
       gzipBudget: 470_000,
     },
     {
-      id: 'auth-page',
-      description: 'Standalone /auth/* callback page',
-      chunkNames: ['AuthCallbackPage'],
-      gzipBudget: 150_000,
-    },
-    {
-      id: 'auth-profile-completion',
-      description: 'Standalone Discord profile confirmation page',
-      chunkNames: ['DiscordProfileCompletionPage'],
-      gzipBudget: 150_000,
-    },
-    {
       id: 'local-game',
       description: 'Local setup before active match controls load at /local',
       chunkNames: ['BrowserApp', 'App'],

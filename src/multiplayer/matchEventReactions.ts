@@ -1,8 +1,10 @@
-import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import type { MatchEvent } from '../core/game/types';
-import type { Database, Tables } from './database.types';
+import type {
+  ApplicationClient,
+  RealtimeSubscription,
+} from './applicationClient';
+import type { Tables } from './database.types';
 import { multiplayerError } from './multiplayerError';
-import { isHttpMultiplayerClient } from './multiplayerClient';
 
 export const MATCH_EVENT_REACTIONS = [
   'fire',
@@ -89,46 +91,27 @@ export function aggregateMatchEventReactions(
 }
 
 export async function fetchMatchEventReactions(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   matchId: string,
 ): Promise<MatchEventReactionRow[]> {
-  if (isHttpMultiplayerClient(client)) {
-    const response = await fetch(
-      `/api/multiplayer/matches/${encodeURIComponent(matchId)}/reactions`,
-      { credentials: 'same-origin' },
+  const response = await fetch(
+    `/api/multiplayer/matches/${encodeURIComponent(matchId)}/reactions`,
+    { credentials: 'same-origin' },
+  );
+  const data = (await response.json()) as
+    | Array<{
+        event_id: string;
+        user_id: string;
+        reaction: string;
+        updated_at: string;
+      }>
+    | { code?: string };
+  if (!response.ok || !Array.isArray(data)) {
+    throw multiplayerError(
+      !Array.isArray(data) && typeof data.code === 'string' ? data.code : data,
     );
-    const data = (await response.json()) as
-      | Array<{
-          event_id: string;
-          user_id: string;
-          reaction: string;
-          updated_at: string;
-        }>
-      | { code?: string };
-    if (!response.ok || !Array.isArray(data)) {
-      throw multiplayerError(
-        !Array.isArray(data) && typeof data.code === 'string' ? data.code : data,
-      );
-    }
-    return data.map((row) => {
-      if (!isMatchEventReaction(row.reaction))
-        throw multiplayerError('invalid_event_reaction');
-      return {
-        eventId: row.event_id,
-        userId: row.user_id,
-        reaction: row.reaction,
-        updatedAt: row.updated_at,
-      };
-    });
   }
-  const { data, error } = await client
-    .from('match_event_reactions')
-    .select('event_id,user_id,reaction,updated_at')
-    .eq('match_id', matchId)
-    .order('event_id')
-    .order('user_id');
-  if (error) throw multiplayerError(error);
-  return (data ?? []).map((row) => {
+  return data.map((row) => {
     if (!isMatchEventReaction(row.reaction)) {
       throw multiplayerError('invalid_event_reaction');
     }
@@ -142,65 +125,39 @@ export async function fetchMatchEventReactions(
 }
 
 export async function setMatchEventReaction(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   matchId: string,
   eventId: string,
   reaction: MatchEventReaction | null,
 ): Promise<void> {
-  if (isHttpMultiplayerClient(client)) {
-    const response = await fetch(
-      `/api/multiplayer/matches/${encodeURIComponent(matchId)}/reactions`,
-      {
-        method: 'PUT',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId, reaction }),
-      },
-    );
-    if (!response.ok) {
-      const body = (await response.json()) as { code?: string };
-      throw multiplayerError(body.code ?? body);
-    }
-    return;
+  const response = await fetch(
+    `/api/multiplayer/matches/${encodeURIComponent(matchId)}/reactions`,
+    {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventId, reaction }),
+    },
+  );
+  if (!response.ok) {
+    const body = (await response.json()) as { code?: string };
+    throw multiplayerError(body.code ?? body);
   }
-  const { error } = await client.rpc('set_match_event_reaction', {
-    p_match_id: matchId,
-    p_event_id: eventId,
-    // The database intentionally accepts null to remove the caller's reaction.
-    p_reaction: reaction as string,
-  });
-  if (error) throw multiplayerError(error);
 }
 
 export function subscribeToMatchEventReactions(
-  client: SupabaseClient<Database>,
-  matchId: string,
+  _client: ApplicationClient,
+  _matchId: string,
   onChange: () => void,
   onStatus: (status: string) => void,
-): RealtimeChannel {
-  if (isHttpMultiplayerClient(client)) {
-    onStatus('SUBSCRIBED');
-    const timer = window.setInterval(onChange, 1_000);
-    return {
-      unsubscribe: async () => {
-        window.clearInterval(timer);
-        return 'ok';
-      },
-    } as unknown as RealtimeChannel;
-  }
-  return client
-    .channel(`private-match-reactions:${matchId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'match_event_reactions',
-        filter: `match_id=eq.${matchId}`,
-      },
-      onChange,
-    )
-    .subscribe(onStatus);
+): RealtimeSubscription {
+  onStatus('SUBSCRIBED');
+  const timer = window.setInterval(onChange, 1_000);
+  return {
+    unsubscribe() {
+      window.clearInterval(timer);
+    },
+  };
 }
 
 export type MatchEventReactionRecord = Tables<'match_event_reactions'>;

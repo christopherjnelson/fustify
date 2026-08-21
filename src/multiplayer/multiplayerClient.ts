@@ -1,11 +1,14 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from './database.types';
+import type { ApplicationClient } from './applicationClient';
 
-export type MultiplayerClient = SupabaseClient<Database>;
+export type MultiplayerClient = ApplicationClient;
 
 const httpClient = {
-  transport: 'fustify-http',
-} as unknown as MultiplayerClient;
+  async removeChannel(
+    channel: import('./applicationClient').RealtimeSubscription,
+  ) {
+    await channel.unsubscribe();
+  },
+} satisfies MultiplayerClient;
 
 declare global {
   interface Window {
@@ -18,10 +21,4 @@ export function getMultiplayerClient(): MultiplayerClient {
     return window.__FUSTIFY_AUTH_TEST_CLIENT__;
   }
   return httpClient;
-}
-
-export function isHttpMultiplayerClient(client: MultiplayerClient): boolean {
-  return (
-    (client as unknown as { transport?: string }).transport === 'fustify-http'
-  );
 }

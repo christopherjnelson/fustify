@@ -10,7 +10,6 @@ release_root="${FUSTIFY_RELEASE_ROOT:-/srv/fustify}"
 release_root="${release_root%/}"
 releases_root="${release_root}/releases"
 current_link="${FUSTIFY_CURRENT_LINK:-${release_root}/current}"
-frontend_env="${FUSTIFY_FRONTEND_ENV:-$(pwd)/.env.production.local}"
 server_env="${FUSTIFY_SERVER_ENV:-${HOME}/.config/fustify/fustify-api.env}"
 public_origin="${FUSTIFY_PUBLIC_ORIGIN:-https://dev.fustify.com}"
 health_url="${FUSTIFY_API_HEALTH_URL:-http://127.0.0.1:8787/api/health}"
@@ -132,7 +131,6 @@ verify_public_surface() {
     return 1
   http_status_is "${public_origin}/" "200" || return 1
   http_status_is "${public_origin}/multiplayer" "200" || return 1
-  http_status_is "${public_origin}/admin" "200" || return 1
   http_status_is "${public_origin}/.env" "404" || return 1
   http_status_is "${public_origin}/.git/config" "404" || return 1
   http_status_is "${public_origin}/src/main.tsx" "404" || return 1
@@ -343,9 +341,8 @@ if [[ "$(realpath -e "${release_root}")" != "${release_root}" ||
 fi
 chmod 0755 "${release_root}" "${releases_root}"
 fustify_require_private_environment \
-  "${frontend_env}" VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY
-fustify_require_private_environment \
-  "${server_env}" SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY
+  "${server_env}" DATABASE_URL BETTER_AUTH_SECRET BETTER_AUTH_URL \
+  FUSTIFY_TRUSTED_ORIGINS
 
 commit="$(git rev-parse HEAD)"
 if [[ ! "${commit}" =~ ^[0-9a-f]{40}$ ]]; then

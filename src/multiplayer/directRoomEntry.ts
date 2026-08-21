@@ -1,6 +1,5 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import type { Database } from './database.types';
+import type { ApplicationClient } from './applicationClient';
 import {
   MULTIPLAYER_ERRORS,
   fetchRoomState,
@@ -18,11 +17,8 @@ export type DirectRoomEntryFailure =
 export class InvalidDirectRoomIdError extends Error {}
 
 interface DirectRoomEntryDependencies {
-  fetch: (
-    client: SupabaseClient<Database>,
-    roomId: string,
-  ) => Promise<RoomState>;
-  join: (client: SupabaseClient<Database>, roomId: string) => Promise<unknown>;
+  fetch: (client: ApplicationClient, roomId: string) => Promise<RoomState>;
+  join: (client: ApplicationClient, roomId: string) => Promise<unknown>;
 }
 
 const defaultDependencies: DirectRoomEntryDependencies = {
@@ -31,7 +27,7 @@ const defaultDependencies: DirectRoomEntryDependencies = {
 };
 
 const pendingEntryByClient = new WeakMap<
-  SupabaseClient<Database>,
+  ApplicationClient,
   Map<string, Promise<RoomState>>
 >();
 
@@ -40,7 +36,7 @@ export function isValidDirectRoomId(roomId: string): boolean {
 }
 
 export function enterRoomFromDirectLink(
-  client: SupabaseClient<Database>,
+  client: ApplicationClient,
   userId: string,
   roomId: string,
   dependencies: DirectRoomEntryDependencies = defaultDependencies,

@@ -1,6 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from './database.types';
-import { isHttpMultiplayerClient } from './multiplayerClient';
+import type { ApplicationClient } from './applicationClient';
 
 export const ROOM_THUMBNAIL_BUCKET = 'room-thumbnails';
 
@@ -9,18 +7,10 @@ export function roomThumbnailPath(roomId: string): string {
 }
 
 export function roomThumbnailPublicUrl(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   path: string,
   version: number,
 ): string {
-  if (isHttpMultiplayerClient(client)) {
-    const roomId = path.split('/')[0];
-    return `/api/multiplayer/rooms/${encodeURIComponent(roomId!)}/thumbnail.svg?v=${encodeURIComponent(String(version))}`;
-  }
-  const publicUrl = client.storage
-    .from(ROOM_THUMBNAIL_BUCKET)
-    .getPublicUrl(path).data.publicUrl;
-  const url = new URL(publicUrl);
-  url.searchParams.set('v', String(version));
-  return url.toString();
+  const roomId = path.split('/')[0];
+  return `/api/multiplayer/rooms/${encodeURIComponent(roomId!)}/thumbnail.svg?v=${encodeURIComponent(String(version))}`;
 }

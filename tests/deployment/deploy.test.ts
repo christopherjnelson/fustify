@@ -69,7 +69,6 @@ async function createHarness(scenario = 'success'): Promise<Harness> {
   const commandLog = join(root, 'commands.log');
   const notificationLog = join(root, 'notifications.log');
   const previousRelease = join(releasesRoot, '20260725T120000Z-bbbbbbbbbbbb');
-  const frontendEnvironment = join(repository, '.env.production.local');
   const serverEnvironment = join(fakeHome, 'fustify-api.env');
 
   await mkdir(repository, { recursive: true });
@@ -79,16 +78,11 @@ async function createHarness(scenario = 'success'): Promise<Harness> {
   await writeCombinedRelease(previousRelease, previousCommit);
   await symlink(previousRelease, currentLink);
   await writeFile(
-    frontendEnvironment,
-    'VITE_SUPABASE_URL=https://example.invalid\n' +
-      'VITE_SUPABASE_PUBLISHABLE_KEY=public-test-value\n',
-    { mode: 0o600 },
-  );
-  await writeFile(
     serverEnvironment,
-    'SUPABASE_URL=https://example.invalid\n' +
-      'SUPABASE_PUBLISHABLE_KEY=public-test-value\n' +
-      'SUPABASE_SERVICE_ROLE_KEY=server-test-value\n',
+    'DATABASE_URL=postgresql://fustify:secret@127.0.0.1:5432/fustify\n' +
+      'BETTER_AUTH_SECRET=deployment-test-secret-at-least-32-characters\n' +
+      'BETTER_AUTH_URL=https://deployment.test\n' +
+      'FUSTIFY_TRUSTED_ORIGINS=https://deployment.test\n',
     { mode: 0o600 },
   );
 
@@ -267,7 +261,6 @@ esac
       FUSTIFY_DEPLOY_USER: 'tester',
       FUSTIFY_RELEASE_ROOT: releaseRoot,
       FUSTIFY_CURRENT_LINK: currentLink,
-      FUSTIFY_FRONTEND_ENV: frontendEnvironment,
       FUSTIFY_SERVER_ENV: serverEnvironment,
       FUSTIFY_PUBLIC_ORIGIN: 'https://deployment.test',
       FUSTIFY_API_HEALTH_URL: 'http://127.0.0.1:18787/api/health',
@@ -344,9 +337,9 @@ describe('combined droplet deployment', () => {
     expect(await readlink(harness.currentLink)).toBe(harness.previousRelease);
   });
 
-  it('fails before any build when frontend configuration is missing', async () => {
+  it('fails before any build when server configuration is missing', async () => {
     const harness = await createHarness();
-    await rm(join(harness.repository, '.env.production.local'));
+    await rm(join(harness.root, 'home', 'fustify-api.env'));
     const result = runDeployment(harness);
 
     expect(result.status).not.toBe(0);
@@ -355,7 +348,7 @@ describe('combined droplet deployment', () => {
     expect(await readlink(harness.currentLink)).toBe(harness.previousRelease);
   });
 
-  it('overrides an inherited umask 077 with public frontend permissions', async () => {
+  it('overrides an inherited umask 077 with public release permissions', async () => {
     const harness = await createHarness();
     const result = spawnSync(
       'bash',

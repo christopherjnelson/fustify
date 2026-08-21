@@ -1,19 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { accountIdentity } from './accountIdentity';
+import type { AccountState } from './accountState';
+import type { DialogView } from './AccountControl';
 import { getAppAuthClient } from './appAuthClient';
 import {
   AuthFlowError,
   authFlowError,
-  clearGuestUpgradeIntent,
-  clearRecoveryState,
-  initiateGuestEmailUpgrade,
   registerWithEmail,
-  requestPasswordRecovery,
-  resendSignupVerification,
   signInWithEmail,
 } from './authFlow';
-import type { AccountState } from './accountState';
-import type { DialogView } from './AccountControl';
-import { accountIdentity } from './accountIdentity';
 import { updateCurrentProfile } from './profileHttpApi';
 import type { UserProfile } from './profileModel';
 import { validatedReturnPath } from './returnPath';
@@ -86,14 +81,6 @@ export default function AuthDialog({
   const [status, setStatus] = useState<FormStatus>({ kind: 'idle' });
   const [usernameAvailability, setUsernameAvailability] =
     useState<UsernameAvailability>('unchecked');
-  const [pendingSignupEmail, setPendingSignupEmail] = useState<string | null>(
-    null,
-  );
-  const [resendStatus, setResendStatus] = useState<FormStatus>({
-    kind: 'idle',
-  });
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const resendPending = useRef(false);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -107,12 +94,9 @@ export default function AuthDialog({
         : null;
     const previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    (
-      dialog?.querySelector<HTMLElement>('input') ??
-      dialog?.querySelector<HTMLElement>(
-        'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
-      )
-    )?.focus();
+    dialog
+      ?.querySelector<HTMLElement>('input, button:not([disabled])')
+      ?.focus();
 
     const handleKeyboard = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -144,15 +128,6 @@ export default function AuthDialog({
     };
   }, []);
 
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = window.setTimeout(
-      () => setResendCooldown((seconds) => Math.max(0, seconds - 1)),
-      1_000,
-    );
-    return () => window.clearTimeout(timer);
-  }, [resendCooldown]);
-
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (status.kind === 'busy') return;
@@ -168,81 +143,32 @@ export default function AuthDialog({
         );
       }
       if (view === 'register') {
-        const registration = await registerWithEmail(client, {
+        await registerWithEmail(client, {
           displayName,
           email,
           password,
           confirmPassword,
-          returnPath,
         });
-        setPendingSignupEmail(
-          registration.confirmationRequired ? registration.email : null,
-        );
-        setResendStatus({ kind: 'idle' });
-        setResendCooldown(registration.confirmationRequired ? 60 : 0);
-        setPassword('');
-        setConfirmPassword('');
-        setStatus({
-          kind: 'success',
-          message: registration.confirmationRequired
-            ? 'Check your email for a verification link to finish creating your account.'
-            : 'Your account is ready.',
-        });
+        window.location.assign(validatedReturnPath(returnPath));
         return;
       }
       if (view === 'sign-in') {
         await signInWithEmail(client, { email, password });
-        setPassword('');
         window.location.assign(validatedReturnPath(returnPath));
         return;
       }
-      if (view === 'guest-upgrade') {
-        if (!identity?.isAnonymous) {
-          throw new AuthFlowError(
-            'account_required',
-            'The guest session is no longer available.',
-          );
-        }
-        await initiateGuestEmailUpgrade(client, {
-          email,
-          expectedUserId: identity.userId,
-          returnPath,
-        });
-        setStatus({
-          kind: 'success',
-          message:
-            'Check your email in this browser to verify it, then choose a password and username.',
-        });
-        return;
+      if (!identity || identity.isAnonymous) {
+        throw new AuthFlowError(
+          'account_required',
+          'Sign in to customize your profile.',
+        );
       }
-      if (view === 'forgot-password') {
-        const result = await requestPasswordRecovery(client, {
-          email,
-          returnPath: '/',
-        });
-        setStatus({
-          kind: 'success',
-          message:
-            result === 'rate-limited'
-              ? 'If that account exists, a reset email will arrive after the request limit clears.'
-              : 'If that account exists, a password-reset email is on its way.',
-        });
-        return;
-      }
-      if (view === 'edit-profile') {
-        if (!identity || identity.isAnonymous) {
-          throw new AuthFlowError(
-            'account_required',
-            'Create an account to customize your profile.',
-          );
-        }
-        const updatedProfile = await updateCurrentProfile(client, {
-          displayName,
-          avatarUrl: avatarUrl.trim() || null,
-        });
-        onProfileUpdated(updatedProfile);
-        setStatus({ kind: 'success', message: 'Profile updated.' });
-      }
+      const updatedProfile = await updateCurrentProfile(client, {
+        displayName,
+        avatarUrl: avatarUrl.trim() || null,
+      });
+      onProfileUpdated(updatedProfile);
+      setStatus({ kind: 'success', message: 'Profile updated.' });
     } catch (error) {
       const safe = authFlowError(error);
       setPassword('');
@@ -251,60 +177,12 @@ export default function AuthDialog({
     }
   };
 
-  const resendVerification = async () => {
-    if (!pendingSignupEmail || resendPending.current || resendCooldown > 0) {
-      return;
-    }
-    resendPending.current = true;
-    setResendStatus({ kind: 'busy' });
-    try {
-      await resendSignupVerification(client, {
-        email: pendingSignupEmail,
-        returnPath,
-      });
-      setResendCooldown(60);
-      setResendStatus({
-        kind: 'success',
-        message:
-          'If that address has a pending signup, a new verification email is on its way.',
-      });
-    } catch (error) {
-      const safe = authFlowError(error);
-      setResendStatus({
-        kind: 'error',
-        message: safe.message,
-        code: safe.code,
-      });
-    } finally {
-      resendPending.current = false;
-    }
-  };
-
   const title =
     view === 'register'
       ? 'Create account'
-      : view === 'guest-upgrade'
-        ? 'Finish creating your account'
-        : view === 'guest-switch-warning'
-          ? 'Sign in to another account'
-          : view === 'forgot-password'
-            ? 'Reset password'
-            : view === 'edit-profile'
-              ? 'Edit profile'
-              : 'Sign in';
-
-  const switchGuest = async () => {
-    setStatus({ kind: 'busy' });
-    try {
-      clearGuestUpgradeIntent();
-      clearRecoveryState();
-      await client.auth.signOut();
-      onView('sign-in');
-      setStatus({ kind: 'idle' });
-    } catch (error) {
-      setStatus({ kind: 'error', message: authFlowError(error).message });
-    }
-  };
+      : view === 'edit-profile'
+        ? 'Edit profile'
+        : 'Sign in';
 
   return (
     <div className="auth-dialog-backdrop" role="presentation">
@@ -330,122 +208,66 @@ export default function AuthDialog({
           </button>
         </header>
 
-        {view === 'guest-switch-warning' ? (
-          <div className="auth-warning">
-            <p>
-              This guest identity cannot be recovered after sign-out unless you
-              finish creating an account. Guest-owned data will not
-              automatically transfer to another account.
-            </p>
-            <button
-              type="button"
-              className="auth-danger-action"
-              disabled={status.kind === 'busy'}
-              onClick={() => void switchGuest()}
-            >
-              Sign out guest and continue
-            </button>
-            <button type="button" onClick={() => onView('guest-upgrade')}>
-              Keep guest and create account
-            </button>
-          </div>
-        ) : (
-          <>
-            {view === 'guest-upgrade' && (
-              <span className="auth-method-label">Finish with email</span>
-            )}
-            <form
-              className="auth-form"
-              onSubmit={(event) => void submit(event)}
-            >
-              {(view === 'register' || view === 'edit-profile') && (
-                <UsernameField
-                  client={client}
-                  value={displayName}
-                  onChange={setDisplayName}
-                  onAvailabilityChange={setUsernameAvailability}
-                />
-              )}
-              {view === 'edit-profile' && (
-                <Field
-                  label="Avatar URL (optional)"
-                  type="url"
-                  value={avatarUrl}
-                  onChange={setAvatarUrl}
-                  autoComplete="url"
-                  maxLength={2048}
-                  required={false}
-                />
-              )}
-              {view !== 'edit-profile' && (
-                <Field
-                  label="Email"
-                  type="email"
-                  value={email}
-                  onChange={setEmail}
-                  autoComplete={view === 'sign-in' ? 'username' : 'email'}
-                  maxLength={254}
-                />
-              )}
-              {(view === 'register' || view === 'sign-in') && (
-                <Field
-                  label="Password"
-                  type="password"
-                  value={password}
-                  onChange={setPassword}
-                  autoComplete={
-                    view === 'register' ? 'new-password' : 'current-password'
-                  }
-                />
-              )}
-              {view === 'register' && (
-                <Field
-                  label="Confirm password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={setConfirmPassword}
-                  autoComplete="new-password"
-                />
-              )}
-              <button
-                type="submit"
-                disabled={
-                  status.kind === 'busy' ||
-                  (view === 'register' && status.kind === 'success')
-                }
-              >
-                {status.kind === 'busy'
-                  ? 'Working…'
-                  : view === 'register' && status.kind === 'success'
-                    ? 'Account created'
-                    : view === 'register'
-                      ? 'Create account'
-                      : view === 'guest-upgrade'
-                        ? 'Send verification email'
-                        : view === 'forgot-password'
-                          ? 'Send reset email'
-                          : view === 'edit-profile'
-                            ? 'Save profile'
-                            : 'Sign in'}
-              </button>
-            </form>
-            {view === 'register' && pendingSignupEmail && (
-              <div className="account-actions">
-                <button
-                  type="button"
-                  disabled={resendStatus.kind === 'busy' || resendCooldown > 0}
-                  onClick={() => void resendVerification()}
-                >
-                  {resendStatus.kind === 'busy'
-                    ? 'Resending…'
-                    : resendCooldown > 0
-                      ? `Resend available in ${resendCooldown}s`
-                      : 'Resend verification'}
-                </button>
-              </div>
-            )}
-          </>
-        )}
+        <form className="auth-form" onSubmit={(event) => void submit(event)}>
+          {(view === 'register' || view === 'edit-profile') && (
+            <UsernameField
+              client={client}
+              value={displayName}
+              onChange={setDisplayName}
+              onAvailabilityChange={setUsernameAvailability}
+            />
+          )}
+          {view === 'edit-profile' && (
+            <Field
+              label="Avatar URL (optional)"
+              type="url"
+              value={avatarUrl}
+              onChange={setAvatarUrl}
+              autoComplete="url"
+              maxLength={2048}
+              required={false}
+            />
+          )}
+          {view !== 'edit-profile' && (
+            <Field
+              label="Email"
+              type="email"
+              value={email}
+              onChange={setEmail}
+              autoComplete={view === 'sign-in' ? 'username' : 'email'}
+              maxLength={254}
+            />
+          )}
+          {view !== 'edit-profile' && (
+            <Field
+              label="Password"
+              type="password"
+              value={password}
+              onChange={setPassword}
+              autoComplete={
+                view === 'register' ? 'new-password' : 'current-password'
+              }
+            />
+          )}
+          {view === 'register' && (
+            <Field
+              label="Confirm password"
+              type="password"
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              autoComplete="new-password"
+            />
+          )}
+          <button type="submit" disabled={status.kind === 'busy'}>
+            {status.kind === 'busy'
+              ? 'Working…'
+              : view === 'register'
+                ? 'Create account'
+                : view === 'edit-profile'
+                  ? 'Save profile'
+                  : 'Sign in'}
+          </button>
+        </form>
 
         {status.kind === 'success' && (
           <p className="auth-success" role="status">
@@ -453,59 +275,23 @@ export default function AuthDialog({
           </p>
         )}
         {status.kind === 'error' && (
-          <div className="auth-error" role="alert">
-            <p>{status.message}</p>
-            {status.code === 'email_conflict' && (
-              <>
-                <p>
-                  Your guest rooms and other guest-owned data will not transfer
-                  automatically if you sign in to that account.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => onView('guest-switch-warning')}
-                >
-                  Sign in to the existing account
-                </button>
-              </>
-            )}
-            {status.code === 'identity_conflict' &&
-              view === 'guest-upgrade' && (
-                <p>
-                  Switching to another account will not transfer legacy rooms,
-                  profiles, reactions, matches, or other legacy-owned data.
-                </p>
-              )}
-          </div>
-        )}
-        {resendStatus.kind === 'success' && (
-          <p className="auth-success" role="status">
-            {resendStatus.message}
-          </p>
-        )}
-        {resendStatus.kind === 'error' && (
           <p className="auth-error" role="alert">
-            {resendStatus.message}
+            {status.message}
           </p>
         )}
 
-        <nav className="auth-dialog-nav" aria-label="Account options">
-          {view === 'sign-in' && (
-            <>
-              <button type="button" onClick={() => onView('forgot-password')}>
-                Forgot password?
-              </button>
-              <button type="button" onClick={() => onView('register')}>
-                Create account
-              </button>
-            </>
-          )}
-          {(view === 'register' || view === 'forgot-password') && (
-            <button type="button" onClick={() => onView('sign-in')}>
-              Back to sign in
+        {view !== 'edit-profile' && (
+          <nav className="auth-dialog-nav" aria-label="Account options">
+            <button
+              type="button"
+              onClick={() =>
+                onView(view === 'sign-in' ? 'register' : 'sign-in')
+              }
+            >
+              {view === 'sign-in' ? 'Create account' : 'Back to sign in'}
             </button>
-          )}
-        </nav>
+          </nav>
+        )}
       </section>
     </div>
   );

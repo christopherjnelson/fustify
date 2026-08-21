@@ -6,7 +6,6 @@
 
 <img width="1827" height="875" alt="procedural generated strategy" src="https://github.com/user-attachments/assets/48362323-f810-4962-88e6-aaeb5355514b" />
 
-
 Fustify is a browser strategy game played on deterministic, procedurally
 generated spherical worlds. Registered players can play locally against
 heuristic bots or people sharing a device, or create public and private
@@ -22,7 +21,7 @@ The application includes:
   elimination, and victory through one authoritative reducer;
 - browser-local versioned saves and shareable versioned setup URLs;
 - registered-account multiplayer with durable rooms, seats, immutable
-  published settings, authoritative commands, and Realtime recovery;
+  published settings, authoritative commands, and polling-based recovery;
 - deterministic heuristic controllers, simulations, balance studies, and
   replayable failure descriptors;
 - responsive keyboard- and touch-capable globe, minimap, navigator, HUD, and
@@ -39,12 +38,27 @@ The application includes:
 | `/multiplayer`                | Public game browser and private-room creation/joining         |
 | `/multiplayer/room/:roomId`   | Waiting room, world settings, publication, and seat selection |
 | `/multiplayer/match/:matchId` | Canonical authoritative multiplayer match                     |
-| `/admin`                      | Protected operations and local verification reports           |
 
 Legacy setup links at `/?v=1&...` remain supported and open local setup
 directly.
 
-## Local development
+## Quick start with Docker
+
+The supported zero-setup path is:
+
+```bash
+git clone https://github.com/christopherjnelson/fustify.git
+cd fustify
+docker compose up --build
+```
+
+Open <http://localhost:8080>. Compose starts PostgreSQL and the combined web/API
+service, applies versioned migrations automatically, and persists database data
+in the `fustify-postgres` Docker volume. The development defaults are intended
+for localhost only; set `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, and
+`FUSTIFY_ORIGIN` before exposing an instance publicly.
+
+## Local development without Docker
 
 Use the Node.js and pnpm versions compatible with `package.json`:
 
@@ -53,13 +67,14 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm dev` starts Vite on port 5173 and the localhost Node API on port 8787 by
-default. Vite proxies `/api/*` to that API.
+Copy `.env.example` to `.env.local`, point `DATABASE_URL` at a PostgreSQL 17
+database, and set a high-entropy `BETTER_AUTH_SECRET`. `pnpm dev` starts Vite on
+port 5173 and the localhost Node API on port 8787; Vite proxies `/api/*` to the
+API. The API applies pending files in `database/migrations/` on startup.
 
-Copy `.env.example` to `.env.local` and configure
-`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. Multiplayer match
-initialization also requires the server-only `SUPABASE_SERVICE_ROLE_KEY`.
-Never expose that service-role key through a `VITE_` variable.
+Accounts use email and password through Better Auth. Signup creates a usable
+session immediately: this project intentionally does not require email
+verification or any external identity-provider configuration.
 
 Production uses a combined immutable frontend/API release on an Ubuntu
 droplet behind Caddy. Use the
@@ -88,9 +103,7 @@ Browser and visual checks:
 ```bash
 pnpm exec playwright install chromium
 pnpm test:e2e
-pnpm test:e2e:multiplayer
 pnpm test:visual
-pnpm test:visual:multiplayer
 pnpm test:world-visual
 WORLD_AUDIT_PHASE=my-review pnpm audit:world-visual
 ```
@@ -120,7 +133,7 @@ pnpm clean:all
 release-staging output. `clean:reports` explicitly removes ignored verification,
 world-generation, balance-study, bot-simulation, and legacy local image
 artifacts. `clean:all` combines them. Cleanup is repository-bound and never
-touches `.env.local`, `node_modules`, or Supabase local state.
+touches `.env.local`, `node_modules`, or the PostgreSQL data volume.
 
 ## World and match contracts
 
@@ -150,7 +163,7 @@ http://localhost:5173/local?v=1&seed=atlas-prime&territories=42&continents=6&pla
 `PlanetDefinition` is immutable generated geography. `MatchState` owns mutable
 turn, territory, army, selection, combat, elimination, event, and victory
 state. The UI, controllers, simulator, browser persistence, Node initializer,
-and multiplayer Edge Function all use the same legal-action helpers and
+and multiplayer API all use the same legal-action helpers and
 `gameReducer`; there is no parallel rules implementation.
 
 Generation is deterministic for its seed, setup, generator version, and code
@@ -166,9 +179,9 @@ names do not consume terrain, ownership, controller, or combat randomness.
   presentation and routing.
 - `src/multiplayer/` contains room, match synchronization, publication, and
   browser integration.
-- `api/` contains the trusted Node match initializer and HTTP service.
-- `supabase/` contains migrations, Edge Functions, database tests, and
-  generated database contracts.
+- `api/` contains the trusted Node HTTP service, authentication integration,
+  and authoritative multiplayer services.
+- `database/migrations/` contains ordered plain-PostgreSQL schema migrations.
 - `scripts/` contains development, verification, analysis, study, release, and
   maintenance tooling.
 - `tests/e2e/` contains browser interaction and committed visual baselines.
@@ -188,7 +201,7 @@ runbooks are:
 - [balance studies](./docs/gameplay/balance-studies.md)
 - [world generation](./docs/world-generation/README.md)
 - [verification](./docs/operations/verification.md)
-- [Supabase](./docs/operations/supabase.md)
+- [PostgreSQL and API](./docs/operations/postgres.md)
 - [bundle analysis](./docs/operations/bundle-analysis.md)
 - [deployment](./docs/operations/deployment.md)
 - [brand assets](./docs/brand/README.md)

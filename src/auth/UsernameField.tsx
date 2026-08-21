@@ -5,8 +5,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '../multiplayer/database.types';
+import type { AppAuthClient } from './authClientTypes';
 import { fetchUsernameOptions, type UsernameOptions } from './profileHttpApi';
 import { profileDisplayNameSchema } from './profileModel';
 
@@ -20,7 +19,7 @@ export function UsernameField({
   onAvailabilityChange,
   autoFocus = false,
 }: {
-  client: SupabaseClient<Database>;
+  client: AppAuthClient;
   value: string;
   onChange: Dispatch<SetStateAction<string>> | ((value: string) => void);
   onAvailabilityChange?: (availability: UsernameAvailability) => void;

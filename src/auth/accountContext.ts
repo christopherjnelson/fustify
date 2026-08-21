@@ -1,10 +1,9 @@
 import { createContext, useContext } from 'react';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '../multiplayer/database.types';
+import type { AppAuthClient } from './authClientTypes';
 import type { AccountController, ProtectedAccountState } from './accountState';
 
 export interface AccountContextValue {
-  client: SupabaseClient<Database> | null;
+  client: AppAuthClient | null;
   controller: AccountController | null;
   state: ProtectedAccountState;
 }

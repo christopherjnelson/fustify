@@ -3,7 +3,9 @@ import { resolveAuthConfiguration } from './authConfiguration.ts';
 describe('auth configuration', () => {
   it('is unavailable until both server-only values exist', () => {
     expect(resolveAuthConfiguration({})).toBeNull();
-    expect(resolveAuthConfiguration({ BETTER_AUTH_SECRET: 'secret' })).toBeNull();
+    expect(
+      resolveAuthConfiguration({ BETTER_AUTH_SECRET: 'secret' }),
+    ).toBeNull();
   });
 
   it('defaults trusted origins to the application origin', () => {

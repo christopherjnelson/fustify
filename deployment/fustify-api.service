@@ -1,5 +1,5 @@
 [Unit]
-Description=Fustify match initialization API
+Description=Fustify web and application API
 After=network-online.target
 Wants=network-online.target
 

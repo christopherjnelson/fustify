@@ -21,12 +21,12 @@ const isMultiplayerMatch = window.location.pathname.startsWith(
 );
 document.documentElement.classList.add(
   isAuth
-      ? 'auth-route'
-      : isMultiplayer
-        ? 'multiplayer-route'
-        : isHome
-          ? 'home-route'
-          : 'game-route',
+    ? 'auth-route'
+    : isMultiplayer
+      ? 'multiplayer-route'
+      : isHome
+        ? 'home-route'
+        : 'game-route',
 );
 if (isMultiplayerMatch) {
   document.documentElement.classList.add('multiplayer-match-route');
@@ -34,25 +34,6 @@ if (isMultiplayerMatch) {
 
 async function bootstrap() {
   const root = createRoot(document.getElementById('root')!);
-  if (isAuth) {
-    if (window.location.pathname.startsWith('/auth/reset-password')) {
-      const { ResetPasswordPage } = await import('./auth/ResetPasswordPage');
-      root.render(
-        <StrictMode>
-          <ResetPasswordPage />
-        </StrictMode>,
-      );
-    } else {
-      const { AuthCallbackPage } = await import('./auth/AuthCallbackPage');
-      root.render(
-        <StrictMode>
-          <AuthCallbackPage />
-        </StrictMode>,
-      );
-    }
-    return;
-  }
-
   if (
     import.meta.env.DEV &&
     isMultiplayer &&

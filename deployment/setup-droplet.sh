@@ -15,7 +15,6 @@ user_systemd="${deploy_home}/.config/systemd/user"
 user_config="${deploy_home}/.config/fustify"
 server_env="${user_config}/fustify-api.env"
 deploy_env="${user_config}/deploy.env"
-frontend_env="${production_repository}/.env.production.local"
 
 fustify_require_non_root_user "${deploy_user}"
 fustify_validate_absolute_path "FUSTIFY_RELEASE_ROOT" "${release_root}"
@@ -60,34 +59,6 @@ sudo install -m 0755 -o root -g root \
 sudo install -d -m 0755 -o root -g root /usr/local/lib
 sudo install -m 0644 -o root -g root \
   "${script_dir}/lib.sh" /usr/local/lib/fustify-deploy-lib.sh
-
-if [[ -f "${production_repository}/package.json" ]] &&
-  ! (
-    fustify_require_private_environment \
-      "${frontend_env}" VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY
-  ) 2>/dev/null &&
-  (
-    umask 077
-    fustify_require_private_environment \
-      "${server_env}" SUPABASE_URL SUPABASE_PUBLISHABLE_KEY \
-      SUPABASE_SERVICE_ROLE_KEY
-    supabase_url="$(fustify_read_env_value "${server_env}" SUPABASE_URL)"
-    publishable_key="$(
-      fustify_read_env_value "${server_env}" SUPABASE_PUBLISHABLE_KEY
-    )"
-    case "${supabase_url}:${publishable_key}" in
-      *your-project* | *replace_me* | *PLACEHOLDER*) exit 1 ;;
-    esac
-    temporary_env="${frontend_env}.tmp.$$"
-    trap 'rm -f -- "${temporary_env}"' EXIT
-    printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\n' \
-      "${supabase_url}" "${publishable_key}" >"${temporary_env}"
-    chmod 0600 "${temporary_env}"
-    mv "${temporary_env}" "${frontend_env}"
-    trap - EXIT
-  ); then
-  printf 'Derived the missing frontend public configuration from the server environment.\n'
-fi
 
 printf 'Installed Fustify release directories, user service, and operator command.\n'
 printf 'Review the private environment files under %s before deployment.\n' \

@@ -18,9 +18,9 @@ routes coding agents to the appropriate runbook.
 ## Operations
 
 - [`operations/verification.md`](operations/verification.md): structured
-  verification reports and the development admin dashboard
-- [`operations/supabase.md`](operations/supabase.md): database, Auth, Edge
-  Functions, security, and remote validation
+  verification reports and command-line review
+- [`operations/postgres.md`](operations/postgres.md): PostgreSQL migrations,
+  Better Auth, application APIs, and local validation
 - [`operations/bundle-analysis.md`](operations/bundle-analysis.md): production
   bundle analysis and budgets
 - [`operations/deployment.md`](operations/deployment.md): droplet deployment,

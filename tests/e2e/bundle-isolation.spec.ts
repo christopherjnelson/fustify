@@ -26,7 +26,6 @@ const GAMEPLAY_FINGERPRINTS = [
   'matchSynchronization',
 ];
 
-const ADMIN_FINGERPRINTS = ['AdminDashboard', 'reportSource', 'reportFixtures'];
 const MULTIPLAYER_FINGERPRINTS = ['MultiplayerApp', 'multiplayerApi'];
 const LOCAL_GAME_FINGERPRINTS = ['app/App.tsx', 'useBotTurnRunner'];
 const ACTIVE_MATCH_FINGERPRINTS = [
@@ -35,7 +34,6 @@ const ACTIVE_MATCH_FINGERPRINTS = [
   'TerritoryHud',
 ];
 const TEST_ONLY_FINGERPRINTS = ['visualScenarios', 'testFixtures'];
-const AUTH_COMPLETION_FINGERPRINTS = ['DiscordProfileCompletionPage'];
 const HOME_FORBIDDEN_FINGERPRINTS = [
   'GlobeScene',
   '/Planet.tsx',
@@ -153,11 +151,6 @@ test.describe('route chunk isolation', () => {
       ACTIVE_MATCH_FINGERPRINTS,
       'active local match controls',
     );
-    expectAbsent(
-      requested,
-      AUTH_COMPLETION_FINGERPRINTS,
-      'Discord profile confirmation',
-    );
   });
 
   test('multiplayer lobby defers the renderer and match surface', async ({
@@ -185,63 +178,6 @@ test.describe('route chunk isolation', () => {
       ],
       'multiplayer match surface',
     );
-    expectAbsent(
-      requested,
-      AUTH_COMPLETION_FINGERPRINTS,
-      'Discord profile confirmation',
-    );
-  });
-
-  test('/admin loads no gameplay, auth shell, or multiplayer code', async ({
-    page,
-  }) => {
-    const requested = recordRequests(page);
-    await page.goto('/admin');
-    await expect(page.locator('.admin-shell, main').first()).toBeVisible();
-    await settle(page);
-
-    expectAbsent(requested, GAMEPLAY_FINGERPRINTS, 'gameplay code');
-    expectAbsent(requested, MULTIPLAYER_FINGERPRINTS, 'multiplayer code');
-    expectAbsent(requested, LOCAL_GAME_FINGERPRINTS, 'local game code');
-    expect(
-      matching(requested, ['BrowserApp', 'home/Home']),
-      'admin must not load the public browser shell',
-    ).toEqual([]);
-  });
-
-  test('/auth/callback loads no gameplay or browser shell code', async ({
-    page,
-  }) => {
-    const requested = recordRequests(page);
-    await page.goto('/auth/callback');
-    await settle(page);
-
-    expectAbsent(requested, GAMEPLAY_FINGERPRINTS, 'gameplay code');
-    expectAbsent(requested, ADMIN_FINGERPRINTS, 'admin code');
-    expect(
-      matching(requested, ['BrowserApp', 'home/Home']),
-      'the auth callback must not load the public browser shell',
-    ).toEqual([]);
-  });
-
-  test('/auth/complete-profile isolates onboarding from gameplay and the browser shell', async ({
-    page,
-  }) => {
-    const requested = recordRequests(page);
-    await page.goto('/auth/complete-profile');
-    await expect(
-      page.getByRole('heading', { name: 'Confirm your Discord profile' }),
-    ).toBeVisible();
-
-    expect(
-      matching(requested, AUTH_COMPLETION_FINGERPRINTS).length,
-    ).toBeGreaterThan(0);
-    expectAbsent(requested, GAMEPLAY_FINGERPRINTS, 'gameplay code');
-    expectAbsent(requested, ADMIN_FINGERPRINTS, 'admin code');
-    expect(
-      matching(requested, ['BrowserApp', 'home/Home']),
-      'profile confirmation must not load the public browser shell',
-    ).toEqual([]);
   });
 
   // Positive control. Without this, a typo in GAMEPLAY_FINGERPRINTS would make

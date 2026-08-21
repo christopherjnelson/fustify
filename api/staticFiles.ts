@@ -37,7 +37,10 @@ export function createStaticFileHandler(root: string) {
       return false;
     }
     const requested = resolve(absoluteRoot, `.${pathname}`);
-    if (requested !== absoluteRoot && !requested.startsWith(`${absoluteRoot}${sep}`)) {
+    if (
+      requested !== absoluteRoot &&
+      !requested.startsWith(`${absoluteRoot}${sep}`)
+    ) {
       return false;
     }
     const path = (await readableFile(requested)) ? requested : indexPath;

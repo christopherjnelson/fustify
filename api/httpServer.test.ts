@@ -112,5 +112,4 @@ describe('localhost Node API', () => {
     release();
     expect((await pending).status).toBe(200);
   });
-
 });

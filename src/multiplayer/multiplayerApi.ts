@@ -1,17 +1,19 @@
-import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import type { GameAction } from '../core/game/types';
 import { getAppSessionToken } from '../auth/appAuthClient';
+import type { GameAction } from '../core/game/types';
 import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
 import {
   DEFAULT_NEW_CONTINENT_COUNT,
   DEFAULT_WORLD_SETUP,
   MAX_NEW_PLAYER_COUNT,
 } from '../core/setup/worldSetup';
-import type { Database, Tables } from './database.types';
+import type {
+  ApplicationClient,
+  RealtimeSubscription,
+} from './applicationClient';
+import type { Tables } from './database.types';
 import type { AuthoritativeCommandResult } from './gameProtocol';
 import { MULTIPLAYER_ERRORS, multiplayerError } from './multiplayerError';
-import { isHttpMultiplayerClient } from './multiplayerClient';
 
 export { MULTIPLAYER_ERRORS, multiplayerError };
 
@@ -67,13 +69,11 @@ export interface RoomState {
   match: RoomMatchSummary | null;
 }
 
-export const MATCH_BOOTSTRAP_COLUMNS =
-  'id, room_id, status, revision, setup_snapshot, seat_order_snapshot, generator_metadata, planet_snapshot, state_snapshot, state_fingerprint, last_command_type, winner_player_id, winner_user_id, created_at, updated_at' as const;
-export const MATCH_VERSION_COLUMNS =
-  'id, status, revision, state_fingerprint, updated_at' as const;
-export const MATCH_MUTABLE_COLUMNS =
-  'status, revision, state_snapshot, state_fingerprint, last_command_type, winner_player_id, winner_user_id, updated_at' as const;
-const ROOM_MATCH_COLUMNS = 'id, room_id, status, revision' as const;
+// Kept as stable identifiers for synchronization diagnostics and tests. The
+// Node API owns its SQL projection; browser code never sends these strings.
+export const MATCH_BOOTSTRAP_COLUMNS = 'match-bootstrap' as const;
+export const MATCH_VERSION_COLUMNS = 'match-version' as const;
+export const MATCH_MUTABLE_COLUMNS = 'match-mutable-state' as const;
 
 export class PermanentMatchReadError extends Error {
   readonly permanent = true;
@@ -192,215 +192,127 @@ export function publicRoomUrl(roomId: string): string {
 }
 
 const pendingBootstrapByClient = new WeakMap<
-  SupabaseClient<Database>,
+  ApplicationClient,
   Map<string, Promise<MultiplayerMatch>>
 >();
 const pendingVersionByClient = new WeakMap<
-  SupabaseClient<Database>,
+  ApplicationClient,
   Map<string, Promise<MatchVersion>>
 >();
 const pendingMutableByClient = new WeakMap<
-  SupabaseClient<Database>,
+  ApplicationClient,
   Map<string, Promise<MatchMutableState>>
 >();
 const pendingHeartbeatByClient = new WeakMap<
-  SupabaseClient<Database>,
+  ApplicationClient,
   Map<string, Promise<boolean>>
 >();
 const pendingPublicationByClient = new WeakMap<
-  SupabaseClient<Database>,
+  ApplicationClient,
   Map<string, Promise<PublishRoomResult>>
 >();
 
 function coalescedRequest<T>(
-  pendingByClient: WeakMap<SupabaseClient<Database>, Map<string, Promise<T>>>,
-  client: SupabaseClient<Database>,
-  matchId: string,
+  pendingByClient: WeakMap<ApplicationClient, Map<string, Promise<T>>>,
+  client: ApplicationClient,
+  key: string,
   read: () => Promise<T>,
 ): Promise<T> {
-  let pendingByMatch = pendingByClient.get(client);
-  if (!pendingByMatch) {
-    pendingByMatch = new Map();
-    pendingByClient.set(client, pendingByMatch);
+  let pendingByKey = pendingByClient.get(client);
+  if (!pendingByKey) {
+    pendingByKey = new Map();
+    pendingByClient.set(client, pendingByKey);
   }
-  const existing = pendingByMatch.get(matchId);
+  const existing = pendingByKey.get(key);
   if (existing) return existing;
   const request = read().finally(() => {
-    if (pendingByMatch.get(matchId) === request) pendingByMatch.delete(matchId);
+    if (pendingByKey.get(key) === request) pendingByKey.delete(key);
   });
-  pendingByMatch.set(matchId, request);
+  pendingByKey.set(key, request);
   return request;
 }
 
+function isAccessDenied(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.message === MULTIPLAYER_ERRORS.room_access_denied ||
+      error.message === MULTIPLAYER_ERRORS.not_authenticated ||
+      error.message === MULTIPLAYER_ERRORS.account_required)
+  );
+}
+
 export async function fetchRoomState(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   roomId: string,
   includeMatch = true,
 ): Promise<RoomState> {
-  if (isHttpMultiplayerClient(client)) {
-    return apiRequest<RoomState>(
+  try {
+    return await apiRequest<RoomState>(
       `/api/multiplayer/rooms/${encodeURIComponent(roomId)}?includeMatch=${includeMatch}`,
     );
+  } catch (error) {
+    if (isAccessDenied(error)) {
+      throw new RoomMembershipRequiredError(
+        MULTIPLAYER_ERRORS.room_access_denied,
+      );
+    }
+    throw error;
   }
-  const matchRequest = includeMatch
-    ? client
-        .from('matches')
-        .select(ROOM_MATCH_COLUMNS)
-        .eq('room_id', roomId)
-        .maybeSingle()
-    : Promise.resolve({ data: null, error: null });
-  const [roomResult, membersResult, seatsResult, matchResult] =
-    await Promise.all([
-      client.from('rooms').select('*').eq('id', roomId).maybeSingle(),
-      client
-        .from('room_members')
-        .select('*')
-        .eq('room_id', roomId)
-        .order('joined_at'),
-      client
-        .from('room_seats')
-        .select('*')
-        .eq('room_id', roomId)
-        .order('seat_index'),
-      matchRequest,
-    ]);
-  const error =
-    roomResult.error ??
-    membersResult.error ??
-    seatsResult.error ??
-    matchResult.error;
-  if (error) throw multiplayerError(error);
-  if (!roomResult.data) {
-    throw new RoomMembershipRequiredError(
-      MULTIPLAYER_ERRORS.room_access_denied,
-    );
-  }
-  return {
-    room: roomResult.data,
-    members: membersResult.data ?? [],
-    seats: seatsResult.data ?? [],
-    match: matchResult.data,
-  };
-}
-
-function permanentMatchReadFailure(
-  error: unknown,
-  responseStatus?: number,
-): boolean {
-  const errorStatus =
-    typeof error === 'object' && error !== null && 'status' in error
-      ? Number(error.status)
-      : Number.NaN;
-  const status = responseStatus ?? errorStatus;
-  const message = error instanceof Error ? error.message : String(error);
-  return (
-    status === 401 ||
-    status === 403 ||
-    /(?:jwt|token|api key).*(?:expired|invalid)|invalid api key|permission denied|not authenticated/i.test(
-      message,
-    )
-  );
 }
 
 export function isAccountRequiredError(error: unknown): boolean {
-  if (
+  return (
     error instanceof Error &&
     error.message === MULTIPLAYER_ERRORS.account_required
-  ) {
-    return true;
-  }
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === 'P0001' &&
-    'message' in error &&
-    error.message === 'account_required'
   );
 }
 
-function matchReadError(
-  error: unknown,
-  missing = false,
-  responseStatus?: number,
-): Error {
-  if (missing || permanentMatchReadFailure(error, responseStatus)) {
-    return new PermanentMatchReadError(MULTIPLAYER_ERRORS.room_access_denied);
+async function matchRequest<T>(path: string): Promise<T> {
+  try {
+    return await apiRequest<T>(path);
+  } catch (error) {
+    if (isAccessDenied(error)) {
+      throw new PermanentMatchReadError(MULTIPLAYER_ERRORS.room_access_denied);
+    }
+    throw error;
   }
-  return multiplayerError(error);
 }
 
 export function fetchMatchBootstrap(
-  client: SupabaseClient<Database>,
+  client: ApplicationClient,
   matchId: string,
 ): Promise<MultiplayerMatch> {
-  return coalescedRequest(
-    pendingBootstrapByClient,
-    client,
-    matchId,
-    async () => {
-      if (isHttpMultiplayerClient(client)) {
-        return apiRequest<MultiplayerMatch>(
-          `/api/multiplayer/matches/${encodeURIComponent(matchId)}/bootstrap`,
-        );
-      }
-      const result = await client
-        .from('matches')
-        .select(MATCH_BOOTSTRAP_COLUMNS)
-        .eq('id', matchId)
-        .maybeSingle();
-      if (result.error)
-        throw matchReadError(result.error, false, result.status);
-      if (!result.data) throw matchReadError('room_access_denied', true);
-      return result.data;
-    },
+  return coalescedRequest(pendingBootstrapByClient, client, matchId, () =>
+    matchRequest(
+      `/api/multiplayer/matches/${encodeURIComponent(matchId)}/bootstrap`,
+    ),
   );
 }
 
 export function fetchMatchVersion(
-  client: SupabaseClient<Database>,
+  client: ApplicationClient,
   matchId: string,
 ): Promise<MatchVersion> {
-  return coalescedRequest(pendingVersionByClient, client, matchId, async () => {
-    if (isHttpMultiplayerClient(client)) {
-      return apiRequest<MatchVersion>(
-        `/api/multiplayer/matches/${encodeURIComponent(matchId)}/version`,
-      );
-    }
-    const result = await client
-      .from('matches')
-      .select(MATCH_VERSION_COLUMNS)
-      .eq('id', matchId)
-      .maybeSingle();
-    if (result.error) throw matchReadError(result.error, false, result.status);
-    if (!result.data) throw matchReadError('room_access_denied', true);
-    return result.data;
-  });
+  return coalescedRequest(pendingVersionByClient, client, matchId, () =>
+    matchRequest(
+      `/api/multiplayer/matches/${encodeURIComponent(matchId)}/version`,
+    ),
+  );
 }
 
 export function fetchMatchMutableState(
-  client: SupabaseClient<Database>,
+  client: ApplicationClient,
   matchId: string,
 ): Promise<MatchMutableState> {
-  return coalescedRequest(pendingMutableByClient, client, matchId, async () => {
-    if (isHttpMultiplayerClient(client)) {
-      return apiRequest<MatchMutableState>(
-        `/api/multiplayer/matches/${encodeURIComponent(matchId)}/state`,
-      );
-    }
-    const result = await client
-      .from('matches')
-      .select(MATCH_MUTABLE_COLUMNS)
-      .eq('id', matchId)
-      .maybeSingle();
-    if (result.error) throw matchReadError(result.error, false, result.status);
-    if (!result.data) throw matchReadError('room_access_denied', true);
-    return result.data;
-  });
+  return coalescedRequest(pendingMutableByClient, client, matchId, () =>
+    matchRequest(
+      `/api/multiplayer/matches/${encodeURIComponent(matchId)}/state`,
+    ),
+  );
 }
 
 export async function createRoom(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   options: CreateRoomOptions = {},
 ): Promise<Room> {
   const settings = options.settings
@@ -408,313 +320,169 @@ export async function createRoom(
     : defaultMultiplayerRoomSettings(
         (options.generateSeed ?? generateReadableWorldSeed)(),
       );
-  const args = {
-    // Retained for the deployed RPC signature; the server ignores this value.
-    display_name: '',
-    seed: settings.seed,
-    territory_count: settings.territoryCount,
-    continent_count: settings.continentCount,
-    assignment_mode: settings.assignmentMode,
-    max_seats: settings.maxSeats,
-    game_name: roomNameSchema.parse(options.name ?? 'New Game'),
-  };
-  if (isHttpMultiplayerClient(client)) {
-    return apiRequest<Room>('/api/multiplayer/rooms', {
-      method: 'POST',
-      body: JSON.stringify({
-        seed: settings.seed,
-        territoryCount: settings.territoryCount,
-        continentCount: settings.continentCount,
-        assignmentMode: settings.assignmentMode,
-        maxSeats: settings.maxSeats,
-        name: roomNameSchema.parse(options.name ?? 'New Game'),
-      }),
-    });
-  }
-  const { data, error } = await client.rpc('create_room', args);
-  if (error) throw multiplayerError(error);
-  if (!data) throw multiplayerError('room_creation_failed');
-  if (
-    data.visibility !== 'private' ||
-    data.status !== 'waiting' ||
-    !data.join_code
-  ) {
-    throw multiplayerError('room_creation_failed');
-  }
-  return data;
+  return apiRequest<Room>('/api/multiplayer/rooms', {
+    method: 'POST',
+    body: JSON.stringify({
+      seed: settings.seed,
+      territoryCount: settings.territoryCount,
+      continentCount: settings.continentCount,
+      assignmentMode: settings.assignmentMode,
+      maxSeats: settings.maxSeats,
+      name: roomNameSchema.parse(options.name ?? 'New Game'),
+    }),
+  });
 }
 
 export async function fetchPublicRooms(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
 ): Promise<PublicRoom[]> {
-  if (isHttpMultiplayerClient(client)) {
-    return z
-      .array(publicRoomSchema)
-      .parse(await apiRequest('/api/multiplayer/rooms/public'));
-  }
-  const { data, error } = await client.rpc('list_public_rooms');
-  if (error) throw multiplayerError(error);
-  return z.array(publicRoomSchema).parse(data ?? []);
+  void _client;
+  return z
+    .array(publicRoomSchema)
+    .parse(await apiRequest('/api/multiplayer/rooms/public'));
 }
 
 export async function joinPublicRoom(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   roomId: string,
 ): Promise<PublicRoomJoin> {
-  if (isHttpMultiplayerClient(client)) {
-    const room = await apiRequest<Room>(
-      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/join`,
-      { method: 'POST' },
-    );
-    return { id: room.id };
-  }
-  const { data, error } = await client.rpc('join_public_room', {
-    p_room_id: roomId,
-  });
-  if (error) throw multiplayerError(error);
-  const joined = data?.[0];
-  if (!joined) throw multiplayerError('public_room_unavailable');
-  return joined;
+  const room = await apiRequest<Room>(
+    `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/join`,
+    { method: 'POST' },
+  );
+  return { id: room.id };
 }
 
-export async function joinRoom(
-  client: SupabaseClient<Database>,
+export function joinRoom(
+  _client: ApplicationClient,
   joinCode: string,
 ): Promise<Room> {
-  if (isHttpMultiplayerClient(client)) {
-    return apiRequest<Room>('/api/multiplayer/rooms/join', {
-      method: 'POST',
-      body: JSON.stringify({ joinCode }),
-    });
-  }
-  const { data, error } = await client.rpc('join_room', {
-    join_code: joinCode,
-    // Retained for the deployed RPC signature; the server ignores this value.
-    display_name: '',
+  return apiRequest('/api/multiplayer/rooms/join', {
+    method: 'POST',
+    body: JSON.stringify({ joinCode }),
   });
-  if (error) throw multiplayerError(error);
-  return data;
 }
 
 export function heartbeatRoomMembership(
-  client: SupabaseClient<Database>,
+  client: ApplicationClient,
   roomId: string,
 ): Promise<boolean> {
-  if (isHttpMultiplayerClient(client)) {
-    return apiRequest<boolean>(
+  return coalescedRequest(pendingHeartbeatByClient, client, roomId, () =>
+    apiRequest(
       `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/heartbeat`,
       { method: 'POST' },
-    );
-  }
-  return coalescedRequest(
-    pendingHeartbeatByClient,
-    client,
-    roomId,
-    async () => {
-      const { data, error } = await client.rpc('heartbeat_room_membership', {
-        p_room_id: roomId,
-      });
-      if (error) throw error;
-      return data;
-    },
+    ),
   );
 }
 
 export async function claimSeat(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   roomId: string,
   seatIndex: number,
 ): Promise<void> {
-  if (isHttpMultiplayerClient(client)) {
-    await apiRequest(
-      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/seats/claim`,
-      { method: 'POST', body: JSON.stringify({ seatIndex }) },
-    );
-    return;
-  }
-  const { error } = await client.rpc('claim_room_seat', {
-    room_id: roomId,
-    seat_index: seatIndex,
-  });
-  if (error) throw multiplayerError(error);
+  await apiRequest(
+    `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/seats/claim`,
+    { method: 'POST', body: JSON.stringify({ seatIndex }) },
+  );
 }
 
 export async function releaseSeat(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   roomId: string,
 ): Promise<void> {
-  if (isHttpMultiplayerClient(client)) {
-    await apiRequest(
-      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/seats/release`,
-      { method: 'POST' },
-    );
-    return;
-  }
-  const { error } = await client.rpc('release_room_seat', { room_id: roomId });
-  if (error) throw multiplayerError(error);
+  await apiRequest(
+    `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/seats/release`,
+    { method: 'POST' },
+  );
 }
 
-export async function updateRoomSettings(
-  client: SupabaseClient<Database>,
+export function updateRoomSettings(
+  _client: ApplicationClient,
   room: Room,
 ): Promise<Room> {
-  if (isHttpMultiplayerClient(client)) {
-    return apiRequest<Room>(
-      `/api/multiplayer/rooms/${encodeURIComponent(room.id)}/settings`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({
-          seed: room.seed,
-          territoryCount: room.territory_count,
-          continentCount: room.continent_count,
-          assignmentMode: room.assignment_mode,
-          maxSeats: room.max_seats,
-          name: room.name,
-        }),
-      },
-    );
-  }
-  const { data, error } = await client.rpc('update_room_settings', {
-    room_id: room.id,
-    seed: room.seed,
-    territory_count: room.territory_count,
-    continent_count: room.continent_count,
-    assignment_mode: room.assignment_mode,
-    max_seats: room.max_seats,
-    game_name: room.name,
-  });
-  if (error) throw multiplayerError(error);
-  return data;
-}
-
-export function publishRoom(
-  client: SupabaseClient<Database>,
-  roomId: string,
-): Promise<PublishRoomResult> {
-  if (isHttpMultiplayerClient(client)) {
-    return apiRequest<PublishRoomResult>(
-      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/publish`,
-      { method: 'POST' },
-    );
-  }
-  return coalescedRequest(
-    pendingPublicationByClient,
-    client,
-    roomId,
-    async () => {
-      const { data, error } = await client.rpc('publish_room', {
-        p_room_id: roomId,
-      });
-      if (error) throw multiplayerError(error);
-      return publishRoomResultSchema.parse(data?.[0]);
+  return apiRequest(
+    `/api/multiplayer/rooms/${encodeURIComponent(room.id)}/settings`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        seed: room.seed,
+        territoryCount: room.territory_count,
+        continentCount: room.continent_count,
+        assignmentMode: room.assignment_mode,
+        maxSeats: room.max_seats,
+        name: room.name,
+      }),
     },
   );
 }
 
-async function functionError(error: unknown): Promise<Error> {
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'context' in error &&
-    error.context instanceof Response
-  ) {
-    try {
-      const body = (await error.context.clone().json()) as {
-        code?: string;
-        gameError?: { message?: string };
-      };
-      if (body.gameError?.message) return new Error(body.gameError.message);
-      if (body.code) return multiplayerError(body.code);
-    } catch {
-      // Fall through to the generic mapper for non-JSON gateway errors.
-    }
-  }
-  return multiplayerError(error);
+export function publishRoom(
+  client: ApplicationClient,
+  roomId: string,
+): Promise<PublishRoomResult> {
+  return coalescedRequest(
+    pendingPublicationByClient,
+    client,
+    roomId,
+    async () =>
+      publishRoomResultSchema.parse(
+        await apiRequest(
+          `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/publish`,
+          { method: 'POST' },
+        ),
+      ),
+  );
 }
 
 export async function startMatch(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   roomId: string,
 ): Promise<MultiplayerMatch> {
-  const accessToken = isHttpMultiplayerClient(client)
-    ? await getAppSessionToken()
-    : (await client.auth.getSession()).data.session?.access_token;
+  const accessToken = await getAppSessionToken();
   if (!accessToken) throw multiplayerError('not_authenticated');
-  let response: Response;
-  try {
-    response = await fetch('/api/multiplayer/start', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ roomId }),
-    });
-  } catch (error) {
+  const response = await fetch('/api/multiplayer/start', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ roomId }),
+  }).catch((error: unknown) => {
     throw multiplayerError(error);
-  }
-  type StartMatchResponse = {
+  });
+  const data = (await response.json().catch(() => null)) as {
     match?: MultiplayerMatch;
     code?: string;
-  };
-  let data: StartMatchResponse;
-  try {
-    data = (await response.json()) as StartMatchResponse;
-  } catch {
-    throw multiplayerError('multiplayer_request_failed');
-  }
-  if (!response.ok) throw multiplayerError(data.code ?? response);
-  const match = data.match;
-  if (!match) throw multiplayerError('invalid_authoritative_state');
-  return match;
+  } | null;
+  if (!response.ok) throw multiplayerError(data?.code ?? response);
+  if (!data?.match) throw multiplayerError('invalid_authoritative_state');
+  return data.match;
 }
 
 export async function submitGameplayCommand(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   matchId: string,
   expectedRevision: number,
   idempotencyKey: string,
   action: GameAction,
 ): Promise<AuthoritativeCommandResult> {
-  if (isHttpMultiplayerClient(client)) {
-    const accessToken = await getAppSessionToken();
-    if (!accessToken) throw multiplayerError('not_authenticated');
-    const result = await apiRequest<Partial<AuthoritativeCommandResult>>(
-      '/api/multiplayer/command',
-      {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({
-          operation: 'command',
-          matchId,
-          expectedRevision,
-          idempotencyKey,
-          action,
-        }),
-      },
-    );
-    if (
-      !Number.isSafeInteger(result.acceptedRevision) ||
-      typeof result.stateFingerprint !== 'string' ||
-      typeof result.duplicate !== 'boolean'
-    ) {
-      throw multiplayerError('invalid_authoritative_state');
-    }
-    return result as AuthoritativeCommandResult;
-  }
-  const { data, error } = await client.functions.invoke('multiplayer-game', {
-    body: {
-      operation: 'command',
-      matchId,
-      expectedRevision,
-      idempotencyKey,
-      action,
+  const accessToken = await getAppSessionToken();
+  if (!accessToken) throw multiplayerError('not_authenticated');
+  const result = await apiRequest<Partial<AuthoritativeCommandResult>>(
+    '/api/multiplayer/command',
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({
+        operation: 'command',
+        matchId,
+        expectedRevision,
+        idempotencyKey,
+        action,
+      }),
     },
-  });
-  if (error) throw await functionError(error);
-  const result = data as Partial<AuthoritativeCommandResult> | null;
+  );
   if (
-    !result ||
     !Number.isSafeInteger(result.acceptedRevision) ||
     typeof result.stateFingerprint !== 'string' ||
     typeof result.duplicate !== 'boolean'
@@ -725,147 +493,68 @@ export async function submitGameplayCommand(
 }
 
 export async function leaveRoom(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   roomId: string,
 ): Promise<void> {
-  if (isHttpMultiplayerClient(client)) {
-    await apiRequest(
-      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/leave`,
-      { method: 'POST' },
-    );
-    return;
-  }
-  const { error } = await client.rpc('leave_room', { room_id: roomId });
-  if (error) throw multiplayerError(error);
+  await apiRequest(
+    `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/leave`,
+    {
+      method: 'POST',
+    },
+  );
 }
 
 export async function closeRoom(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   roomId: string,
 ): Promise<void> {
-  if (isHttpMultiplayerClient(client)) {
-    await apiRequest(
-      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/close`,
-      { method: 'POST' },
-    );
-    return;
-  }
-  const { error } = await client.rpc('close_room', { room_id: roomId });
-  if (error) throw multiplayerError(error);
+  await apiRequest(
+    `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/close`,
+    {
+      method: 'POST',
+    },
+  );
 }
 
 export function subscribeToRoom(
-  client: SupabaseClient<Database>,
-  roomId: string,
+  _client: ApplicationClient,
+  _roomId: string,
   onChange: () => void,
   onStatus: (status: string) => void,
-): RealtimeChannel {
-  if (isHttpMultiplayerClient(client)) {
-    onStatus('SUBSCRIBED');
-    const timer = window.setInterval(onChange, 1_500);
-    return {
-      unsubscribe: async () => {
-        window.clearInterval(timer);
-        return 'ok';
-      },
-    } as unknown as RealtimeChannel;
-  }
-  const channel = client.channel(`private-room:${roomId}`);
-  channel
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'rooms',
-        filter: `id=eq.${roomId}`,
-      },
-      onChange,
-    )
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'room_members',
-        filter: `room_id=eq.${roomId}`,
-      },
-      onChange,
-    )
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'room_seats',
-        filter: `room_id=eq.${roomId}`,
-      },
-      onChange,
-    )
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'matches',
-        filter: `room_id=eq.${roomId}`,
-      },
-      onChange,
-    )
-    .subscribe(onStatus);
-  return channel;
+): RealtimeSubscription {
+  onStatus('SUBSCRIBED');
+  const timer = window.setInterval(onChange, 1_500);
+  return {
+    unsubscribe() {
+      window.clearInterval(timer);
+    },
+  };
 }
 
 export function subscribeToMatch(
-  client: SupabaseClient<Database>,
+  client: ApplicationClient,
   matchId: string,
   onChange: (version: Pick<MatchVersion, 'revision' | 'status'>) => void,
   onStatus: (status: string) => void,
-): RealtimeChannel {
-  if (isHttpMultiplayerClient(client)) {
-    let revision = -1;
-    onStatus('SUBSCRIBED');
-    const poll = () => {
-      void fetchMatchVersion(client, matchId)
-        .then((version) => {
-          if (version.revision !== revision) {
-            revision = version.revision;
-            onChange({ revision: version.revision, status: version.status });
-          }
-        })
-        .catch(() => undefined);
-    };
-    const timer = window.setInterval(poll, 1_000);
-    return {
-      unsubscribe: async () => {
-        window.clearInterval(timer);
-        return 'ok';
-      },
-    } as unknown as RealtimeChannel;
-  }
-  const channel = client.channel(`private-match:${matchId}`);
-  channel
-    .on(
-      'postgres_changes',
-      {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'matches',
-        filter: `id=eq.${matchId}`,
-      },
-      (payload) => {
-        const row = payload.new as {
-          revision?: number;
-          status?: string;
-        } | null;
-        const revision = Number(row?.revision ?? -1);
-        if (Number.isSafeInteger(revision)) {
-          onChange({ revision, status: row?.status ?? 'active' });
+): RealtimeSubscription {
+  let revision = -1;
+  onStatus('SUBSCRIBED');
+  const poll = () => {
+    void fetchMatchVersion(client, matchId)
+      .then((version) => {
+        if (version.revision !== revision) {
+          revision = version.revision;
+          onChange({ revision: version.revision, status: version.status });
         }
-      },
-    )
-    .subscribe(onStatus);
-  return channel;
+      })
+      .catch(() => undefined);
+  };
+  const timer = window.setInterval(poll, 1_000);
+  return {
+    unsubscribe() {
+      window.clearInterval(timer);
+    },
+  };
 }
 
 export function formatRoomCode(code: string): string {

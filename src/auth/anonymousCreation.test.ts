@@ -25,12 +25,7 @@ async function productionFiles(directory: string): Promise<string[]> {
 
 describe('production Auth flows', () => {
   it('contain no anonymous-user creation path', async () => {
-    const files = (
-      await Promise.all([
-        productionFiles('src'),
-        productionFiles('supabase/functions'),
-      ])
-    ).flat();
+    const files = await productionFiles('src');
     const offenders: string[] = [];
     for (const file of files) {
       const source = await readFile(file, 'utf8');

@@ -1,10 +1,9 @@
-import type {
-  AuthChangeEvent,
-  Session,
-  SupabaseClient,
-} from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Database } from '../multiplayer/database.types';
+import type {
+  AppAuthClient,
+  AppSession,
+  AuthChangeEvent,
+} from './authClientTypes';
 import {
   AccountController,
   deriveAccountState,
@@ -46,7 +45,7 @@ function accountClient(options: {
           email: anonymous ? undefined : 'player@example.test',
         };
   let listener:
-    ((event: AuthChangeEvent, session: Session | null) => void) | undefined;
+    ((event: AuthChangeEvent, session: AppSession | null) => void) | undefined;
   const query = {
     select: vi.fn(() => query),
     eq: vi.fn(() => query),
@@ -91,7 +90,7 @@ function accountClient(options: {
     })),
     refreshSession: vi.fn(),
     onAuthStateChange: vi.fn(
-      (next: (event: AuthChangeEvent, session: Session | null) => void) => {
+      (next: (event: AuthChangeEvent, session: AppSession | null) => void) => {
         listener = next;
         return {
           data: { subscription: { unsubscribe: vi.fn() } },
@@ -102,7 +101,7 @@ function accountClient(options: {
   const client = {
     auth,
     from: vi.fn(() => query),
-  } as unknown as SupabaseClient<Database>;
+  } as unknown as AppAuthClient;
   const fetch = vi.fn(async () =>
     options.profileUnavailable
       ? new Response(JSON.stringify({ code: 'profile_unavailable' }), {
@@ -128,7 +127,7 @@ function accountClient(options: {
           ? ({
               access_token: 'current-token',
               user: currentUser,
-            } as Session)
+            } as AppSession)
           : null,
       );
     },

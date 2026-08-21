@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from './database.types';
+import type { ApplicationClient } from './applicationClient';
 import {
   fetchMatchBootstrap,
   fetchMatchMutableState,
@@ -21,7 +20,7 @@ type RecoveryReason =
   | 'visibility';
 
 interface MatchSynchronizationOptions {
-  client: SupabaseClient<Database>;
+  client: ApplicationClient;
   matchId: string;
   install: (match: MultiplayerMatch) => void;
   onError: (error: Error) => void;

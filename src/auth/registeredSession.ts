@@ -1,5 +1,4 @@
-import type { SupabaseClient, User } from '@supabase/supabase-js';
-import type { Database } from '../multiplayer/database.types';
+import type { AppAuthClient, AppUser } from './authClientTypes';
 
 const SESSION_REFRESH_MESSAGE =
   'Your account session could not be refreshed. Please try again.';
@@ -7,9 +6,9 @@ const SESSION_VERIFICATION_MESSAGE =
   'Your account session could not be verified. Please try again.';
 
 export type RegisteredSessionResult =
-  | { status: 'registered-ready'; user: User }
+  | { status: 'registered-ready'; user: AppUser }
   | { status: 'signed-out' }
-  | { status: 'legacy-anonymous'; user: User }
+  | { status: 'legacy-anonymous'; user: AppUser }
   | {
       status: 'error';
       reason:
@@ -20,7 +19,7 @@ export type RegisteredSessionResult =
       message: string;
     };
 
-type Client = SupabaseClient<Database>;
+type Client = AppAuthClient;
 
 const refreshes = new WeakMap<Client, Promise<RegisteredSessionResult>>();
 const generations = new WeakMap<Client, number>();

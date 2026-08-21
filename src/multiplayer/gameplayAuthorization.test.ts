@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { describe, expect, it, vi } from 'vitest';
 import { authorizeGameplayRequest } from './requestAuthorization';
 
@@ -77,20 +76,5 @@ describe('authoritative gameplay request authorization', () => {
     expect(() => {
       if (authorized.ok) validateCommand();
     }).toThrow('invalid_request');
-  });
-
-  it('authorizes before parsing or loading match state and does not log credentials', async () => {
-    const source = await readFile(
-      'supabase/functions/multiplayer-game/index.ts',
-      'utf8',
-    );
-    const authorizationCall = source.indexOf(
-      'const authorized = await authorizeGameplayRequest',
-    );
-    expect(authorizationCall).toBeGreaterThan(0);
-    expect(authorizationCall).toBeLessThan(source.indexOf('request.json()'));
-    expect(authorizationCall).toBeLessThan(source.indexOf(".from('matches')"));
-    expect(source).not.toMatch(/console\.(?:log|info|debug|warn|error)/);
-    expect(source).not.toContain('JSON.stringify(authData');
   });
 });

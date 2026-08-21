@@ -64,9 +64,6 @@ describe('Vite development API proxy', () => {
         env: {
           ...process.env,
           FUSTIFY_API_PORT: apiPort.toString(),
-          SUPABASE_SERVICE_ROLE_KEY: 'integration-service-role',
-          VITE_SUPABASE_URL: 'https://example.supabase.co',
-          VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_integration',
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       },

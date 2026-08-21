@@ -26,11 +26,7 @@ function manifest(): BundleManifest {
       file: 'assets/index-aaaa.js',
       name: 'index',
       isEntry: true,
-      dynamicImports: [
-        '_BrowserApp-bbbb.js',
-        'src/auth/AuthCallbackPage.tsx',
-        'src/auth/DiscordProfileCompletionPage.tsx',
-      ],
+      dynamicImports: ['_BrowserApp-bbbb.js'],
     },
     '_BrowserApp-bbbb.js': {
       file: 'assets/BrowserApp-bbbb.js',
@@ -86,18 +82,6 @@ function manifest(): BundleManifest {
       isDynamicEntry: true,
       imports: ['index.html', '_GameSetup-eeee.js', '_BrowserApp-bbbb.js'],
     },
-    'src/auth/AuthCallbackPage.tsx': {
-      file: 'assets/AuthCallbackPage-jjjj.js',
-      name: 'AuthCallbackPage',
-      isDynamicEntry: true,
-      imports: ['index.html', '_authFlow-cccc.js'],
-    },
-    'src/auth/DiscordProfileCompletionPage.tsx': {
-      file: 'assets/DiscordProfileCompletionPage-profile.js',
-      name: 'DiscordProfileCompletionPage',
-      isDynamicEntry: true,
-      imports: ['index.html', '_authFlow-cccc.js'],
-    },
   };
 }
 
@@ -113,11 +97,6 @@ const sizes: AssetSizes = {
   'assets/LocalActiveMatchSurface-active.js': { raw: 48, gzip: 24 },
   'assets/MultiplayerApp-gggg.js': { raw: 64, gzip: 32 },
   'assets/MultiplayerGameScene-match.js': { raw: 80, gzip: 40 },
-  'assets/AuthCallbackPage-jjjj.js': { raw: 512, gzip: 256 },
-  'assets/DiscordProfileCompletionPage-profile.js': {
-    raw: 768,
-    gzip: 384,
-  },
 };
 
 describe('manifest traversal', () => {
@@ -254,11 +233,6 @@ describe('route isolation', () => {
     );
   });
 
-  it('keeps gameplay chunks out of the standalone auth page', () => {
-    expect(files('auth-page')).not.toContain('assets/GameSetup-eeee.js');
-    expect(files('auth-page')).not.toContain('assets/BrowserApp-bbbb.js');
-  });
-
   it('keeps the multiplayer chunk out of the local game route', () => {
     expect(files('local-game')).not.toContain('assets/MultiplayerApp-gggg.js');
     expect(files('local-game')).not.toContain(
@@ -355,8 +329,6 @@ describe('budget evaluation', () => {
     expect(BUNDLE_BUDGETS.routes.map((route) => route.id)).toEqual([
       'public-shell',
       'homepage-preview',
-      'auth-page',
-      'auth-profile-completion',
       'local-game',
       'local-active-match',
       'multiplayer-entry',

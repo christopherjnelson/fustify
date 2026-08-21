@@ -13,17 +13,11 @@ const apiEnvironment = {
   ...environment,
   FUSTIFY_API_ALLOW_INCOMPLETE_CONFIGURATION: '1',
   FUSTIFY_API_PORT: apiPort.toString(),
-  SUPABASE_URL: environment.SUPABASE_URL ?? environment.VITE_SUPABASE_URL ?? '',
-  SUPABASE_PUBLISHABLE_KEY:
-    environment.SUPABASE_PUBLISHABLE_KEY ??
-    environment.VITE_SUPABASE_PUBLISHABLE_KEY ??
-    '',
 };
 const viteEnvironment: NodeJS.ProcessEnv = {
   ...process.env,
   FUSTIFY_API_PORT: apiPort.toString(),
 };
-delete viteEnvironment.SUPABASE_SERVICE_ROLE_KEY;
 
 const children = new Set<ChildProcess>();
 let stopping = false;

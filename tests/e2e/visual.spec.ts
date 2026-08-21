@@ -358,22 +358,3 @@ for (const fixture of ['populated', 'empty', 'create-dialog'] as const) {
     });
   });
 }
-
-test('visual review: Discord profile confirmation', async ({
-  page,
-}, testInfo) => {
-  await page.goto('/auth/complete-profile?visual-review=1');
-  await page.addStyleTag({
-    content: ':root { font-family: Arial, sans-serif !important; }',
-  });
-  await expect(
-    page.getByRole('heading', { name: 'Confirm your Discord profile' }),
-  ).toBeVisible();
-  await expect(page.locator('.auth-profile-completion-card')).toHaveScreenshot(
-    'discord-profile-confirmation-ui.png',
-  );
-  await page.screenshot({
-    path: reviewPath(testInfo, 'discord-profile-confirmation'),
-    fullPage: true,
-  });
-});

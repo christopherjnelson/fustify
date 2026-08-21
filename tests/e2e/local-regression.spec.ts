@@ -19,9 +19,7 @@ test('local routes remain isolated from multiplayer', async ({ page }) => {
     performance
       .getEntriesByType('resource')
       .map((entry) => entry.name)
-      .filter(
-        (name) => name.includes('MultiplayerApp') || name.includes('supabase'),
-      ),
+      .filter((name) => name.includes('MultiplayerApp')),
   );
   expect(loadedScripts).toEqual([]);
 

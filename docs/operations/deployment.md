@@ -19,14 +19,14 @@ at `/release.json` for commit verification. `web/health.json` retains the former
 static health metadata contract. The Node `/api/health` endpoint is the runtime
 health authority.
 
-The API only initializes multiplayer matches. Ordinary multiplayer gameplay
-continues to use Supabase. This workflow does not run migrations or deploy Edge
-Functions.
+The Node service owns authentication, profiles, rooms, authoritative gameplay,
+reactions, thumbnails, static assets, and health checks. It applies pending
+plain-PostgreSQL migrations during startup.
 
 ## One-time installation
 
-Prerequisites are Caddy, Git, pnpm, `/usr/local/bin/node` version 24, the
-existing non-root `chris` user, and a checkout at
+Prerequisites are PostgreSQL 17, Caddy, Git, pnpm, `/usr/local/bin/node`
+version 24, the existing non-root `chris` user, and a checkout at
 `/srv/fustify/repository`. Run these commands as `chris`, not root:
 
 ```sh
@@ -65,20 +65,14 @@ Keep both files mode `0600`; never commit them:
 
 `/home/chris/.config/fustify/fustify-api.env`
 
-- `SUPABASE_URL`
-- `SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- Optional: `FUSTIFY_API_PORT` (default `8787`)
+- `DATABASE_URL`
+- `BETTER_AUTH_SECRET`
+- `BETTER_AUTH_URL`
+- `FUSTIFY_TRUSTED_ORIGINS`
+- Optional: `FUSTIFY_API_HOST` and `FUSTIFY_API_PORT`
 
-`/srv/fustify/repository/.env.production.local`
-
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_PUBLISHABLE_KEY`
-
-After valid server values are present, rerunning `setup-droplet.sh` derives a
-missing or invalid frontend file from the corresponding public server values
-inside a restrictive-umask subshell. It never overwrites an already valid
-frontend file.
+There is no frontend secrets file. The browser uses same-origin API routes and
+receives no database or authentication secret.
 
 Deployment notifications use two deliberately separate Discord webhooks:
 
@@ -119,7 +113,7 @@ Only checks that actually ran are listed in the success notification. The
 command stages web and API artifacts together, applies explicit Caddy-readable
 frontend permissions, atomically switches `current`, restarts the user
 service, and retries local API health silently for a bounded interval. It then
-checks the public API, `/`, `/multiplayer`, `/admin`, sensitive-path blocking,
+checks the public API, `/`, `/multiplayer`, sensitive-path blocking,
 and the full commit in `/release.json`.
 
 A same-commit rebuild is normal: update the private environment file and run
@@ -198,7 +192,7 @@ test "$(readlink -f /srv/fustify/current)" = "${candidate}"
 systemctl --user restart fustify-api.service
 curl --fail --silent http://127.0.0.1:8787/api/health
 curl --fail --silent https://dev.fustify.com/api/health
-for route in / /multiplayer /admin; do
+for route in / /multiplayer; do
   test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
     "https://dev.fustify.com${route}")" = 200
 done

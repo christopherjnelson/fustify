@@ -1,9 +1,6 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from './database.types';
+import type { ApplicationClient } from './applicationClient';
 import type { Room } from './multiplayerApi';
 import { generateRoomPreviewPlanet } from './roomWorld';
-import { ROOM_THUMBNAIL_BUCKET, roomThumbnailPath } from './worldThumbnail';
-import { isHttpMultiplayerClient } from './multiplayerClient';
 import {
   buildWorldThumbnailSvg,
   ROOM_THUMBNAIL_HEIGHT,
@@ -58,28 +55,10 @@ export async function createRoomThumbnail(room: Room): Promise<Blob> {
 }
 
 export async function replaceRoomThumbnail(
-  client: SupabaseClient<Database>,
+  _client: ApplicationClient,
   room: Room,
   createThumbnail: (room: Room) => Promise<Blob> = createRoomThumbnail,
 ): Promise<Room> {
-  if (room.visibility !== 'public') return room;
-  if (isHttpMultiplayerClient(client)) return room;
-
-  const path = roomThumbnailPath(room.id);
-  const thumbnail = await createThumbnail(room);
-  const { error: uploadError } = await client.storage
-    .from(ROOM_THUMBNAIL_BUCKET)
-    .upload(path, thumbnail, {
-      cacheControl: '31536000',
-      contentType: 'image/webp',
-      upsert: true,
-    });
-  if (uploadError) throw uploadError;
-
-  const { data, error } = await client.rpc('publish_room_thumbnail', {
-    p_room_id: room.id,
-    p_thumbnail_path: path,
-  });
-  if (error) throw error;
-  return data;
+  void createThumbnail;
+  return room;
 }

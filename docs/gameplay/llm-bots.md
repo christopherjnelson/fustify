@@ -51,7 +51,7 @@ seats in v1.
   - Compatible endpoints without structured-output support use the same JSON
     contract through prompt instructions followed by strict local validation.
 - Add `POST /api/llm/plan` to the droplet API:
-  - Require a valid Supabase JWT and the existing `admin` role.
+  - Require a valid Better Auth session and an application-managed operator role.
   - Accept only a validated observation, legal-action catalog, safe profile ID,
     and bounded structured memory. Never accept browser-supplied prompts,
     endpoints, models, or credentials.
@@ -124,9 +124,9 @@ seats in v1.
   - Deterministic engine replay from recorded commands.
   - Transcript reproduction from stored requests and responses.
   - Fresh reruns, which are new nondeterministic samples.
-- Extend the private development `/admin` dashboard with tournament summaries,
-  matchup views, operational metrics, and links to stored traces. Do not publish
-  results or upload research artifacts to Supabase in v1.
+- Add private CLI-generated tournament summaries, matchup views, operational
+  metrics, and links to stored traces. Do not upload research artifacts to an
+  external service in v1.
 - Retain only metrics, canonical actions, and concise intent for interactive
   games. Do not retain full interactive prompts or responses.
 

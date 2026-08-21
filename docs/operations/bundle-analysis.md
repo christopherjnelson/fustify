@@ -26,18 +26,15 @@ Budget definitions live in `src/build/bundleBudget.ts` and are unit tested in
 `src/build/bundleBudget.test.ts`. Browser-level route isolation is enforced by
 `tests/e2e/bundle-isolation.spec.ts`.
 
-| Budget                                             |           Limit |
-| -------------------------------------------------- | --------------: |
-| `public-shell` initial JavaScript, gzip            |   158,000 bytes |
-| `homepage-preview` loaded JS, gzip                 |   470,000 bytes |
-| `auth-page` initial JavaScript, gzip               |   150,000 bytes |
-| `auth-profile-completion` initial JavaScript, gzip |   150,000 bytes |
-| `local-game` setup JavaScript, gzip                |   472,000 bytes |
-| `local-active-match` loaded JS, gzip               |   496,000 bytes |
-| `multiplayer-entry` lobby/room JS, gzip            |   475,500 bytes |
-| `multiplayer-match` loaded JS, gzip                |   504,000 bytes |
-| `admin` initial JavaScript, gzip                   |   166,000 bytes |
-| Largest JavaScript chunk, raw                      | 1,080,000 bytes |
+| Budget                                  |           Limit |
+| --------------------------------------- | --------------: |
+| `public-shell` initial JavaScript, gzip |   158,000 bytes |
+| `homepage-preview` loaded JS, gzip      |   470,000 bytes |
+| `local-game` setup JavaScript, gzip     |   472,000 bytes |
+| `local-active-match` loaded JS, gzip    |   496,000 bytes |
+| `multiplayer-entry` lobby/room JS, gzip |   475,500 bytes |
+| `multiplayer-match` loaded JS, gzip     |   504,000 bytes |
+| Largest JavaScript chunk, raw           | 1,080,000 bytes |
 
 The check uses Node's gzip implementation, whose byte count is slightly more
 conservative than Vite's displayed gzip estimate, and it depends on the Node
@@ -52,11 +49,6 @@ manifest imports, so the checker explicitly discovers the emitted
 `homeWorld.worker-*` asset and includes it in both the preview budget and the
 largest-JavaScript check.
 
-Bundle-analysis mode defines deterministic, non-secret placeholder Supabase
-configuration. This keeps the production client graph measurable even when a
-developer or CI runner has no `.env.local`; the placeholders are used only by
-the analysis build and are never credentials.
-
 ## Reproducibility and policy
 
 Run `pnpm clean` before collecting a formal comparison, then run
@@ -67,9 +59,8 @@ cross-version gzip totals are not evidence of application growth.
 
 Review every budget failure. Do not raise a limit merely to make the check
 pass. A feature adding more than approximately 15 KB gzip to an initial route
-requires an explicit route/chunk explanation. Protected gameplay and admin
-graphs must stay lazy; `tests/e2e/bundle-isolation.spec.ts` enforces that
-boundary.
+requires an explicit route/chunk explanation. Protected gameplay graphs must
+stay lazy; `tests/e2e/bundle-isolation.spec.ts` enforces that boundary.
 
 Rebaseline only for an intentional feature milestone after two clean,
 reproducible builds. Update this runbook, the relevant constants, tests, and

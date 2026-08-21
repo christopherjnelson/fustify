@@ -1,6 +1,5 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ApplicationClient } from './applicationClient';
 import { describe, expect, it, vi } from 'vitest';
-import type { Database } from './database.types';
 import {
   directRoomEntryFailure,
   directRoomEntryStatus,
@@ -12,8 +11,8 @@ import { RoomMembershipRequiredError, type RoomState } from './multiplayerApi';
 const roomId = '10000000-0000-4000-8000-000000000001';
 const userId = '20000000-0000-4000-8000-000000000001';
 
-function client(): SupabaseClient<Database> {
-  return {} as SupabaseClient<Database>;
+function client(): ApplicationClient {
+  return {} as ApplicationClient;
 }
 
 function roomState(id = roomId): RoomState {
@@ -87,16 +86,21 @@ describe('direct public-room entry', () => {
       .mockImplementationOnce(() => protectedLoad.promise)
       .mockImplementationOnce(async () => canonical);
     const join = vi.fn(() => joinRequest.promise);
-    const supabase = client();
+    const applicationClient = client();
 
-    const first = enterRoomFromDirectLink(supabase, userId, roomId, {
+    const first = enterRoomFromDirectLink(applicationClient, userId, roomId, {
       fetch,
       join,
     });
-    const duplicate = enterRoomFromDirectLink(supabase, userId, roomId, {
-      fetch,
-      join,
-    });
+    const duplicate = enterRoomFromDirectLink(
+      applicationClient,
+      userId,
+      roomId,
+      {
+        fetch,
+        join,
+      },
+    );
     expect(duplicate).toBe(first);
 
     protectedLoad.reject(

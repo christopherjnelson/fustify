@@ -8,9 +8,7 @@ export interface DatabaseConfiguration {
   maximumConnections?: number;
 }
 
-export function createDatabasePool(
-  configuration: DatabaseConfiguration,
-): Pool {
+export function createDatabasePool(configuration: DatabaseConfiguration): Pool {
   const options: PoolConfig = {
     connectionString: configuration.connectionString,
     max: configuration.maximumConnections ?? 10,

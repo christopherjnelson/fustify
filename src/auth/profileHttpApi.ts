@@ -62,6 +62,7 @@ export async function fetchOwnProfileForVerifiedUser(
 export async function fetchCurrentProfile(
   _client: unknown,
 ): Promise<UserProfile> {
+  void _client;
   return parseUserProfile(await request('/api/profile'));
 }
 

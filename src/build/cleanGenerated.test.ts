@@ -41,7 +41,6 @@ describe('generated-output cleanup', () => {
     await fixtureFile(root, 'artifacts/bot-simulations/report.json');
     await fixtureFile(root, '.env.local');
     await fixtureFile(root, 'node_modules/package/index.js');
-    await fixtureFile(root, 'supabase/.temp/state');
 
     await cleanGenerated({ root, mode: 'transient', log: () => undefined });
 
@@ -59,7 +58,6 @@ describe('generated-output cleanup', () => {
     expect(await exists(resolve(root, 'node_modules/package/index.js'))).toBe(
       true,
     );
-    expect(await exists(resolve(root, 'supabase/.temp/state'))).toBe(true);
   });
 
   it('removes reports and artifacts only in explicit report mode', async () => {
