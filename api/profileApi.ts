@@ -67,13 +67,6 @@ export class ProfileApi {
     url: URL,
   ): Promise<boolean> {
     if (!url.pathname.startsWith('/api/profile')) return false;
-    const session = await this.auth.api.getSession({
-      headers: fromNodeHeaders(request.headers),
-    });
-    if (!session) {
-      sendJson(response, 401, { code: 'not_authenticated' });
-      return true;
-    }
 
     if (
       request.method === 'GET' &&
@@ -86,18 +79,29 @@ export class ProfileApi {
         sendJson(response, 400, { code: 'invalid_profile_display_name' });
         return true;
       }
+      const session = await this.auth.api.getSession({
+        headers: fromNodeHeaders(request.headers),
+      });
       const existing = await this.pool.query(
         `select 1 from profiles
          where lower(display_name) = lower($1)
            and onboarding_completed
-           and user_id <> $2`,
-        [parsed.data, session.user.id],
+           and ($2::text is null or user_id <> $2)`,
+        [parsed.data, session?.user.id ?? null],
       );
       const available = existing.rowCount === 0;
       sendJson(response, 200, {
         available,
         suggestions: available ? [] : usernameSuggestions(parsed.data),
       });
+      return true;
+    }
+
+    const session = await this.auth.api.getSession({
+      headers: fromNodeHeaders(request.headers),
+    });
+    if (!session) {
+      sendJson(response, 401, { code: 'not_authenticated' });
       return true;
     }
 

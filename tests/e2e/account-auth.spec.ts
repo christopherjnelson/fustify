@@ -563,6 +563,88 @@ async function installAuthFixture(page: Page, fixture: AuthFixture) {
           };
         },
       };
+      const browserFetch = window.fetch.bind(window);
+      window.fetch = async (input, init) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? new URL(input, window.location.origin)
+            : input instanceof URL
+              ? input
+              : new URL(input.url);
+        if (requestUrl.pathname === '/api/profile/username-options') {
+          const candidate = requestUrl.searchParams.get('candidate') ?? '';
+          calls.push({
+            method: 'username_options',
+            payload: { p_candidate: candidate },
+          });
+          const unavailable =
+            candidate.toLowerCase() ===
+            (
+              window.sessionStorage.getItem(
+                'fustify-auth-test-taken-username',
+              ) ?? ''
+            ).toLowerCase();
+          return new Response(
+            JSON.stringify({
+              available: !unavailable,
+              suggestions: unavailable
+                ? [`${candidate}-2`, `${candidate}-3`, `${candidate}-4`]
+                : [],
+            }),
+            { headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        if (requestUrl.pathname === '/api/profile' && !init?.method) {
+          if (!profileExists) {
+            calls.push({ method: 'ensure_own_profile' });
+            if (fixtureName === 'missing-profile-error') {
+              return new Response(
+                JSON.stringify({ code: 'profile_unavailable' }),
+                {
+                  status: 503,
+                  headers: { 'Content-Type': 'application/json' },
+                },
+              );
+            }
+            profileExists = true;
+          }
+          return new Response(JSON.stringify(profile), {
+            status: user ? 200 : 401,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        if (
+          requestUrl.pathname === '/api/profile' &&
+          init?.method === 'PATCH'
+        ) {
+          const payload = JSON.parse(String(init.body)) as {
+            displayName: string;
+            avatarUrl: string | null;
+            complete: boolean;
+          };
+          calls.push({
+            method: payload.complete
+              ? 'complete_own_profile'
+              : 'update_own_profile',
+            payload: {
+              p_display_name: payload.displayName,
+              p_avatar_url: payload.avatarUrl,
+            },
+          });
+          profile = {
+            ...profile,
+            display_name: payload.displayName,
+            avatar_url: payload.avatarUrl,
+            onboarding_completed:
+              profile.onboarding_completed || payload.complete,
+            updated_at: '2026-07-24T09:00:00.000Z',
+          };
+          return new Response(JSON.stringify(profile), {
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return browserFetch(input, init);
+      };
       Object.defineProperty(window, '__FUSTIFY_AUTH_TEST_CLIENT__', {
         configurable: true,
         value: client,

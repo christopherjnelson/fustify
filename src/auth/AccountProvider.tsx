@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  getSupabaseClient,
-  readMultiplayerConfiguration,
-} from '../multiplayer/supabaseClient';
+import { getAppAuthClient } from './appAuthClient';
 import {
   getAccountController,
   type ProtectedAccountState,
 } from './accountState';
 import { AccountContext } from './accountContext';
+import { completeCurrentProfile } from './profileHttpApi';
 
 const configurationError: ProtectedAccountState = {
   status: 'error',
@@ -15,11 +13,7 @@ const configurationError: ProtectedAccountState = {
 };
 
 export function AccountProvider({ children }: { children: ReactNode }) {
-  const configured = readMultiplayerConfiguration() !== null;
-  const client = useMemo(
-    () => (configured ? getSupabaseClient() : null),
-    [configured],
-  );
+  const client = useMemo(() => getAppAuthClient(), []);
   const controller = useMemo(
     () => (client ? getAccountController(client) : null),
     [client],
@@ -34,13 +28,24 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   }, [controller]);
 
   useEffect(() => {
-    if (
-      state.status === 'onboarding-required' &&
-      !window.location.pathname.startsWith('/auth/complete-profile')
-    ) {
+    if (state.status !== 'onboarding-required') return;
+    const hasEmailIdentity =
+      state.account.user.identities?.some(
+        (identity) => identity.provider === 'email',
+      ) === true;
+    if (hasEmailIdentity) {
+      void completeCurrentProfile(client, {
+        displayName: state.account.profile.displayName,
+        avatarUrl: state.account.profile.avatarUrl,
+      })
+        .then((profile) => controller?.updateProfile(profile))
+        .catch(() => undefined);
+      return;
+    }
+    if (!window.location.pathname.startsWith('/auth/complete-profile')) {
       window.location.replace('/auth/complete-profile');
     }
-  }, [state.status]);
+  }, [client, controller, state]);
 
   const value = useMemo(
     () => ({ client, controller, state }),

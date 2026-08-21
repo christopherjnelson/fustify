@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import {
-  getSupabaseClient,
-  readMultiplayerConfiguration,
-} from '../multiplayer/supabaseClient';
+import { getAppAuthClient } from './appAuthClient';
 import {
   AuthFlowError,
   authFlowError,
@@ -32,11 +29,7 @@ function removeCallbackSecrets(href: string) {
 }
 
 export function AuthCallbackPage() {
-  const configured = readMultiplayerConfiguration() !== null;
-  const client = useMemo(
-    () => (configured ? getSupabaseClient() : null),
-    [configured],
-  );
+  const client = useMemo(() => getAppAuthClient(), []);
   const [discordIntent] = useState(() => readDiscordAuthIntent());
   const [result, setResult] = useState<AuthCallbackResult | null>(null);
   const [error, setError] = useState<AuthFlowError | null>(

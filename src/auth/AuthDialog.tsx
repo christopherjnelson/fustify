@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { getSupabaseClient } from '../multiplayer/supabaseClient';
+import { getAppAuthClient } from './appAuthClient';
 import { DiscordIcon } from './DiscordIcon';
 import {
   AuthFlowError,
@@ -75,7 +75,7 @@ export default function AuthDialog({
   onProfileUpdated: (profile: UserProfile) => void;
   returnPath: string;
 }) {
-  const client = useMemo(() => getSupabaseClient(), []);
+  const client = useMemo(() => getAppAuthClient(), []);
   const identity = accountIdentity(account);
   const dialogRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);

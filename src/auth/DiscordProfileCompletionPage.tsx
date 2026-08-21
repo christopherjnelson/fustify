@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import {
-  getSupabaseClient,
-  readMultiplayerConfiguration,
-} from '../multiplayer/supabaseClient';
+import { getAppAuthClient } from './appAuthClient';
 import {
   clearDiscordAuthIntent,
   hasEmailIdentity,
@@ -22,9 +19,7 @@ import { UsernameField, type UsernameAvailability } from './UsernameField';
 
 type CompletionData = Awaited<ReturnType<typeof loadCompletionData>>;
 
-async function loadCompletionData(
-  client: ReturnType<typeof getSupabaseClient>,
-) {
+async function loadCompletionData(client: ReturnType<typeof getAppAuthClient>) {
   const verified = await client.auth.getUser();
   if (verified.error || !verified.data.user) {
     throw new Error('Your Discord account session is unavailable.');
@@ -91,11 +86,7 @@ function DiscordProfileCompletionFixture() {
 }
 
 function LiveDiscordProfileCompletionPage() {
-  const configured = readMultiplayerConfiguration() !== null;
-  const client = useMemo(
-    () => (configured ? getSupabaseClient() : null),
-    [configured],
-  );
+  const client = useMemo(() => getAppAuthClient(), []);
   const [intent] = useState(() => readDiscordAuthIntent());
   const [data, setData] = useState<CompletionData | null>(null);
   const [username, setUsername] = useState('');

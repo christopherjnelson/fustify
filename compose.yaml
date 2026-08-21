@@ -26,7 +26,7 @@ services:
       DATABASE_URL: postgresql://fustify:${POSTGRES_PASSWORD:-fustify-development-only}@database:5432/fustify
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-development-secret-change-before-production-32chars}
       BETTER_AUTH_URL: ${FUSTIFY_ORIGIN:-http://localhost:8080}
-      FUSTIFY_TRUSTED_ORIGINS: ${FUSTIFY_ORIGIN:-http://localhost:8080}
+      FUSTIFY_TRUSTED_ORIGINS: ${FUSTIFY_TRUSTED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
       FUSTIFY_API_HOST: 0.0.0.0
       FUSTIFY_API_PORT: 8787
       FUSTIFY_STATIC_ROOT: /app/dist

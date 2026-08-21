@@ -1,14 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import {
-  getSupabaseClient,
-  readMultiplayerConfiguration,
-} from '../multiplayer/supabaseClient';
-import {
-  AuthFlowError,
-  authFlowError,
-  completePasswordRecovery,
-  establishRecoverySession,
-} from './authFlow';
+import { useEffect, useState, type FormEvent } from 'react';
+import { resetAppPassword } from './appAuthClient';
+import { AuthFlowError, authFlowError } from './authFlow';
 import { validatedReturnPath } from './returnPath';
 
 function removeRecoverySecrets(href: string) {
@@ -28,25 +20,22 @@ function removeRecoverySecrets(href: string) {
 }
 
 export function ResetPasswordPage() {
-  const configured = readMultiplayerConfiguration() !== null;
-  const client = useMemo(
-    () => (configured ? getSupabaseClient() : null),
-    [configured],
+  const [token] = useState(
+    () => new URL(window.location.href).searchParams.get('token') ?? '',
   );
-  const [ready, setReady] = useState(false);
+  const ready = token.length > 0;
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState<AuthFlowError | null>(
-    client
+    ready
       ? null
       : new AuthFlowError(
-          'request_failed',
-          'Account configuration is unavailable.',
+          'expired_email_link',
+          'This password-reset link is invalid or has expired.',
         ),
   );
   const [busy, setBusy] = useState(false);
   const [complete, setComplete] = useState(false);
-  const started = useRef(false);
   const [returnPath] = useState(() =>
     validatedReturnPath(
       new URL(window.location.href).searchParams.get('returnPath'),
@@ -54,31 +43,27 @@ export function ResetPasswordPage() {
   );
 
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    const href = window.location.href;
-    removeRecoverySecrets(href);
-    if (!client) return;
-    void establishRecoverySession(client, href)
-      .then(() => {
-        setReady(true);
-      })
-      .catch((recoveryError) => {
-        setError(authFlowError(recoveryError));
-      });
-  }, [client]);
+    removeRecoverySecrets(window.location.href);
+  }, []);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!client || !ready || busy) return;
+    if (!ready || busy) return;
     setBusy(true);
     setError(null);
     try {
-      await completePasswordRecovery(client, password, confirmation);
+      if (password.length < 8 || password !== confirmation) {
+        throw new AuthFlowError(
+          'invalid_form',
+          password.length < 8
+            ? 'Use at least 8 characters for your password.'
+            : 'The passwords do not match.',
+        );
+      }
+      await resetAppPassword(token, password);
       setPassword('');
       setConfirmation('');
       setComplete(true);
-      setReady(false);
     } catch (recoveryError) {
       setPassword('');
       setConfirmation('');
@@ -98,7 +83,7 @@ export function ResetPasswordPage() {
               ? 'Password-reset link expired'
               : 'Choose a new password'}
         </h1>
-        {ready && (
+        {ready && !complete && (
           <form className="auth-form" onSubmit={(event) => void submit(event)}>
             <label className="auth-field">
               <span>New password</span>
