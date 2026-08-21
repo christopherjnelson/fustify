@@ -287,6 +287,9 @@ export function createApiServer(
         return;
       }
       const failure = startMatchError(error);
+      if (failure.code === 'multiplayer_request_failed') {
+        console.error('Unhandled Fustify API request failure.', error);
+      }
       sendJson(response, failure.status, { code: failure.code });
     }
   });

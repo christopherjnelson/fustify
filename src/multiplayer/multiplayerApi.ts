@@ -676,6 +676,32 @@ export async function submitGameplayCommand(
   idempotencyKey: string,
   action: GameAction,
 ): Promise<AuthoritativeCommandResult> {
+  if (isHttpMultiplayerClient(client)) {
+    const accessToken = await getAppSessionToken();
+    if (!accessToken) throw multiplayerError('not_authenticated');
+    const result = await apiRequest<Partial<AuthoritativeCommandResult>>(
+      '/api/multiplayer/command',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          operation: 'command',
+          matchId,
+          expectedRevision,
+          idempotencyKey,
+          action,
+        }),
+      },
+    );
+    if (
+      !Number.isSafeInteger(result.acceptedRevision) ||
+      typeof result.stateFingerprint !== 'string' ||
+      typeof result.duplicate !== 'boolean'
+    ) {
+      throw multiplayerError('invalid_authoritative_state');
+    }
+    return result as AuthoritativeCommandResult;
+  }
   const { data, error } = await client.functions.invoke('multiplayer-game', {
     body: {
       operation: 'command',

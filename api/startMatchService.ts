@@ -416,11 +416,11 @@ export class PostgresStartMatchRepository implements StartMatchRepository {
         [
           matchId,
           roomId,
-          initialized.setupSnapshot as Json,
-          initialized.seatOrderSnapshot as unknown as Json,
-          initialized.generatorMetadata as Json,
-          initialized.planet as unknown as Json,
-          initialized.state as unknown as Json,
+          JSON.stringify(initialized.setupSnapshot) as Json,
+          JSON.stringify(initialized.seatOrderSnapshot) as Json,
+          JSON.stringify(initialized.generatorMetadata) as Json,
+          JSON.stringify(initialized.planet) as Json,
+          JSON.stringify(initialized.state) as Json,
           initialized.stateFingerprint,
         ],
       );

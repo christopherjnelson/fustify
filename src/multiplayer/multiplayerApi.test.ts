@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Database } from './database.types';
+
+vi.mock('../auth/appAuthClient', () => ({
+  getAppSessionToken: vi.fn(async () => 'better-auth-session-token'),
+}));
 import {
   createRoom,
   defaultMultiplayerRoomSettings,
@@ -469,6 +473,44 @@ describe('multiplayer match launch transport', () => {
         idempotencyKey: 'command-key',
         action: { type: 'END_ATTACK_PHASE' },
       },
+    });
+  });
+
+  it('submits application-client gameplay commands to the Node API', async () => {
+    const result = {
+      acceptedRevision: 3,
+      stateFingerprint: 'b'.repeat(64),
+      duplicate: false,
+    };
+    const fetchRequest = vi.fn(async () => Response.json(result));
+    vi.stubGlobal('fetch', fetchRequest);
+    const client = {
+      transport: 'fustify-http',
+    } as unknown as SupabaseClient<Database>;
+
+    await expect(
+      submitGameplayCommand(
+        client,
+        '40000000-0000-4000-8000-000000000004',
+        2,
+        '50000000-0000-4000-8000-000000000005',
+        { type: 'END_ATTACK_PHASE' },
+      ),
+    ).resolves.toEqual(result);
+    expect(fetchRequest).toHaveBeenCalledWith('/api/multiplayer/command', {
+      credentials: 'same-origin',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer better-auth-session-token',
+      },
+      body: JSON.stringify({
+        operation: 'command',
+        matchId: '40000000-0000-4000-8000-000000000004',
+        expectedRevision: 2,
+        idempotencyKey: '50000000-0000-4000-8000-000000000005',
+        action: { type: 'END_ATTACK_PHASE' },
+      }),
     });
   });
 });

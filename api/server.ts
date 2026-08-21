@@ -20,6 +20,8 @@ import { createStaticFileHandler } from './staticFiles.ts';
 import { ProfileApi } from './profileApi.ts';
 import { RoomApi } from './roomApi.ts';
 import { MatchApi } from './matchApi.ts';
+import { GameplayApi } from './gameplayApi.ts';
+import { PostgresGameplayService } from './gameplayService.ts';
 
 class MissingEnvironmentError extends Error {
   readonly variableName: string;
@@ -103,6 +105,9 @@ const profileApi =
   database && auth ? new ProfileApi(database, auth) : undefined;
 const roomApi = database && auth ? new RoomApi(database, auth) : undefined;
 const matchApi = database && auth ? new MatchApi(database, auth) : undefined;
+const gameplayApi = database
+  ? new GameplayApi(new PostgresGameplayService(database))
+  : undefined;
 const staticRoot = process.env.FUSTIFY_STATIC_ROOT?.trim();
 const server = createApiServer(
   createMatchStartService(database),
@@ -117,11 +122,12 @@ const server = createApiServer(
       }
     : undefined,
   staticRoot ? createStaticFileHandler(resolve(staticRoot)) : undefined,
-  profileApi || roomApi || matchApi
+  profileApi || roomApi || matchApi || gameplayApi
     ? async (request, response, url) =>
         (await profileApi?.handle(request, response, url)) ||
         (await roomApi?.handle(request, response, url)) ||
         (await matchApi?.handle(request, response, url)) ||
+        (await gameplayApi?.handle(request, response, url)) ||
         false
     : undefined,
 );
