@@ -1,17 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { getAppAuthClient } from './appAuthClient';
-import { DiscordIcon } from './DiscordIcon';
 import {
   AuthFlowError,
   authFlowError,
   clearGuestUpgradeIntent,
   clearRecoveryState,
   initiateGuestEmailUpgrade,
-  linkDiscordIdentity,
   registerWithEmail,
   requestPasswordRecovery,
   resendSignupVerification,
-  signInWithDiscord,
   signInWithEmail,
 } from './authFlow';
 import type { AccountState } from './accountState';
@@ -283,31 +280,6 @@ export default function AuthDialog({
     }
   };
 
-  const startDiscord = async () => {
-    if (status.kind === 'busy') return;
-    setStatus({ kind: 'busy' });
-    try {
-      if (view === 'guest-upgrade') {
-        if (!identity?.isAnonymous) {
-          throw new AuthFlowError(
-            'account_required',
-            'The guest session is no longer available.',
-          );
-        }
-        await linkDiscordIdentity(client, {
-          intent: 'legacy-discord-upgrade',
-          expectedUserId: identity.userId,
-          returnPath,
-        });
-        return;
-      }
-      await signInWithDiscord(client, returnPath);
-    } catch (error) {
-      const safe = authFlowError(error);
-      setStatus({ kind: 'error', message: safe.message, code: safe.code });
-    }
-  };
-
   const title =
     view === 'register'
       ? 'Create account'
@@ -445,7 +417,7 @@ export default function AuthDialog({
                 {status.kind === 'busy'
                   ? 'Working…'
                   : view === 'register' && status.kind === 'success'
-                    ? 'Verification sent'
+                    ? 'Account created'
                     : view === 'register'
                       ? 'Create account'
                       : view === 'guest-upgrade'
@@ -469,24 +441,6 @@ export default function AuthDialog({
                     : resendCooldown > 0
                       ? `Resend available in ${resendCooldown}s`
                       : 'Resend verification'}
-                </button>
-              </div>
-            )}
-            {(view === 'sign-in' ||
-              view === 'register' ||
-              view === 'guest-upgrade') && (
-              <div className="auth-oauth-option">
-                <span aria-hidden="true">or</span>
-                <button
-                  type="button"
-                  className="auth-discord-action"
-                  disabled={status.kind === 'busy'}
-                  onClick={() => void startDiscord()}
-                >
-                  <DiscordIcon />
-                  {status.kind === 'busy'
-                    ? 'Connecting…'
-                    : 'Continue with Discord'}
                 </button>
               </div>
             )}

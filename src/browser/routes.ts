@@ -15,8 +15,6 @@ export function isAuthRoute(pathname: string): boolean {
   return (
     pathname === '/auth/callback' ||
     pathname === '/auth/callback/' ||
-    pathname === '/auth/complete-profile' ||
-    pathname === '/auth/complete-profile/' ||
     pathname === '/auth/reset-password' ||
     pathname === '/auth/reset-password/'
   );

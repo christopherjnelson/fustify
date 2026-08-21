@@ -7,10 +7,6 @@ const betterAuthClient = createAuthClient({ basePath: '/api/auth' });
 type LegacyClient = SupabaseClient<Database>;
 type LegacyAuth = LegacyClient['auth'];
 
-function discordCompletionUrl(): string {
-  return new URL('/auth/complete-profile', window.location.origin).toString();
-}
-
 function authError(error: unknown) {
   if (!error) return null;
   if (error instanceof Error) return error;
@@ -25,21 +21,16 @@ async function currentUser(): Promise<User | null> {
   const session = await betterAuthClient.getSession();
   if (session.error || !session.data?.user) return null;
   const sessionData = session.data;
-  const accounts = await betterAuthClient.listAccounts();
-  const identities = (accounts.data ?? []).map((account) => {
-    const provider =
-      account.providerId === 'credential' ? 'email' : account.providerId;
-    return {
-      id: account.id,
-      identity_id: account.id,
-      user_id: sessionData.user.id,
-      identity_data: {},
-      provider,
-      created_at: sessionData.user.createdAt.toISOString(),
-      updated_at: sessionData.user.updatedAt.toISOString(),
-      last_sign_in_at: sessionData.session.updatedAt.toISOString(),
-    };
-  });
+  const identity = {
+    id: `email:${sessionData.user.id}`,
+    identity_id: `email:${sessionData.user.id}`,
+    user_id: sessionData.user.id,
+    identity_data: {},
+    provider: 'email',
+    created_at: sessionData.user.createdAt.toISOString(),
+    updated_at: sessionData.user.updatedAt.toISOString(),
+    last_sign_in_at: sessionData.session.updatedAt.toISOString(),
+  };
   return {
     id: sessionData.user.id,
     aud: 'authenticated',
@@ -58,7 +49,7 @@ async function currentUser(): Promise<User | null> {
       display_name: sessionData.user.name,
       avatar_url: sessionData.user.image,
     },
-    identities,
+    identities: [identity],
     created_at: sessionData.user.createdAt.toISOString(),
     updated_at: sessionData.user.updatedAt.toISOString(),
     is_anonymous: false,
@@ -110,32 +101,6 @@ const auth = {
   },
   async signInWithPassword(input: { email: string; password: string }) {
     const result = await betterAuthClient.signIn.email(input);
-    return { data: result.data, error: authError(result.error) };
-  },
-  async signInWithOAuth(input: {
-    provider: 'discord';
-    options?: { redirectTo?: string };
-  }) {
-    const result = await betterAuthClient.signIn.social({
-      provider: input.provider,
-      callbackURL: discordCompletionUrl(),
-    });
-    return { data: result.data, error: authError(result.error) };
-  },
-  async linkIdentity(input: {
-    provider: 'discord';
-    options?: { redirectTo?: string };
-  }) {
-    const result = await betterAuthClient.linkSocial({
-      provider: input.provider,
-      callbackURL: discordCompletionUrl(),
-    });
-    return { data: result.data, error: authError(result.error) };
-  },
-  async unlinkIdentity(identity: { id: string; provider: string }) {
-    const result = await betterAuthClient.unlinkAccount({
-      accountId: identity.id,
-    });
     return { data: result.data, error: authError(result.error) };
   },
   async signOut() {

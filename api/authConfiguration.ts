@@ -15,7 +15,5 @@ export function resolveAuthConfiguration(
       configuredOrigins && configuredOrigins.length > 0
         ? configuredOrigins
         : [new URL(baseUrl).origin],
-    discordClientId: environment.DISCORD_CLIENT_ID?.trim() || undefined,
-    discordClientSecret: environment.DISCORD_CLIENT_SECRET?.trim() || undefined,
   };
 }

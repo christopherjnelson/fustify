@@ -8,12 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { accountCapabilities } from './accountCapabilities';
-import {
-  authFlowError,
-  hasDiscordIdentity,
-  linkDiscordIdentity,
-  signOutRegisteredAccount,
-} from './authFlow';
+import { authFlowError, signOutRegisteredAccount } from './authFlow';
 import {
   BACKEND_ACCOUNT_REQUIRED_MESSAGE,
   PROFILE_UNAVAILABLE_MESSAGE,
@@ -25,7 +20,6 @@ import { profileInitials } from './guestName';
 import { currentSafeReturnPath, validatedReturnPath } from './returnPath';
 import { BrandedAppShell } from '../brand/BrandedAppShell';
 import { useAdminAccess } from '../admin/adminAccessContext';
-import { DiscordIcon } from './DiscordIcon';
 
 export type DialogView =
   | 'sign-in'
@@ -61,7 +55,6 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
   const identity = accountIdentity(account);
   const [dialog, setDialog] = useState<DialogView | null>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
-  const [discordBusy, setDiscordBusy] = useState(false);
   const dialogTriggerRef = useRef<HTMLElement | null>(null);
   const [returnPath] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -136,28 +129,6 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
     setDialog(view);
   };
 
-  const connectDiscord = async () => {
-    if (
-      discordBusy ||
-      account.status !== 'registered-ready' ||
-      hasDiscordIdentity(account.account.user)
-    ) {
-      return;
-    }
-    setDiscordBusy(true);
-    setSignOutError(null);
-    try {
-      await linkDiscordIdentity(client, {
-        intent: 'discord-link',
-        expectedUserId: account.account.userId,
-        returnPath,
-      });
-    } catch (error) {
-      setDiscordBusy(false);
-      setSignOutError(authFlowError(error).message);
-    }
-  };
-
   return (
     <aside
       className={`account-control${compact ? ' account-control-compact' : ''}`}
@@ -201,12 +172,6 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
                 : (identity.email ?? 'Registered account')}
             </span>
           </div>
-          {!identity.isAnonymous && hasDiscordIdentity(identity.user) && (
-            <span className="account-provider-status">
-              <DiscordIcon />
-              Discord connected
-            </span>
-          )}
           {identity.isAnonymous ? (
             <div className="account-actions">
               <button type="button" onClick={() => open('guest-upgrade')}>
@@ -233,15 +198,6 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
                     Edit profile
                   </button>
                 )}
-              {!compact && !hasDiscordIdentity(identity.user) && (
-                <button
-                  type="button"
-                  disabled={discordBusy}
-                  onClick={() => void connectDiscord()}
-                >
-                  {discordBusy ? 'Connecting…' : 'Connect Discord'}
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => {
@@ -357,7 +313,7 @@ export function AccountRequiredGate({
     case 'legacy-anonymous':
       title = 'Finish creating your account to continue';
       message =
-        'Keep this identity by finishing with email or Discord before entering gameplay.';
+        'Keep this identity by finishing with email before entering gameplay.';
       break;
     case 'registered-ready':
       title = loadError ? 'Game unavailable' : 'Loading game…';

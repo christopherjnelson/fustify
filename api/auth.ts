@@ -4,20 +4,12 @@ export interface AuthConfiguration {
   baseUrl: string;
   secret: string;
   trustedOrigins: string[];
-  discordClientId?: string;
-  discordClientSecret?: string;
 }
 
-export function createFustifyAuth(pool: Pool, configuration: AuthConfiguration) {
-  const discord =
-    configuration.discordClientId && configuration.discordClientSecret
-      ? {
-          discord: {
-            clientId: configuration.discordClientId,
-            clientSecret: configuration.discordClientSecret,
-          },
-        }
-      : undefined;
+export function createFustifyAuth(
+  pool: Pool,
+  configuration: AuthConfiguration,
+) {
   return betterAuth({
     database: pool,
     baseURL: configuration.baseUrl,
@@ -28,7 +20,6 @@ export function createFustifyAuth(pool: Pool, configuration: AuthConfiguration) 
       enabled: true,
       revokeSessionsOnPasswordReset: true,
     },
-    socialProviders: discord,
     advanced: {
       database: { generateId: 'uuid' },
       ipAddress: { ipAddressHeaders: ['x-fustify-client-ip'] },
@@ -79,7 +70,8 @@ export function createFustifyAuth(pool: Pool, configuration: AuthConfiguration) 
       user: {
         create: {
           after: async (user) => {
-            const fallback = user.name.trim() || `Player ${user.id.slice(0, 8)}`;
+            const fallback =
+              user.name.trim() || `Player ${user.id.slice(0, 8)}`;
             await pool.query(
               `insert into profiles (user_id, display_name)
                values ($1, $2)
