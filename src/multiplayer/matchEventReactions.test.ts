@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Database } from './database.types';
 import {
   aggregateMatchEventReactions,
@@ -30,6 +30,8 @@ const rows: MatchEventReactionRow[] = [
     updatedAt: '2026-07-23T12:00:02Z',
   },
 ];
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('multiplayer Activity reaction aggregation', () => {
   it('derives deterministic counts and the current user reaction', () => {
@@ -171,5 +173,49 @@ describe('multiplayer Activity reaction API', () => {
       onChange,
     );
     expect(channel.subscribe).toHaveBeenCalledWith(onStatus);
+  });
+
+  it('uses the application API for fetch and desired-state updates', async () => {
+    const fetchRequest = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json([
+          {
+            event_id: 'event-1',
+            user_id: 'user-a',
+            reaction: 'heart',
+            updated_at: '2026-08-20T12:00:00Z',
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(Response.json({ ok: true }));
+    vi.stubGlobal('fetch', fetchRequest);
+    const client = {
+      transport: 'fustify-http',
+    } as unknown as SupabaseClient<Database>;
+
+    await expect(fetchMatchEventReactions(client, 'match-a')).resolves.toEqual([
+      {
+        eventId: 'event-1',
+        userId: 'user-a',
+        reaction: 'heart',
+        updatedAt: '2026-08-20T12:00:00Z',
+      },
+    ]);
+    await setMatchEventReaction(client, 'match-a', 'event-1', 'heart');
+
+    expect(fetchRequest).toHaveBeenNthCalledWith(
+      1,
+      '/api/multiplayer/matches/match-a/reactions',
+      { credentials: 'same-origin' },
+    );
+    expect(fetchRequest).toHaveBeenNthCalledWith(
+      2,
+      '/api/multiplayer/matches/match-a/reactions',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ eventId: 'event-1', reaction: 'heart' }),
+      }),
+    );
   });
 });

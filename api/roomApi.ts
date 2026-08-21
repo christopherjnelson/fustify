@@ -5,6 +5,9 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import type { FustifyAuth } from './auth.ts';
 import { readJson, sendJson } from './httpServer.ts';
+import { buildWorldThumbnailSvg } from '../src/multiplayer/worldThumbnailSvg.ts';
+import { generatePlanet } from '../src/core/generation/generatePlanet.ts';
+import { resolveGeneratorVersion } from '../src/core/generation/constants.ts';
 
 const roomSettingsSchema = z
   .object({
@@ -100,6 +103,13 @@ export class RoomApi {
       ) {
         await this.userId(request);
         await this.listPublic(response);
+        return true;
+      }
+      const thumbnail = url.pathname.match(
+        /^\/api\/multiplayer\/rooms\/([0-9a-f-]+)\/thumbnail\.svg$/i,
+      );
+      if (request.method === 'GET' && thumbnail) {
+        await this.thumbnail(response, thumbnail[1]!);
         return true;
       }
       const userId = await this.userId(request);
@@ -539,12 +549,45 @@ export class RoomApi {
     if (current.status !== 'waiting')
       throw new RoomApiError('room_not_waiting', 409);
     const result = await this.pool.query(
-      `update rooms set visibility = 'public', revision = revision + 1
+      `update rooms set visibility = 'public', revision = revision + 1,
+         thumbnail_path = id::text || '/world.webp',
+         thumbnail_version = thumbnail_version + 1
        where id = $1 returning id as room_id, visibility as room_visibility,
          revision as room_revision`,
       [id],
     );
     sendJson(response, 200, result.rows[0]);
+  }
+
+  private async thumbnail(response: ServerResponse, id: string) {
+    if (!z.string().uuid().safeParse(id).success) {
+      sendJson(response, 400, { code: 'invalid_request' });
+      return;
+    }
+    const result = await this.pool.query(
+      `select * from rooms
+       where id = $1 and visibility = 'public' and status = 'waiting'`,
+      [id],
+    );
+    const room = result.rows[0];
+    if (!room) {
+      sendJson(response, 404, { code: 'room_not_found' });
+      return;
+    }
+    const svg = buildWorldThumbnailSvg(
+      generatePlanet(room.seed, {
+        territoryCount: room.territory_count,
+        continentCount: room.continent_count,
+        playerCount: room.max_seats,
+        generatorVersion: resolveGeneratorVersion(room.generator_version),
+      }),
+    );
+    response.writeHead(200, {
+      'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    response.end(svg);
   }
 
   private async leave(response: ServerResponse, userId: string, id: string) {

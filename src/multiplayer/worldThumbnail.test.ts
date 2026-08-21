@@ -4,7 +4,7 @@ import { DEFAULT_GENERATOR_VERSION } from '../core/generation/constants';
 import type { Database } from './database.types';
 import type { Room } from './multiplayerApi';
 import { generateRoomPreviewPlanet } from './roomWorld';
-import { roomThumbnailPath } from './worldThumbnail';
+import { roomThumbnailPath, roomThumbnailPublicUrl } from './worldThumbnail';
 import {
   buildWorldThumbnailSvg,
   replaceRoomThumbnail,
@@ -106,5 +106,26 @@ describe('room world thumbnails', () => {
       replaceRoomThumbnail(client, room, async () => new Blob(['webp'])),
     ).rejects.toThrow('storage failed');
     expect(client.rpc).not.toHaveBeenCalled();
+  });
+
+  it('uses the same-origin generated SVG for application API rooms', async () => {
+    const client = {
+      transport: 'fustify-http',
+    } as unknown as SupabaseClient<Database>;
+    const createThumbnail = vi.fn();
+
+    await expect(replaceRoomThumbnail(client, room, createThumbnail)).resolves.toBe(
+      room,
+    );
+    expect(createThumbnail).not.toHaveBeenCalled();
+    expect(
+      roomThumbnailPublicUrl(
+        client,
+        `${room.id}/world.webp`,
+        room.thumbnail_version + 1,
+      ),
+    ).toBe(
+      `/api/multiplayer/rooms/${room.id}/thumbnail.svg?v=1`,
+    );
   });
 });
