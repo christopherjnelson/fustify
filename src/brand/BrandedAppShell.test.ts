@@ -21,11 +21,6 @@ describe('BrandedAppShell', () => {
       title: 'Match',
       immersive: true,
     });
-    expect(protectedRouteContext('/admin')).toMatchObject({
-      backHref: '/',
-      title: 'Administration',
-      immersive: false,
-    });
   });
 
   it('renders the compact mark, account region, and protected content', () => {

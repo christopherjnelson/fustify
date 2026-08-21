@@ -3,7 +3,6 @@ import { AccountProvider } from '../auth/AccountProvider';
 import { AccountRequiredGate } from '../auth/AccountControl';
 import { hasLocalSetupParameters, isMultiplayerRoute } from './routes';
 import { Home } from '../home/Home';
-import { AdminAccessProvider } from '../admin/adminAccess';
 
 const routeClasses = [
   'admin-route',
@@ -66,16 +65,14 @@ export function BrowserApp() {
 
   return (
     <AccountProvider>
-      <AdminAccessProvider>
-        {home ? (
-          <Home onNavigate={navigate} />
-        ) : (
-          <AccountRequiredGate
-            returnPath={returnPath}
-            load={multiplayer ? loadMultiplayer : loadLocal}
-          />
-        )}
-      </AdminAccessProvider>
+      {home ? (
+        <Home onNavigate={navigate} />
+      ) : (
+        <AccountRequiredGate
+          returnPath={returnPath}
+          load={multiplayer ? loadMultiplayer : loadLocal}
+        />
+      )}
     </AccountProvider>
   );
 }

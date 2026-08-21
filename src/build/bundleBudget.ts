@@ -138,12 +138,6 @@ export const BUNDLE_BUDGETS: BundleBudgets = {
       chunkNames: ['BrowserApp', 'MultiplayerApp', 'MultiplayerGameScene'],
       gzipBudget: 504_000,
     },
-    {
-      id: 'admin',
-      description: 'Restricted administration dashboard at /admin',
-      chunkNames: ['AdminApp', 'reportSource'],
-      gzipBudget: 166_000,
-    },
   ],
   largestJavaScriptRaw: 1_080_000,
 };

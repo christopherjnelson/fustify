@@ -19,7 +19,6 @@ import { accountIdentity } from './accountIdentity';
 import { profileInitials } from './guestName';
 import { currentSafeReturnPath, validatedReturnPath } from './returnPath';
 import { BrandedAppShell } from '../brand/BrandedAppShell';
-import { useAdminAccess } from '../admin/adminAccessContext';
 
 export type DialogView =
   | 'sign-in'
@@ -51,7 +50,6 @@ const AuthDialog = lazy(() => import('./AuthDialog'));
 
 export function AccountControl({ compact = false }: { compact?: boolean }) {
   const { client, controller, state: account } = useAccount();
-  const { state: adminAccess } = useAdminAccess();
   const identity = accountIdentity(account);
   const [dialog, setDialog] = useState<DialogView | null>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -186,11 +184,6 @@ export function AccountControl({ compact = false }: { compact?: boolean }) {
             </div>
           ) : (
             <div className="account-actions">
-              {adminAccess.status === 'allowed' && (
-                <a className="admin-nav-link" href="/admin">
-                  Admin
-                </a>
-              )}
               {!compact &&
                 accountCapabilities(identity.isAnonymous)
                   .canCustomizeProfile && (

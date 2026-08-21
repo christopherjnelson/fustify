@@ -1,7 +1,6 @@
 import { once } from 'node:events';
 import { resolve } from 'node:path';
 import { toNodeHandler } from 'better-auth/node';
-import { SupabaseAdminConsole } from './adminService.ts';
 import { createApiServer } from './httpServer.ts';
 import {
   MatchStartError,
@@ -24,21 +23,6 @@ import { GameplayApi } from './gameplayApi.ts';
 import { PostgresGameplayService } from './gameplayService.ts';
 import { ReactionApi } from './reactionApi.ts';
 
-class MissingEnvironmentError extends Error {
-  readonly variableName: string;
-
-  constructor(variableName: string) {
-    super(`Missing required environment variable: ${variableName}`);
-    this.variableName = variableName;
-  }
-}
-
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) throw new MissingEnvironmentError(name);
-  return value;
-}
-
 function createMatchStartService(
   database: ReturnType<typeof createDatabasePool> | undefined,
 ) {
@@ -53,37 +37,6 @@ function createMatchStartService(
       throw new MatchStartError('server_configuration_error', 503);
     },
   };
-}
-
-function createAdminConsole() {
-  try {
-    const url = requiredEnvironment('SUPABASE_URL');
-    return new SupabaseAdminConsole({
-      url,
-      publishableKey: requiredEnvironment('SUPABASE_PUBLISHABLE_KEY'),
-      secretKey:
-        process.env.SUPABASE_SECRET_KEY?.trim() ||
-        requiredEnvironment('SUPABASE_SERVICE_ROLE_KEY'),
-      projectRef:
-        process.env.SUPABASE_PROJECT_REF?.trim() ||
-        new URL(url).hostname.split('.')[0]!,
-      managementAccessToken:
-        process.env.SUPABASE_MANAGEMENT_ACCESS_TOKEN?.trim() || undefined,
-      expectedMigration:
-        process.env.FUSTIFY_EXPECTED_SUPABASE_MIGRATION?.trim() ||
-        '20260728042940',
-      mutationsEnabled: process.env.FUSTIFY_ADMIN_MUTATIONS_ENABLED === '1',
-    });
-  } catch (error) {
-    if (
-      process.env.FUSTIFY_API_ALLOW_INCOMPLETE_CONFIGURATION === '1' &&
-      error instanceof MissingEnvironmentError
-    ) {
-      console.warn(`Fustify administration unavailable: ${error.message}.`);
-      return undefined;
-    }
-    throw error;
-  }
 }
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -114,7 +67,6 @@ const reactionApi =
 const staticRoot = process.env.FUSTIFY_STATIC_ROOT?.trim();
 const server = createApiServer(
   createMatchStartService(database),
-  createAdminConsole(),
   authHandler
     ? async (request, response) => {
         // This private header is always overwritten at the trusted Node

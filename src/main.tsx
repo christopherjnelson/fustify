@@ -3,12 +3,10 @@ import { createRoot } from 'react-dom/client';
 import './styles/globals.css';
 import {
   hasLocalSetupParameters,
-  isAdminRoute,
   isAuthRoute,
   isMultiplayerRoute,
 } from './browser/routes';
 
-const isAdmin = isAdminRoute(window.location.pathname);
 const isAuth = isAuthRoute(window.location.pathname);
 const isMultiplayer = isMultiplayerRoute(window.location.pathname);
 const isLegacyLocalSetup =
@@ -22,9 +20,7 @@ const isMultiplayerMatch = window.location.pathname.startsWith(
   '/multiplayer/match/',
 );
 document.documentElement.classList.add(
-  isAdmin
-    ? 'admin-route'
-    : isAuth
+  isAuth
       ? 'auth-route'
       : isMultiplayer
         ? 'multiplayer-route'
@@ -38,70 +34,6 @@ if (isMultiplayerMatch) {
 
 async function bootstrap() {
   const root = createRoot(document.getElementById('root')!);
-  if (isAdmin) {
-    const [{ AdminApp, AdminFixtureApp, AdminFixtureGate }, reportSources] =
-      await Promise.all([
-        import('./admin/AdminApp'),
-        import('./admin/reportSource'),
-      ]);
-    const parameters = new URLSearchParams(window.location.search);
-    const visualReview =
-      import.meta.env.DEV && parameters.get('visual-review') === '1';
-    if (visualReview) {
-      const accessState = parameters.get('admin-access');
-      if (
-        accessState === 'checking' ||
-        accessState === 'denied' ||
-        accessState === 'error'
-      ) {
-        root.render(
-          <StrictMode>
-            <AdminFixtureGate state={accessState} />
-          </StrictMode>,
-        );
-        return;
-      }
-      const [
-        { fixtureAdminReportSource },
-        { fixtureAdminConsoleSource, fixtureAdminDashboardSource },
-      ] = await Promise.all([
-        import('./admin/fixtureReportSource'),
-        import('./admin/adminFixtures'),
-      ]);
-      const reportFixture = parameters.get('admin-fixture') ?? 'empty';
-      const dataFixture = parameters.get('admin-data');
-      root.render(
-        <StrictMode>
-          <AdminFixtureApp
-            operationsSource={fixtureAdminDashboardSource(
-              dataFixture === 'empty' ||
-                dataFixture === 'error' ||
-                dataFixture === 'loading'
-                ? dataFixture
-                : 'populated',
-            )}
-            consoleSource={
-              parameters.get('admin-console') === '1'
-                ? fixtureAdminConsoleSource()
-                : undefined
-            }
-            verificationSource={fixtureAdminReportSource(reportFixture)}
-          />
-        </StrictMode>,
-      );
-      return;
-    }
-    root.render(
-      <StrictMode>
-        <AdminApp
-          verificationSource={reportSources.localAdminReportSource}
-          verificationDataAvailable={import.meta.env.DEV}
-        />
-      </StrictMode>,
-    );
-    return;
-  }
-
   if (isAuth) {
     if (window.location.pathname.startsWith('/auth/reset-password')) {
       const { ResetPasswordPage } = await import('./auth/ResetPasswordPage');
@@ -178,7 +110,6 @@ async function bootstrap() {
 void bootstrap();
 
 if (
-  !isAdmin &&
   !isMultiplayer &&
   !isHome &&
   import.meta.env.DEV &&

@@ -16,8 +16,8 @@ import {
 /**
  * A miniature manifest shaped like Fustify's real analysis output: one HTML
  * entry, a dynamically loaded public shell, two dynamically loaded route
- * chunks, one shared chunk reached by both routes, and an isolated admin
- * route. File names deliberately carry fake hashes so nothing in these tests
+ * chunks and one shared chunk reached by both routes. File names deliberately
+ * carry fake hashes so nothing in these tests
  * depends on real content hashes.
  */
 function manifest(): BundleManifest {
@@ -28,8 +28,6 @@ function manifest(): BundleManifest {
       isEntry: true,
       dynamicImports: [
         '_BrowserApp-bbbb.js',
-        'src/admin/AdminApp.tsx',
-        'src/admin/reportSource.ts',
         'src/auth/AuthCallbackPage.tsx',
         'src/auth/DiscordProfileCompletionPage.tsx',
       ],
@@ -88,18 +86,6 @@ function manifest(): BundleManifest {
       isDynamicEntry: true,
       imports: ['index.html', '_GameSetup-eeee.js', '_BrowserApp-bbbb.js'],
     },
-    'src/admin/AdminApp.tsx': {
-      file: 'assets/AdminApp-hhhh.js',
-      name: 'AdminApp',
-      isDynamicEntry: true,
-      imports: ['index.html'],
-    },
-    'src/admin/reportSource.ts': {
-      file: 'assets/reportSource-iiii.js',
-      name: 'reportSource',
-      isDynamicEntry: true,
-      imports: ['_schemas-dddd.js'],
-    },
     'src/auth/AuthCallbackPage.tsx': {
       file: 'assets/AuthCallbackPage-jjjj.js',
       name: 'AuthCallbackPage',
@@ -127,8 +113,6 @@ const sizes: AssetSizes = {
   'assets/LocalActiveMatchSurface-active.js': { raw: 48, gzip: 24 },
   'assets/MultiplayerApp-gggg.js': { raw: 64, gzip: 32 },
   'assets/MultiplayerGameScene-match.js': { raw: 80, gzip: 40 },
-  'assets/AdminApp-hhhh.js': { raw: 128, gzip: 64 },
-  'assets/reportSource-iiii.js': { raw: 256, gzip: 128 },
   'assets/AuthCallbackPage-jjjj.js': { raw: 512, gzip: 256 },
   'assets/DiscordProfileCompletionPage-profile.js': {
     raw: 768,
@@ -240,7 +224,7 @@ describe('route isolation', () => {
   };
   const files = (id: string) => route(id).assets.map((asset) => asset.file);
 
-  it('keeps gameplay and admin chunks out of the public shell', () => {
+  it('keeps gameplay chunks out of the public shell', () => {
     expect(files('public-shell')).toEqual([
       'assets/schemas-dddd.js',
       'assets/authFlow-cccc.js',
@@ -252,7 +236,6 @@ describe('route isolation', () => {
     expect(files('public-shell')).not.toContain(
       'assets/MultiplayerApp-gggg.js',
     );
-    expect(files('public-shell')).not.toContain('assets/AdminApp-hhhh.js');
   });
 
   it('measures the deferred preview and its worker separately from the shell', () => {
@@ -274,15 +257,6 @@ describe('route isolation', () => {
   it('keeps gameplay chunks out of the standalone auth page', () => {
     expect(files('auth-page')).not.toContain('assets/GameSetup-eeee.js');
     expect(files('auth-page')).not.toContain('assets/BrowserApp-bbbb.js');
-  });
-
-  it('keeps admin isolated from every game chunk', () => {
-    const admin = files('admin');
-    expect(admin).not.toContain('assets/GameSetup-eeee.js');
-    expect(admin).not.toContain('assets/App-ffff.js');
-    expect(admin).not.toContain('assets/MultiplayerApp-gggg.js');
-    expect(admin).not.toContain('assets/BrowserApp-bbbb.js');
-    expect(admin).not.toContain('assets/authFlow-cccc.js');
   });
 
   it('keeps the multiplayer chunk out of the local game route', () => {
@@ -387,7 +361,6 @@ describe('budget evaluation', () => {
       'local-active-match',
       'multiplayer-entry',
       'multiplayer-match',
-      'admin',
     ]);
   });
 });

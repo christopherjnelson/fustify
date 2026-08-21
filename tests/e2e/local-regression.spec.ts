@@ -1,8 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('local and admin routes remain isolated from multiplayer', async ({
-  page,
-}) => {
+test('local routes remain isolated from multiplayer', async ({ page }) => {
   await page.goto('/local');
   await expect(
     page.getByRole('heading', { name: 'Choose your world' }),
@@ -33,14 +31,4 @@ test('local and admin routes remain isolated from multiplayer', async ({
       name: /^(Multiplayer|Multiplayer configuration unavailable)$/,
     }),
   ).toBeVisible();
-
-  await page.goto(
-    '/admin?visual-review=1&admin-fixture=empty&admin-data=populated',
-  );
-  await expect(
-    page.getByRole('heading', { name: 'Admin Dashboard' }),
-  ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Multiplayer' })).toHaveCount(
-    0,
-  );
 });

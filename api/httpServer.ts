@@ -3,17 +3,7 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import {
-  accountMutationSchema,
-  AdminApiError,
-  adminListQuerySchema,
-  adminLogQuerySchema,
-  type AdminConsole,
-  maintenanceMutationSchema,
-  roomMutationSchema,
-} from './adminService.ts';
 import { MatchStartError, startMatchError } from './startMatchService.ts';
 
 const startRequestSchema = z.object({ roomId: z.string().uuid() }).strict();
@@ -65,145 +55,8 @@ export type FallbackRequestHandler = (
   url: URL,
 ) => boolean | Promise<boolean>;
 
-function queryObject(url: URL) {
-  return Object.fromEntries(url.searchParams.entries());
-}
-
-async function handleAdminRequest(
-  admin: AdminConsole,
-  request: IncomingMessage,
-  response: ServerResponse,
-  url: URL,
-) {
-  const authorized = await admin.authorize(
-    request.headers.authorization ?? null,
-  );
-  const suppliedRequestId = request.headers['x-request-id'];
-  const actor = {
-    ...authorized,
-    requestId:
-      typeof suppliedRequestId === 'string' &&
-      z.string().uuid().safeParse(suppliedRequestId).success
-        ? suppliedRequestId
-        : randomUUID(),
-  };
-  if (
-    request.method === 'POST' &&
-    !request.headers['content-type']?.startsWith('application/json')
-  ) {
-    throw new AdminApiError('invalid_request', 400);
-  }
-  const accountAction = url.pathname.match(
-    /^\/api\/admin\/accounts\/([^/]+)\/(reveal|actions)$/,
-  );
-  const roomAction = url.pathname.match(
-    /^\/api\/admin\/rooms\/([0-9a-f-]+)\/actions$/,
-  );
-
-  if (request.method === 'GET' && url.pathname === '/api/admin/overview') {
-    sendJson(response, 200, await admin.overview());
-    return;
-  }
-  if (request.method === 'GET' && url.pathname === '/api/admin/accounts') {
-    sendJson(
-      response,
-      200,
-      await admin.accounts(adminListQuerySchema.parse(queryObject(url))),
-    );
-    return;
-  }
-  if (
-    request.method === 'POST' &&
-    accountAction?.[2] === 'reveal' &&
-    accountAction[1]
-  ) {
-    sendJson(
-      response,
-      200,
-      await admin.revealAccount(actor, decodeURIComponent(accountAction[1])),
-    );
-    return;
-  }
-  if (
-    request.method === 'POST' &&
-    accountAction?.[2] === 'actions' &&
-    accountAction[1]
-  ) {
-    sendJson(
-      response,
-      200,
-      await admin.mutateAccount(
-        actor,
-        decodeURIComponent(accountAction[1]),
-        accountMutationSchema.parse(await readJson(request)),
-      ),
-    );
-    return;
-  }
-  if (request.method === 'GET' && url.pathname === '/api/admin/rooms') {
-    sendJson(
-      response,
-      200,
-      await admin.rooms(adminListQuerySchema.parse(queryObject(url))),
-    );
-    return;
-  }
-  if (request.method === 'POST' && roomAction?.[1]) {
-    sendJson(
-      response,
-      200,
-      await admin.mutateRoom(
-        actor,
-        roomAction[1],
-        roomMutationSchema.parse(await readJson(request)),
-      ),
-    );
-    return;
-  }
-  if (request.method === 'GET' && url.pathname === '/api/admin/logs') {
-    sendJson(
-      response,
-      200,
-      await admin.logs(adminLogQuerySchema.parse(queryObject(url))),
-    );
-    return;
-  }
-  if (request.method === 'GET' && url.pathname === '/api/admin/maintenance') {
-    sendJson(response, 200, await admin.maintenance());
-    return;
-  }
-  if (
-    request.method === 'POST' &&
-    url.pathname === '/api/admin/maintenance/actions'
-  ) {
-    sendJson(
-      response,
-      200,
-      await admin.mutateMaintenance(
-        actor,
-        maintenanceMutationSchema.parse(await readJson(request)),
-      ),
-    );
-    return;
-  }
-  if (request.method === 'GET' && url.pathname === '/api/admin/audit') {
-    sendJson(
-      response,
-      200,
-      await admin.audit(adminListQuerySchema.parse(queryObject(url))),
-    );
-    return;
-  }
-  if (request.method === 'GET' && url.pathname === '/api/admin/metrics') {
-    sendJson(response, 200, await admin.metrics());
-    return;
-  }
-  sendJson(response, 404, { code: 'not_found' });
-}
-
 export function createApiServer(
   service?: MatchStarter,
-  admin?: AdminConsole,
   authHandler?: NodeRequestHandler,
   fallbackHandler?: FallbackRequestHandler,
   applicationHandler?: FallbackRequestHandler,
@@ -233,15 +86,6 @@ export function createApiServer(
         url.pathname.startsWith('/api/') &&
         (await applicationHandler(request, response, url))
       ) {
-        return;
-      }
-
-      if (url.pathname.startsWith('/api/admin/')) {
-        if (!admin) {
-          sendJson(response, 503, { code: 'admin_unavailable' });
-          return;
-        }
-        await handleAdminRequest(admin, request, response, url);
         return;
       }
 
@@ -278,10 +122,6 @@ export function createApiServer(
       );
       sendJson(response, 200, { match });
     } catch (error) {
-      if (error instanceof AdminApiError) {
-        sendJson(response, error.status, { code: error.code });
-        return;
-      }
       if (error instanceof z.ZodError) {
         sendJson(response, 400, { code: 'invalid_request' });
         return;
