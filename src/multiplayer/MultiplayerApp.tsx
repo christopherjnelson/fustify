@@ -43,7 +43,7 @@ import {
 } from './multiplayerApi';
 import { useAccount } from '../auth/accountContext';
 import { MatchSynchronization } from './matchSynchronization';
-import { getSupabaseClient } from './supabaseClient';
+import { getMultiplayerClient } from './multiplayerClient';
 import { isMatchState } from './gameProtocol';
 import { ReadonlyMinimap } from './ReadonlyMinimap';
 import { ClipboardCopyButton } from './RoomCodeCopyButton';
@@ -157,7 +157,7 @@ function StatusScreen({ title, message }: { title: string; message: string }) {
 }
 
 function Lobby() {
-  const client = useMemo(() => getSupabaseClient(), []);
+  const client = useMemo(() => getMultiplayerClient(), []);
   const { controller, state: account } = useAccount();
   const [notice] = useState<string | null>(() => {
     const value = (
@@ -262,7 +262,7 @@ function RoomWorldPreview({ planet }: { planet: PlanetDefinition }) {
 }
 
 function RoomView({ roomId, userId }: { roomId: string; userId: string }) {
-  const client = useMemo(() => getSupabaseClient(), []);
+  const client = useMemo(() => getMultiplayerClient(), []);
   const [state, setState] = useState<RoomState | null>(null);
   const [settings, setSettings] = useState<Room | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1031,7 +1031,7 @@ function MatchView({
   userId: string;
   canReact: boolean;
 }) {
-  const client = useMemo(() => getSupabaseClient(), []);
+  const client = useMemo(() => getMultiplayerClient(), []);
   const [match, setMatch] = useState<MultiplayerMatch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connection, setConnection] = useState('CONNECTING');

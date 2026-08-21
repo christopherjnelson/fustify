@@ -18,6 +18,8 @@ import { resolveAuthConfiguration } from './authConfiguration.ts';
 import { createDatabasePool, runDatabaseMigrations } from './database.ts';
 import { createStaticFileHandler } from './staticFiles.ts';
 import { ProfileApi } from './profileApi.ts';
+import { RoomApi } from './roomApi.ts';
+import { MatchApi } from './matchApi.ts';
 
 class MissingEnvironmentError extends Error {
   readonly variableName: string;
@@ -99,6 +101,8 @@ const auth =
 const authHandler = auth ? toNodeHandler(auth) : undefined;
 const profileApi =
   database && auth ? new ProfileApi(database, auth) : undefined;
+const roomApi = database && auth ? new RoomApi(database, auth) : undefined;
+const matchApi = database && auth ? new MatchApi(database, auth) : undefined;
 const staticRoot = process.env.FUSTIFY_STATIC_ROOT?.trim();
 const server = createApiServer(
   createMatchStartService(database),
@@ -113,7 +117,13 @@ const server = createApiServer(
       }
     : undefined,
   staticRoot ? createStaticFileHandler(resolve(staticRoot)) : undefined,
-  profileApi ? profileApi.handle.bind(profileApi) : undefined,
+  profileApi || roomApi || matchApi
+    ? async (request, response, url) =>
+        (await profileApi?.handle(request, response, url)) ||
+        (await roomApi?.handle(request, response, url)) ||
+        (await matchApi?.handle(request, response, url)) ||
+        false
+    : undefined,
 );
 const port = resolveFustifyApiPort(process.env.FUSTIFY_API_PORT);
 const host = resolveFustifyApiHost(process.env.FUSTIFY_API_HOST);

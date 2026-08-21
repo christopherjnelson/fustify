@@ -187,3 +187,8 @@ export async function resetAppPassword(token: string, password: string) {
   });
   if (result.error) throw authError(result.error);
 }
+
+export async function getAppSessionToken(): Promise<string | null> {
+  const result = await betterAuthClient.getSession();
+  return result.data?.session.token ?? null;
+}

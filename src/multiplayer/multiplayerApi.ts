@@ -1,6 +1,7 @@
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import type { GameAction } from '../core/game/types';
+import { getAppSessionToken } from '../auth/appAuthClient';
 import { generateReadableWorldSeed } from '../core/generation/readableWorldSeed';
 import {
   DEFAULT_NEW_CONTINENT_COUNT,
@@ -10,8 +11,30 @@ import {
 import type { Database, Tables } from './database.types';
 import type { AuthoritativeCommandResult } from './gameProtocol';
 import { MULTIPLAYER_ERRORS, multiplayerError } from './multiplayerError';
+import { isHttpMultiplayerClient } from './multiplayerClient';
 
 export { MULTIPLAYER_ERRORS, multiplayerError };
+
+async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    credentials: 'same-origin',
+    ...init,
+    headers: {
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...init?.headers,
+    },
+  });
+  const body = (await response.json().catch(() => null)) as
+    T | { code?: string } | null;
+  if (!response.ok) {
+    throw multiplayerError(
+      body && typeof body === 'object' && 'code' in body
+        ? (body.code ?? 'multiplayer_request_failed')
+        : 'multiplayer_request_failed',
+    );
+  }
+  return body as T;
+}
 
 export type Room = Tables<'rooms'>;
 export type RoomMember = Tables<'room_members'>;
@@ -214,6 +237,11 @@ export async function fetchRoomState(
   roomId: string,
   includeMatch = true,
 ): Promise<RoomState> {
+  if (isHttpMultiplayerClient(client)) {
+    return apiRequest<RoomState>(
+      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}?includeMatch=${includeMatch}`,
+    );
+  }
   const matchRequest = includeMatch
     ? client
         .from('matches')
@@ -311,6 +339,11 @@ export function fetchMatchBootstrap(
     client,
     matchId,
     async () => {
+      if (isHttpMultiplayerClient(client)) {
+        return apiRequest<MultiplayerMatch>(
+          `/api/multiplayer/matches/${encodeURIComponent(matchId)}/bootstrap`,
+        );
+      }
       const result = await client
         .from('matches')
         .select(MATCH_BOOTSTRAP_COLUMNS)
@@ -329,6 +362,11 @@ export function fetchMatchVersion(
   matchId: string,
 ): Promise<MatchVersion> {
   return coalescedRequest(pendingVersionByClient, client, matchId, async () => {
+    if (isHttpMultiplayerClient(client)) {
+      return apiRequest<MatchVersion>(
+        `/api/multiplayer/matches/${encodeURIComponent(matchId)}/version`,
+      );
+    }
     const result = await client
       .from('matches')
       .select(MATCH_VERSION_COLUMNS)
@@ -345,6 +383,11 @@ export function fetchMatchMutableState(
   matchId: string,
 ): Promise<MatchMutableState> {
   return coalescedRequest(pendingMutableByClient, client, matchId, async () => {
+    if (isHttpMultiplayerClient(client)) {
+      return apiRequest<MatchMutableState>(
+        `/api/multiplayer/matches/${encodeURIComponent(matchId)}/state`,
+      );
+    }
     const result = await client
       .from('matches')
       .select(MATCH_MUTABLE_COLUMNS)
@@ -375,6 +418,19 @@ export async function createRoom(
     max_seats: settings.maxSeats,
     game_name: roomNameSchema.parse(options.name ?? 'New Game'),
   };
+  if (isHttpMultiplayerClient(client)) {
+    return apiRequest<Room>('/api/multiplayer/rooms', {
+      method: 'POST',
+      body: JSON.stringify({
+        seed: settings.seed,
+        territoryCount: settings.territoryCount,
+        continentCount: settings.continentCount,
+        assignmentMode: settings.assignmentMode,
+        maxSeats: settings.maxSeats,
+        name: roomNameSchema.parse(options.name ?? 'New Game'),
+      }),
+    });
+  }
   const { data, error } = await client.rpc('create_room', args);
   if (error) throw multiplayerError(error);
   if (!data) throw multiplayerError('room_creation_failed');
@@ -391,6 +447,11 @@ export async function createRoom(
 export async function fetchPublicRooms(
   client: SupabaseClient<Database>,
 ): Promise<PublicRoom[]> {
+  if (isHttpMultiplayerClient(client)) {
+    return z
+      .array(publicRoomSchema)
+      .parse(await apiRequest('/api/multiplayer/rooms/public'));
+  }
   const { data, error } = await client.rpc('list_public_rooms');
   if (error) throw multiplayerError(error);
   return z.array(publicRoomSchema).parse(data ?? []);
@@ -400,6 +461,13 @@ export async function joinPublicRoom(
   client: SupabaseClient<Database>,
   roomId: string,
 ): Promise<PublicRoomJoin> {
+  if (isHttpMultiplayerClient(client)) {
+    const room = await apiRequest<Room>(
+      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/join`,
+      { method: 'POST' },
+    );
+    return { id: room.id };
+  }
   const { data, error } = await client.rpc('join_public_room', {
     p_room_id: roomId,
   });
@@ -413,6 +481,12 @@ export async function joinRoom(
   client: SupabaseClient<Database>,
   joinCode: string,
 ): Promise<Room> {
+  if (isHttpMultiplayerClient(client)) {
+    return apiRequest<Room>('/api/multiplayer/rooms/join', {
+      method: 'POST',
+      body: JSON.stringify({ joinCode }),
+    });
+  }
   const { data, error } = await client.rpc('join_room', {
     join_code: joinCode,
     // Retained for the deployed RPC signature; the server ignores this value.
@@ -426,6 +500,12 @@ export function heartbeatRoomMembership(
   client: SupabaseClient<Database>,
   roomId: string,
 ): Promise<boolean> {
+  if (isHttpMultiplayerClient(client)) {
+    return apiRequest<boolean>(
+      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/heartbeat`,
+      { method: 'POST' },
+    );
+  }
   return coalescedRequest(
     pendingHeartbeatByClient,
     client,
@@ -445,6 +525,13 @@ export async function claimSeat(
   roomId: string,
   seatIndex: number,
 ): Promise<void> {
+  if (isHttpMultiplayerClient(client)) {
+    await apiRequest(
+      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/seats/claim`,
+      { method: 'POST', body: JSON.stringify({ seatIndex }) },
+    );
+    return;
+  }
   const { error } = await client.rpc('claim_room_seat', {
     room_id: roomId,
     seat_index: seatIndex,
@@ -456,6 +543,13 @@ export async function releaseSeat(
   client: SupabaseClient<Database>,
   roomId: string,
 ): Promise<void> {
+  if (isHttpMultiplayerClient(client)) {
+    await apiRequest(
+      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/seats/release`,
+      { method: 'POST' },
+    );
+    return;
+  }
   const { error } = await client.rpc('release_room_seat', { room_id: roomId });
   if (error) throw multiplayerError(error);
 }
@@ -464,6 +558,22 @@ export async function updateRoomSettings(
   client: SupabaseClient<Database>,
   room: Room,
 ): Promise<Room> {
+  if (isHttpMultiplayerClient(client)) {
+    return apiRequest<Room>(
+      `/api/multiplayer/rooms/${encodeURIComponent(room.id)}/settings`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          seed: room.seed,
+          territoryCount: room.territory_count,
+          continentCount: room.continent_count,
+          assignmentMode: room.assignment_mode,
+          maxSeats: room.max_seats,
+          name: room.name,
+        }),
+      },
+    );
+  }
   const { data, error } = await client.rpc('update_room_settings', {
     room_id: room.id,
     seed: room.seed,
@@ -481,6 +591,12 @@ export function publishRoom(
   client: SupabaseClient<Database>,
   roomId: string,
 ): Promise<PublishRoomResult> {
+  if (isHttpMultiplayerClient(client)) {
+    return apiRequest<PublishRoomResult>(
+      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/publish`,
+      { method: 'POST' },
+    );
+  }
   return coalescedRequest(
     pendingPublicationByClient,
     client,
@@ -520,12 +636,10 @@ export async function startMatch(
   client: SupabaseClient<Database>,
   roomId: string,
 ): Promise<MultiplayerMatch> {
-  const { data: sessionData, error: sessionError } =
-    await client.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
-  if (sessionError || !accessToken) {
-    throw multiplayerError('not_authenticated');
-  }
+  const accessToken = isHttpMultiplayerClient(client)
+    ? await getAppSessionToken()
+    : (await client.auth.getSession()).data.session?.access_token;
+  if (!accessToken) throw multiplayerError('not_authenticated');
   let response: Response;
   try {
     response = await fetch('/api/multiplayer/start', {
@@ -588,6 +702,13 @@ export async function leaveRoom(
   client: SupabaseClient<Database>,
   roomId: string,
 ): Promise<void> {
+  if (isHttpMultiplayerClient(client)) {
+    await apiRequest(
+      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/leave`,
+      { method: 'POST' },
+    );
+    return;
+  }
   const { error } = await client.rpc('leave_room', { room_id: roomId });
   if (error) throw multiplayerError(error);
 }
@@ -596,6 +717,13 @@ export async function closeRoom(
   client: SupabaseClient<Database>,
   roomId: string,
 ): Promise<void> {
+  if (isHttpMultiplayerClient(client)) {
+    await apiRequest(
+      `/api/multiplayer/rooms/${encodeURIComponent(roomId)}/close`,
+      { method: 'POST' },
+    );
+    return;
+  }
   const { error } = await client.rpc('close_room', { room_id: roomId });
   if (error) throw multiplayerError(error);
 }
@@ -606,6 +734,16 @@ export function subscribeToRoom(
   onChange: () => void,
   onStatus: (status: string) => void,
 ): RealtimeChannel {
+  if (isHttpMultiplayerClient(client)) {
+    onStatus('SUBSCRIBED');
+    const timer = window.setInterval(onChange, 1_500);
+    return {
+      unsubscribe: async () => {
+        window.clearInterval(timer);
+        return 'ok';
+      },
+    } as unknown as RealtimeChannel;
+  }
   const channel = client.channel(`private-room:${roomId}`);
   channel
     .on(
@@ -658,6 +796,27 @@ export function subscribeToMatch(
   onChange: (version: Pick<MatchVersion, 'revision' | 'status'>) => void,
   onStatus: (status: string) => void,
 ): RealtimeChannel {
+  if (isHttpMultiplayerClient(client)) {
+    let revision = -1;
+    onStatus('SUBSCRIBED');
+    const poll = () => {
+      void fetchMatchVersion(client, matchId)
+        .then((version) => {
+          if (version.revision !== revision) {
+            revision = version.revision;
+            onChange({ revision: version.revision, status: version.status });
+          }
+        })
+        .catch(() => undefined);
+    };
+    const timer = window.setInterval(poll, 1_000);
+    return {
+      unsubscribe: async () => {
+        window.clearInterval(timer);
+        return 'ok';
+      },
+    } as unknown as RealtimeChannel;
+  }
   const channel = client.channel(`private-match:${matchId}`);
   channel
     .on(
