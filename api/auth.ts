@@ -31,6 +31,7 @@ export function createFustifyAuth(pool: Pool, configuration: AuthConfiguration) 
     socialProviders: discord,
     advanced: {
       database: { generateId: 'uuid' },
+      ipAddress: { ipAddressHeaders: ['x-fustify-client-ip'] },
     },
     user: {
       modelName: 'auth_users',

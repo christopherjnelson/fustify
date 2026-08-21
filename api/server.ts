@@ -105,11 +105,20 @@ const auth =
   database && authConfiguration
     ? createFustifyAuth(database, authConfiguration)
     : undefined;
+const authHandler = auth ? toNodeHandler(auth) : undefined;
 const staticRoot = process.env.FUSTIFY_STATIC_ROOT?.trim();
 const server = createApiServer(
   createMatchStartService(),
   createAdminConsole(),
-  auth ? toNodeHandler(auth) : undefined,
+  authHandler
+    ? async (request, response) => {
+        // This private header is always overwritten at the trusted Node
+        // boundary, so clients cannot spoof the address used for rate limits.
+        request.headers['x-fustify-client-ip'] =
+          request.socket.remoteAddress ?? 'unknown';
+        await authHandler(request, response);
+      }
+    : undefined,
   staticRoot ? createStaticFileHandler(resolve(staticRoot)) : undefined,
 );
 const port = resolveFustifyApiPort(process.env.FUSTIFY_API_PORT);
