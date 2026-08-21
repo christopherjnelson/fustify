@@ -3,7 +3,7 @@ import type {
   Session,
   SupabaseClient,
 } from '@supabase/supabase-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Database } from '../multiplayer/database.types';
 import {
   AccountController,
@@ -29,6 +29,7 @@ function accountClient(options: {
   userId?: string;
   session?: boolean;
   verificationError?: Error;
+  profileUnavailable?: boolean;
 }) {
   const id = options.userId ?? userId;
   const anonymous = options.anonymous ?? false;
@@ -102,9 +103,24 @@ function accountClient(options: {
     auth,
     from: vi.fn(() => query),
   } as unknown as SupabaseClient<Database>;
+  const fetch = vi.fn(async () =>
+    options.profileUnavailable
+      ? new Response(JSON.stringify({ code: 'profile_unavailable' }), {
+          status: 503,
+        })
+      : new Response(
+          JSON.stringify({
+            ...profileRow,
+            user_id: currentUser?.id ?? id,
+            onboarding_completed: options.onboardingCompleted ?? true,
+          }),
+        ),
+  );
+  vi.stubGlobal('fetch', fetch);
   return {
     auth,
     client,
+    fetch,
     emit(event: AuthChangeEvent) {
       listener?.(
         event,
@@ -123,6 +139,8 @@ function accountClient(options: {
     },
   };
 }
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('protected account state', () => {
   it('publishes registered-ready only after user, session, claims, and profile agree', async () => {
@@ -172,33 +190,21 @@ describe('protected account state', () => {
     });
   });
 
-  it('recovers a missing profile before publishing registered readiness', async () => {
+  it('accepts a profile recovered by the server before publishing readiness', async () => {
     const fixture = accountClient({});
-    const query = fixture.client.from('profiles') as unknown as {
-      maybeSingle: ReturnType<typeof vi.fn>;
-    };
-    query.maybeSingle.mockResolvedValue({ data: null, error: null });
-    const rpc = vi.fn(async () => ({ data: profileRow, error: null }));
-    (fixture.client as unknown as { rpc: typeof rpc }).rpc = rpc;
 
     await expect(deriveAccountState(fixture.client)).resolves.toMatchObject({
       status: 'registered-ready',
       account: { profile: { displayName: 'Player One' } },
     });
-    expect(rpc).toHaveBeenCalledWith('ensure_own_profile');
+    expect(fixture.fetch).toHaveBeenCalledWith(
+      '/api/profile',
+      expect.objectContaining({ credentials: 'same-origin' }),
+    );
   });
 
-  it('fails closed with a safe message when profile recovery fails', async () => {
-    const fixture = accountClient({});
-    const query = fixture.client.from('profiles') as unknown as {
-      maybeSingle: ReturnType<typeof vi.fn>;
-    };
-    query.maybeSingle.mockResolvedValue({ data: null, error: null });
-    const rpc = vi.fn(async () => ({
-      data: null,
-      error: new Error('private database detail'),
-    }));
-    (fixture.client as unknown as { rpc: typeof rpc }).rpc = rpc;
+  it('fails closed with a safe message when the profile API fails', async () => {
+    const fixture = accountClient({ profileUnavailable: true });
 
     await expect(deriveAccountState(fixture.client)).resolves.toEqual({
       status: 'error',

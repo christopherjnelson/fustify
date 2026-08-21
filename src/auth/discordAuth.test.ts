@@ -1,5 +1,5 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Database } from '../multiplayer/database.types';
 import {
   completeAuthCallback,
@@ -85,6 +85,10 @@ function readyClient(
     rpcResult?: { data: unknown; error: unknown };
   } = {},
 ) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify(options.row ?? profileRow))),
+  );
   const query = {
     select: vi.fn(() => query),
     eq: vi.fn(() => query),
@@ -157,6 +161,8 @@ beforeEach(() => {
     },
   });
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('Discord authentication flows', () => {
   it('detects Discord only from verified Auth identities', () => {

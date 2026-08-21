@@ -7,7 +7,7 @@ import {
 } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../multiplayer/database.types';
-import { fetchUsernameOptions, type UsernameOptions } from './profileApi';
+import { fetchUsernameOptions, type UsernameOptions } from './profileHttpApi';
 import { profileDisplayNameSchema } from './profileModel';
 
 export type UsernameAvailability =

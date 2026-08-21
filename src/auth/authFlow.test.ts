@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Database } from '../multiplayer/database.types';
 import {
   AuthFlowError,
@@ -48,7 +48,13 @@ beforeEach(() => {
       sessionStorage: browserStorage(),
     },
   });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify(profileRow))),
+  );
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 function asClient(value: unknown): SupabaseClient<Database> {
   return value as SupabaseClient<Database>;
@@ -545,6 +551,15 @@ describe('email/password authentication flows', () => {
 
   it('sets the password before updating the registered profile', async () => {
     const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        calls.push('profile');
+        return new Response(
+          JSON.stringify({ ...profileRow, display_name: 'Player One' }),
+        );
+      }),
+    );
     const client = asClient({
       auth: {
         getSession: vi.fn(async () => ({
@@ -584,13 +599,6 @@ describe('email/password authentication flows', () => {
           return { error: null };
         }),
       },
-      rpc: vi.fn(async () => {
-        calls.push('profile');
-        return {
-          data: { ...profileRow, display_name: 'Player One' },
-          error: null,
-        };
-      }),
     });
 
     await completeGuestUpgrade(client, {

@@ -4,7 +4,7 @@ import type { Database } from '../multiplayer/database.types';
 import {
   completeCurrentProfile,
   fetchOwnProfileForVerifiedUser,
-} from './profileApi';
+} from './profileHttpApi';
 import { profileDisplayNameSchema, type UserProfile } from './profileModel';
 import { validatedReturnPath } from './returnPath';
 import {

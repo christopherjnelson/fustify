@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../multiplayer/database.types';
-import { profileApiError } from './profileApi';
+import { profileApiError } from './profileHttpApi';
 import { parseUserProfile, type UserProfile } from './profileModel';
 
 export type DiscordAvatarChoice = 'current' | 'discord' | 'custom' | 'none';

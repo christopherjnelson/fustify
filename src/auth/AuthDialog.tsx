@@ -17,7 +17,7 @@ import {
 import type { AccountState } from './accountState';
 import type { DialogView } from './AccountControl';
 import { accountIdentity } from './accountIdentity';
-import { updateCurrentProfile } from './profileApi';
+import { updateCurrentProfile } from './profileHttpApi';
 import type { UserProfile } from './profileModel';
 import { validatedReturnPath } from './returnPath';
 import { UsernameField, type UsernameAvailability } from './UsernameField';

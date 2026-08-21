@@ -5,7 +5,10 @@ import type {
   User,
 } from '@supabase/supabase-js';
 import type { Database } from '../multiplayer/database.types';
-import { fetchOwnProfileForVerifiedUser, profileApiError } from './profileApi';
+import {
+  fetchOwnProfileForVerifiedUser,
+  profileApiError,
+} from './profileHttpApi';
 import type { UserProfile } from './profileModel';
 import {
   ensureRegisteredSessionReady,

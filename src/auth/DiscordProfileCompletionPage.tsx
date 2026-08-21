@@ -17,7 +17,7 @@ import {
   completeDiscordProfile,
   type DiscordAvatarChoice,
 } from './discordProfileApi';
-import { fetchCurrentProfile } from './profileApi';
+import { fetchCurrentProfile } from './profileHttpApi';
 import { UsernameField, type UsernameAvailability } from './UsernameField';
 
 type CompletionData = Awaited<ReturnType<typeof loadCompletionData>>;
