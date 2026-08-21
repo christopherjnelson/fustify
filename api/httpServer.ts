@@ -19,7 +19,11 @@ import { MatchStartError, startMatchError } from './startMatchService.ts';
 const startRequestSchema = z.object({ roomId: z.string().uuid() }).strict();
 const MAX_REQUEST_BYTES = 16 * 1024;
 
-function sendJson(response: ServerResponse, status: number, body: unknown) {
+export function sendJson(
+  response: ServerResponse,
+  status: number,
+  body: unknown,
+) {
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
@@ -28,7 +32,7 @@ function sendJson(response: ServerResponse, status: number, body: unknown) {
   response.end(JSON.stringify(body));
 }
 
-async function readJson(request: IncomingMessage): Promise<unknown> {
+export async function readJson(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   let bytes = 0;
   for await (const chunk of request) {
@@ -202,6 +206,7 @@ export function createApiServer(
   admin?: AdminConsole,
   authHandler?: NodeRequestHandler,
   fallbackHandler?: FallbackRequestHandler,
+  applicationHandler?: FallbackRequestHandler,
 ) {
   const server = createServer(async (request, response) => {
     try {
@@ -220,6 +225,14 @@ export function createApiServer(
         (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/'))
       ) {
         await authHandler(request, response);
+        return;
+      }
+
+      if (
+        applicationHandler &&
+        url.pathname.startsWith('/api/') &&
+        (await applicationHandler(request, response, url))
+      ) {
         return;
       }
 
